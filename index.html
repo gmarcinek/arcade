@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html lang="pl">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>Arcade</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        html,
+        body {
+            min-height: 100%;
+            background: #f5f7fb;
+            color: #2b3550;
+            font-family: -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+
+        /* ── Header ── */
+        header {
+            padding: 36px 24px 0;
+            text-align: center;
+        }
+
+        header .title {
+            font-size: 13px;
+            letter-spacing: 4px;
+            font-weight: 700;
+            color: #8a94ae;
+            text-transform: uppercase;
+            margin-bottom: 6px;
+        }
+
+        header h1 {
+            font-size: 38px;
+            font-weight: 900;
+            letter-spacing: 2px;
+            color: #2b3550;
+            line-height: 1;
+        }
+
+        header .tagline {
+            margin-top: 10px;
+            font-size: 14px;
+            color: #8a94ae;
+            font-weight: 500;
+        }
+
+        /* ── Grid ── */
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: 20px;
+            padding: 32px 24px 48px;
+            max-width: 960px;
+            margin: 0 auto;
+        }
+
+        /* ── Card ── */
+        .card {
+            background: #fff;
+            border-radius: 22px;
+            overflow: hidden;
+            box-shadow: 0 4px 24px rgba(60, 80, 130, 0.09);
+            transition: transform .15s, box-shadow .15s;
+            cursor: pointer;
+            text-decoration: none;
+            color: inherit;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 10px 36px rgba(60, 80, 130, 0.15);
+        }
+
+        .card:active {
+            transform: scale(0.98);
+        }
+
+        /* thumbnail */
+        .card-thumb {
+            height: 180px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+            overflow: hidden;
+        }
+
+        /* Block Dock thumbnail */
+        .thumb-blockdock {
+            background: linear-gradient(135deg, #e8ecf8 0%, #d4daf2 100%);
+        }
+
+        .thumb-blockdock .mini-board {
+            display: grid;
+            grid-template-columns: repeat(9, 14px);
+            grid-template-rows: repeat(9, 14px);
+            gap: 1px;
+            border-radius: 6px;
+            overflow: hidden;
+            box-shadow: 0 4px 16px rgba(43, 53, 80, 0.18);
+        }
+
+        .mini-board .mc {
+            border-radius: 2px;
+        }
+
+        /* card body */
+        .card-body {
+            padding: 18px 20px 20px;
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .card-tag {
+            font-size: 10px;
+            letter-spacing: 2px;
+            font-weight: 700;
+            color: #8a94ae;
+            text-transform: uppercase;
+            margin-bottom: 6px;
+        }
+
+        .card-title {
+            font-size: 22px;
+            font-weight: 900;
+            color: #2b3550;
+            margin-bottom: 8px;
+            letter-spacing: .5px;
+        }
+
+        .card-desc {
+            font-size: 13px;
+            color: #8a94ae;
+            line-height: 1.6;
+            flex: 1;
+            margin-bottom: 18px;
+        }
+
+        .card-footer {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .badge {
+            display: flex;
+            gap: 6px;
+        }
+
+        .badge span {
+            font-size: 10px;
+            font-weight: 700;
+            letter-spacing: 1px;
+            padding: 4px 10px;
+            border-radius: 999px;
+            background: #f0f3fb;
+            color: #6b7894;
+            text-transform: uppercase;
+        }
+
+        .play-btn {
+            background: linear-gradient(180deg, #5aa3ff, #3b82f6);
+            color: #fff;
+            border: none;
+            padding: 10px 22px;
+            font-size: 12px;
+            font-weight: 800;
+            letter-spacing: 2px;
+            border-radius: 999px;
+            cursor: pointer;
+            box-shadow: 0 4px 14px rgba(59, 130, 246, 0.38);
+            transition: transform .1s;
+            text-transform: uppercase;
+        }
+
+        .play-btn:active {
+            transform: scale(0.95);
+        }
+
+        /* ── Footer ── */
+        footer {
+            text-align: center;
+            padding: 0 24px 36px;
+            font-size: 12px;
+            color: #b8bfd0;
+            letter-spacing: 1px;
+        }
+    </style>
+</head>
+
+<body>
+
+    <header>
+        <div class="title">Mini Games</div>
+        <h1>ARCADE</h1>
+        <p class="tagline">Wybierz grę i zagraj</p>
+    </header>
+
+    <div class="grid" id="gameGrid"></div>
+
+    <footer>ARCADE &nbsp;·&nbsp; 2026</footer>
+
+    <script>
+        const GAMES = [
+            {
+                id: 'block-dock',
+                title: 'Block Dock',
+                tag: 'Puzzle',
+                desc: 'Przeciągaj klocki na planszę. Wypełnij rzędy, kolumny lub kwadraty 3×3 żeby je kasować. Dostępne rozmiary: 6×6, 9×9, 12×12, 15×15, 18×18.',
+                badges: ['Puzzle', '6–18'],
+                url: 'block-dock/index.html',
+                thumb: 'blockdock',
+                accentColor: '#3b82f6',
+            },
+        ];
+
+        const PALETTE = [
+            '#3b82f6', '#10b981', '#a855f7',
+            '#f97316', '#ef4444', '#06b6d4',
+            '#eab308', '#ec4899',
+        ];
+
+        function makeMiniBoard() {
+            // Generate a random-looking but visually pleasing mini board snapshot
+            const board = Array.from({ length: 9 }, () => Array(9).fill(null));
+            // place a few random pieces
+            const rnd = (n) => Math.floor(Math.random() * n);
+            const attempts = 30;
+            for (let a = 0; a < attempts; a++) {
+                const color = PALETTE[rnd(PALETTE.length)];
+                const pieces = [
+                    [[0, 0], [1, 0], [2, 0]], [[0, 0], [0, 1], [0, 2]],
+                    [[0, 0], [1, 0], [0, 1], [1, 1]], [[0, 0], [1, 0], [2, 0], [1, 1]],
+                    [[0, 0]], [[0, 0], [1, 0]],
+                    [[0, 0], [1, 1], [0, 1]],
+                ];
+                const shape = pieces[rnd(pieces.length)];
+                const col = rnd(9), row = rnd(9);
+                let ok = true;
+                for (const [dx, dy] of shape) {
+                    if (col + dx >= 9 || row + dy >= 9 || board[row + dy][col + dx]) { ok = false; break; }
+                }
+                if (ok) for (const [dx, dy] of shape) board[row + dy][col + dx] = color;
+            }
+            return board;
+        }
+
+        function renderBlockDockThumb() {
+            const board = makeMiniBoard();
+            const div = document.createElement('div');
+            div.className = 'mini-board';
+            for (let y = 0; y < 9; y++) {
+                for (let x = 0; x < 9; x++) {
+                    const cell = document.createElement('div');
+                    cell.className = 'mc';
+                    if (board[y][x]) {
+                        cell.style.background = board[y][x];
+                    } else {
+                        const shaded = (Math.floor(x / 3) + Math.floor(y / 3)) % 2 === 1;
+                        cell.style.background = shaded ? '#d8deee' : '#e8ecf6';
+                    }
+                    div.appendChild(cell);
+                }
+            }
+            return div;
+        }
+
+        function buildCard(game) {
+            const a = document.createElement('a');
+            a.className = 'card';
+            a.href = game.url;
+
+            // thumbnail
+            const thumb = document.createElement('div');
+            thumb.className = 'card-thumb';
+            if (game.thumb === 'blockdock') {
+                thumb.classList.add('thumb-blockdock');
+                thumb.appendChild(renderBlockDockThumb());
+            }
+            a.appendChild(thumb);
+
+            // body
+            const body = document.createElement('div');
+            body.className = 'card-body';
+
+            const tag = document.createElement('div');
+            tag.className = 'card-tag';
+            tag.textContent = game.tag;
+
+            const title = document.createElement('div');
+            title.className = 'card-title';
+            title.textContent = game.title;
+
+            const desc = document.createElement('div');
+            desc.className = 'card-desc';
+            desc.textContent = game.desc;
+
+            const footer = document.createElement('div');
+            footer.className = 'card-footer';
+
+            const badge = document.createElement('div');
+            badge.className = 'badge';
+            for (const b of game.badges) {
+                const s = document.createElement('span');
+                s.textContent = b;
+                badge.appendChild(s);
+            }
+
+            const btn = document.createElement('button');
+            btn.className = 'play-btn';
+            btn.textContent = 'GRAJ';
+            btn.style.background = `linear-gradient(180deg, ${game.accentColor}cc, ${game.accentColor})`;
+
+            footer.appendChild(badge);
+            footer.appendChild(btn);
+
+            body.appendChild(tag);
+            body.appendChild(title);
+            body.appendChild(desc);
+            body.appendChild(footer);
+            a.appendChild(body);
+
+            return a;
+        }
+
+        const grid = document.getElementById('gameGrid');
+        for (const game of GAMES) {
+            grid.appendChild(buildCard(game));
+        }
+    </script>
+</body>
+
+</html>

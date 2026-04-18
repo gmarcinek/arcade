@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="pl">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no,viewport-fit=cover">
+    <title>Block Dock</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+    <canvas id="game"></canvas>
+
+    <button id="backBtn" onclick="location.href='../index.html'">&#8592; Arcade</button>
+
+    <!-- Settings gear button — top right, visible during play -->
+    <button id="settingsBtn" onclick="openDrawer()" title="Settings">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"
+            stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="3" />
+            <path
+                d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+        </svg>
+    </button>
+
+    <div id="hud">
+        <div class="grid-info" id="gridInfo"></div>
+        <div class="score">
+            <div class="lbl">SCORE</div>
+            <div class="val" id="score">0</div>
+        </div>
+        <div class="best">
+            <div>BEST</div>
+            <div class="v" id="best">0</div>
+        </div>
+    </div>
+
+    <div id="settingsDrawer">
+        <div class="drawer-header">
+            <span class="drawer-title">USTAWIENIA</span>
+            <button class="drawer-close" onclick="closeDrawer()">&#10005;</button>
+        </div>
+
+        <div class="drawer-section">
+            <div class="size-label">Tło</div>
+            <div class="color-row">
+                <input type="color" id="bgPicker" value="#ffffff">
+                <span class="color-hint">Kolor tła</span>
+                <button class="reset-btn" id="bgReset" title="Przywróć domyślny">&#8635;</button>
+            </div>
+        </div>
+
+        <div class="drawer-section">
+            <div class="size-label">Klocki</div>
+            <div class="color-row">
+                <input type="color" id="blockPicker" value="#fe5879">
+                <span class="color-hint">Kolor klocków</span>
+            </div>
+        </div>
+
+        <div class="drawer-section">
+            <div class="size-label">Siatka</div>
+            <div class="color-row">
+                <input type="color" id="gridPicker" value="#383838">
+                <span class="color-hint">Kolor siatki</span>
+            </div>
+            <div class="slider-row">
+                <span class="slider-label">Przezroczystość</span>
+                <input type="range" id="gridAlpha" min="0" max="1" step="0.01" value="0.34">
+            </div>
+        </div>
+    </div>
+
+    <div id="overlay"></div>
+
+    <script src="shapes.js"></script>
+    <script src="game.js"></script>
+</body>
+
+</html>
