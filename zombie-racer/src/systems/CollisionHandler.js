@@ -1,3 +1,5 @@
+import { BUMPER_SPEED_THRESHOLD, BUILDING_IMPACT_SCALE, CAR_IMPACT_SCALE, DAMAGE_PER_IMPULSE } from '../physicsConfig.js';
+
 export class CollisionHandler {
   constructor(world, player, zombies, npcCars, timer, hud, onZombieKill, onCarKill, onCarHit) {
     this.player      = player;
@@ -21,16 +23,16 @@ export class CollisionHandler {
     // Player hits building
     if (bodyB.userData?.building) {
       const playerSpeed = bodyA.velocity.length();
-      if (playerSpeed > 3) {
-        const nx = bodyA.position.x - bodyB.position.x;
-        const nz = bodyA.position.z - bodyB.position.z;
-        const len = Math.sqrt(nx * nx + nz * nz) || 1;
-        const contactNormal = { x: nx / len, y: 0, z: nz / len };
-        // Pełna energia zderzenia (budynek statyczny = cała prędkość gracza)
-        this.player.receiveImpact(playerSpeed * 0.5 * 800, contactNormal);
-        const hpLost = Math.round(playerSpeed * 0.5 * 800 * 0.0008 * 100);
-        this.hud.showMessage(`🏗️ BUDYNEK -${hpLost} HP`, '#ff6600', 900);
-      }
+      const BUMPER_THRESHOLD = BUMPER_SPEED_THRESHOLD;
+      if (playerSpeed <= BUMPER_THRESHOLD) return;
+      const effectiveSpeed = playerSpeed - BUMPER_THRESHOLD;
+      const nx = bodyB.position.x - bodyA.position.x;
+      const nz = bodyB.position.z - bodyA.position.z;
+      const len = Math.sqrt(nx * nx + nz * nz) || 1;
+      const contactNormal = { x: nx / len, y: 0, z: nz / len };
+      this.player.receiveImpact(effectiveSpeed * BUILDING_IMPACT_SCALE, contactNormal);
+      const hpLost = Math.round(effectiveSpeed * BUILDING_IMPACT_SCALE * DAMAGE_PER_IMPULSE * 100);
+      if (hpLost > 0) this.hud.showMessage(`🏗️ BUDYNEK -${hpLost} HP`, '#ff6600', 900);
       return;
     }
 
@@ -42,12 +44,8 @@ export class CollisionHandler {
         const relVelZ = bodyA.velocity.z - bodyB.velocity.z;
         const relSpeed = Math.sqrt(relVelX * relVelX + relVelZ * relVelZ);
         if (relSpeed > 2) {
-          // Zombie: 10x mniej obrażeń gracza niż oryginalne uderzenie NPC
-          const nx = bodyA.position.x - bodyB.position.x;
-          const nz = bodyA.position.z - bodyB.position.z;
-          const len = Math.sqrt(nx * nx + nz * nz) || 1;
-          const contactNormal = { x: nx / len, y: 0, z: nz / len };
-          this.player.receiveImpact(relSpeed * 0.5 * 80, contactNormal);
+          // Zombie: dokładnie 1 HP obrażeń dla gracza
+          this.player.hp = Math.max(0, this.player.hp - 1);
           this.onZombieKill(zombie);
         }
       }
@@ -62,16 +60,15 @@ export class CollisionHandler {
       const relSpeed = Math.sqrt(relVelX * relVelX + relVelZ * relVelZ);
 
       if (relSpeed > 1.5) {
-        const nx = bodyA.position.x - bodyB.position.x;
-        const nz = bodyA.position.z - bodyB.position.z;
+        // Normal: from player toward NPC = direction of impact on player's car
+        const nx = bodyB.position.x - bodyA.position.x;
+        const nz = bodyB.position.z - bodyA.position.z;
         const len = Math.sqrt(nx * nx + nz * nz) || 1;
         const contactNormal = { x: nx / len, y: 0, z: nz / len };
 
-        // Gracz: 50% mniej niż poprzednio (było * 800)
         const impactForce = relSpeed * 0.5;
-        this.player.receiveImpact(impactForce * 400, contactNormal);
+        this.player.receiveImpact(impactForce * CAR_IMPACT_SCALE, contactNormal);
 
-        // NPC: obrażenia zależne od energii kinetycznej i obrony
         const npcHpBefore = npc.hp;
         const npcDamageHP = (relSpeed * relSpeed * this.player.stats.offence) / (npc.stats.defence * 3);
         npc.hp = Math.max(0, npc.hp - npcDamageHP);

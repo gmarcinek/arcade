@@ -1,5 +1,5 @@
 import { Car } from './Car.js';
-import { MAX_STEER } from '../constants.js';
+import { MAX_STEER } from '../physicsConfig.js';
 
 export class PlayerCar extends Car {
   constructor() {

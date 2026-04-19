@@ -2,12 +2,12 @@ import { Car } from '../car/Car.js';
 
 const NPC_WAYPOINT_THRESHOLD = 8;
 const NPC_MAX_HP = 600;
-const NPC_ATTACK_RANGE = 30;   // m — poniżej tej odległości NPC atakuje gracza
+const NPC_ATTACK_RANGE = 80;   // m — poniżej tej odległości NPC atakuje gracza
 const NPC_BOUNDS = 410;        // poza granicą = wypchnięty = śmierć
 
 export class NPCCar extends Car {
   constructor(waypointRoute, color = 0xcc2200) {
-    super({ stats: { engine: 0.8, defence: 0.8, offence: 1.2 } });
+    super({ stats: { engine: 1.2, defence: 0.7, offence: 0.7 } });
     this.waypointRoute = waypointRoute;
     this.waypointIdx = 0;
     this.npcColor = color;
@@ -36,7 +36,8 @@ export class NPCCar extends Car {
 
     let targetX, targetZ;
 
-    // Atak gracza jeśli w zasięgu
+    // Atak gracza jeśli w zasięgu — pełny gaz przy ataku
+    let throttle = 0.7;
     if (playerPos) {
       const dpx = playerPos.x - pos.x;
       const dpz = playerPos.z - pos.z;
@@ -44,6 +45,7 @@ export class NPCCar extends Car {
       if (playerDist < NPC_ATTACK_RANGE) {
         targetX = playerPos.x;
         targetZ = playerPos.z;
+        throttle = 1.0;
       }
     }
 
@@ -75,7 +77,7 @@ export class NPCCar extends Car {
     while (steerAngle < -Math.PI) steerAngle += Math.PI * 2;
     const steer = Math.max(-1, Math.min(1, steerAngle / 0.8));
 
-    this.applyControl(0.7, steer, false);
+    this.applyControl(throttle, steer, false);
     this.sync();
   }
 }

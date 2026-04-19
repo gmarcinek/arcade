@@ -1,9 +1,6 @@
 import * as THREE from 'three';
-import { CAMERA_OFFSET_BEHIND, CAMERA_OFFSET_UP } from '../constants.js';
-
-const YAW_LERP     = 0.04;  // lag obrotu kamery za autem
-const POS_LERP     = 0.06;  // lag pozycji
-const REVERSE_LERP = 0.03;  // wolniejszy obrót przy cofaniu
+import { CAMERA_OFFSET_BEHIND, CAMERA_OFFSET_UP,
+         CAMERA_YAW_LERP, CAMERA_POS_LERP, CAMERA_REVERSE_LERP } from '../physicsConfig.js';
 
 export class ThirdPersonCamera {
   constructor(camera) {
@@ -30,7 +27,7 @@ export class ThirdPersonCamera {
     let diff = targetYaw - this._camYaw;
     while (diff >  Math.PI) diff -= 2 * Math.PI;
     while (diff < -Math.PI) diff += 2 * Math.PI;
-    const lerpFactor = throttle < 0 ? REVERSE_LERP : YAW_LERP;
+    const lerpFactor = throttle < 0 ? CAMERA_REVERSE_LERP : CAMERA_YAW_LERP;
     this._camYaw += diff * lerpFactor;
 
     // Pozycja idealna: ZA autem według kąta kamery (nie kąta auta)
@@ -42,7 +39,7 @@ export class ThirdPersonCamera {
       carPos.z - cosY * CAMERA_OFFSET_BEHIND
     );
 
-    this.camera.position.lerp(this._idealPos, POS_LERP);
+    this.camera.position.lerp(this._idealPos, CAMERA_POS_LERP);
 
     // Patrz na auto (lekko powyżej środka)
     this._lookTarget.set(carPos.x, carPos.y + 1.2, carPos.z);

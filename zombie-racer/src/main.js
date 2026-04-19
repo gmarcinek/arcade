@@ -64,8 +64,8 @@ player.build(scene, world, MAP.playerSpawn.x, spawnH + 0.9, MAP.playerSpawn.z, 0
 
 // ── NPC Cars ──────────────────────────────────────────────────────
 const npcCars = [];
-const npcColors = [0xcc2200, 0x2200cc];
-for (let i = 0; i < MAP.npcWaypoints.length; i++) {
+const npcColors = [0xcc2200, 0x2200cc, 0xcc8800, 0xaa00cc, 0x00aacc];
+for (let i = 0; i < Math.min(MAP.npcWaypoints.length, 5); i++) {
   const npc = new NPCCar(MAP.npcWaypoints[i], npcColors[i % npcColors.length]);
   npc.buildNPC(scene, world, terrain);
   npcCars.push(npc);
@@ -74,10 +74,14 @@ for (let i = 0; i < MAP.npcWaypoints.length; i++) {
 // ── Zombies ───────────────────────────────────────────────────────
 const zombies = [];
 for (const sp of MAP.zombieSpawns) {
-  const z = new Zombie();
-  const zh = terrain.getHeightAt(sp.x, sp.z) + 1.2;
-  z.spawn(scene, world, sp.x, zh, sp.z);
-  zombies.push(z);
+  for (let j = 0; j < 3; j++) {
+    const ox = (Math.random() - 0.5) * 10;
+    const oz = (Math.random() - 0.5) * 10;
+    const z = new Zombie();
+    const zh = terrain.getHeightAt(sp.x + ox, sp.z + oz) + 1.2;
+    z.spawn(scene, world, sp.x + ox, zh, sp.z + oz);
+    zombies.push(z);
+  }
 }
 
 // ── Systems ───────────────────────────────────────────────────────
@@ -111,6 +115,35 @@ function onZombieKill(zombie) {
   addCredits(CREDITS_ZOMBIE, '🧟 +20s', '#44ff44');
   const pos = zombie.mesh ? zombie.mesh.position : { x: 0, z: 0 };
   particles.spawnBloodSplatter(pos.x, 1, pos.z);
+  checkWinConditions();
+}
+
+function showWin(reason) {
+  if (gameOverVisible) return;
+  gameOverVisible = true;
+  const el = document.createElement('div');
+  el.style.cssText = `position:fixed;inset:0;background:rgba(0,0,0,0.88);
+    display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:200;`;
+  el.innerHTML = `
+    <div style="font-size:68px;font-weight:900;color:#00ff88;letter-spacing:4px;text-shadow:0 0 30px #00ff88;">WYGRAŁEŚ!</div>
+    <div style="font-size:22px;color:#ccc;margin:12px 0 8px;">${reason}</div>
+    <div style="font-size:18px;color:#ffcc00;margin:0 0 32px;">🧟 ${zombieKills} zombie &nbsp;|&nbsp; 🚗 ${carKills} auta &nbsp;|&nbsp; 💰 ${credits} CR</div>
+    <button onclick="location.reload()"
+      style="padding:14px 44px;font-size:18px;font-weight:800;background:#00cc66;color:#fff;
+             border:none;border-radius:10px;cursor:pointer;letter-spacing:2px;">ZAGRAJ PONOWNIE</button>
+    <button onclick="location.href='../index.html'"
+      style="margin-top:12px;padding:10px 32px;font-size:14px;background:transparent;
+             color:#888;border:1px solid #444;border-radius:8px;cursor:pointer;">← Arcade</button>
+  `;
+  document.body.appendChild(el);
+}
+
+function checkWinConditions() {
+  if (gameOverVisible) return;
+  const aliveNpcs = npcCars.filter(c => c.isAlive).length;
+  if (aliveNpcs === 0) { showWin('Wszystkich oponentów zniszczono! 🚗💥'); return; }
+  const aliveZombies = zombies.filter(z => z.isAlive).length;
+  if (aliveZombies === 0) { showWin('Wszystkie zombie rozjechane! 🧟💀'); }
 }
 
 function onCarKill(npc) {
@@ -120,6 +153,7 @@ function onCarKill(npc) {
   timer.addTime(80);
   carKills++;
   addCredits(CREDITS_CAR_KILL, '🚗💥 +80s', '#ffcc00');
+  checkWinConditions();
 }
 
 function onCarHit(damageDealt) {
@@ -255,7 +289,8 @@ function gameLoop() {
   particles.update(dt);
   timer.update(dt);
   thirdPersonCam.update(player.group, input.throttle);
-  hud.update(timer.getDisplay(), zombieKills, carKills, player.hp, credits);
+  const speedKmh = player.chassisBody ? player.chassisBody.velocity.length() * 3.6 : 0;
+  hud.update(timer.getDisplay(), zombieKills, carKills, player.hp, credits, speedKmh);
   damageOverlay.update(player.damageSystem.state);
 
   renderer.render(scene, camera);

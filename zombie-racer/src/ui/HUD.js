@@ -11,14 +11,16 @@ export class HUD {
           <div id="hud-hp-bar" style="height:100%;width:100%;background:#22cc44;transition:width .2s,background .2s;border-radius:6px;"></div>
         </div>
       </div>
+      <div id="hud-speed" style="position:absolute;bottom:24px;right:32px;font-size:38px;font-weight:900;color:#fff;text-shadow:0 2px 10px #000;text-align:right;letter-spacing:1px;"></div>
     `;
     this._timer   = document.getElementById('hud-timer');
     this._kills   = document.getElementById('hud-kills');
     this._credits = document.getElementById('hud-credits');
     this._hpBar   = document.getElementById('hud-hp-bar');
+    this._speed   = document.getElementById('hud-speed');
   }
 
-  update(timerDisplay, zombieKills, carKills, hpPercent, credits = 0) {
+  update(timerDisplay, zombieKills, carKills, hpPercent, credits = 0, speedKmh = 0) {
     this._timer.textContent   = timerDisplay;
     this._kills.textContent   = `🧟 ×${zombieKills}   🚗 ×${carKills}`;
     this._credits.textContent = `💰 ${credits >= 0 ? '+' : ''}${credits} CR`;
@@ -26,6 +28,7 @@ export class HUD {
     const pct = Math.max(0, Math.min(100, hpPercent));
     this._hpBar.style.width      = pct + '%';
     this._hpBar.style.background = pct > 50 ? '#22cc44' : pct > 25 ? '#ffaa00' : '#ff3333';
+    this._speed.textContent = `${Math.round(speedKmh)} km/h`;
   }
 
   showMessage(text, color = '#fff', duration = 2000) {

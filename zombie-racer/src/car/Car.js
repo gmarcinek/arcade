@@ -1,6 +1,14 @@
 import * as THREE from 'three';
 import * as CANNON from 'cannon-es';
-import { CAR_MASS, MAX_ENGINE_FORCE, MAX_STEER, BRAKE_FORCE } from '../constants.js';
+import { CAR_MASS, MAX_ENGINE_FORCE, MAX_STEER, BRAKE_FORCE,
+         CHASSIS_COM_OFFSET_X, CHASSIS_COM_OFFSET_Y, CHASSIS_COM_OFFSET_Z,
+         ANGULAR_DAMPING, LINEAR_DAMPING,
+         WHEEL_RADIUS, WHEEL_POS_X, WHEEL_POS_Z_FRONT, WHEEL_POS_Z_REAR,
+         SUSPENSION_STIFFNESS, SUSPENSION_REST_LENGTH, SUSPENSION_MAX_TRAVEL,
+         SUSPENSION_MAX_FORCE, DAMPING_RELAXATION, DAMPING_COMPRESSION, ROLL_INFLUENCE,
+         FRICTION_SLIP_FRONT_STATIC, FRICTION_SLIP_REAR_STATIC,
+         FRICTION_SLIP_FRONT_DYNAMIC, FRICTION_SLIP_REAR_DYNAMIC,
+         SLIP_SPEED_MIN, SLIP_SPEED_MAX } from '../physicsConfig.js';
 import { carBodyMaterial, wheelMaterial } from '../physics/PhysicsWorld.js';
 import { DamageSystem } from './DamageSystem.js';
 import { CarStats } from './CarStats.js';
@@ -84,12 +92,29 @@ export class Car {
     }
 
     // ── Cannon-es physics ─────────────────────────────────
-    const chassisShape = new CANNON.Box(new CANNON.Vec3(1.2, 0.4, 2.4));
+    // Złożona bryła kolizji: podwozie + kabina + dach
+    // Dzięki temu auto ma realistyczny moment bezwładności i może kozłować
     this.chassisBody = new CANNON.Body({ mass: CAR_MASS, material: carBodyMaterial });
-    this.chassisBody.addShape(chassisShape);
+
+    // Podwozie — szeroki, płaski kształt (dolna część auta)
+    const shapeFloor  = new CANNON.Box(new CANNON.Vec3(1.15, 0.22, 2.35));
+    // Kabina — węższy, wyższy kształt (górna część nadwozia)
+    const shapeCabin  = new CANNON.Box(new CANNON.Vec3(0.85, 0.40, 1.15));
+    // Dach — bardzo wąski, płaski (przesuwa środek masy w górę, umożliwia kozłowanie)
+    const shapeRoof   = new CANNON.Box(new CANNON.Vec3(0.75, 0.12, 1.0));
+
+    const com = new CANNON.Vec3(CHASSIS_COM_OFFSET_X, CHASSIS_COM_OFFSET_Y, CHASSIS_COM_OFFSET_Z);
+
+    // podwozie: na osi COM (y=0 względem środka masy)
+    this.chassisBody.addShape(shapeFloor, new CANNON.Vec3(com.x,          com.y - 0.18,  com.z));
+    // kabina: 0.42m wyżej nad podwoziem
+    this.chassisBody.addShape(shapeCabin, new CANNON.Vec3(com.x,          com.y + 0.42,  com.z + 0.12));
+    // dach: kolejne 0.52m wyżej — podnosi środek masy i tensor bezwładności w osi X
+    this.chassisBody.addShape(shapeRoof,  new CANNON.Vec3(com.x,          com.y + 0.90,  com.z + 0.08));
+
     this.chassisBody.position.set(spawnX, spawnY, spawnZ);
-    this.chassisBody.angularDamping = 0.4;
-    this.chassisBody.linearDamping = 0.1;
+    this.chassisBody.angularDamping = ANGULAR_DAMPING;
+    this.chassisBody.linearDamping  = LINEAR_DAMPING;
     this.chassisBody.userData = { car: this };
 
 
@@ -101,27 +126,27 @@ export class Car {
     });
 
     const wheelOpts = {
-      radius: 0.55,
+      radius: WHEEL_RADIUS,
       directionLocal: new CANNON.Vec3(0, -1, 0),
       axleLocal: new CANNON.Vec3(-1, 0, 0),
       chassisConnectionPointLocal: new CANNON.Vec3(),
-      suspensionStiffness: 22,        // niższe = bardziej miękkie, większe bujanie
-      suspensionRestLength: 0.55,
-      frictionSlip: 2.75,
-      dampingRelaxation: 1.8,         // mniejsze = wolniejszy powrót zawieszenia
-      dampingCompression: 2.8,
-      maxSuspensionForce: 100000,
-      rollInfluence: 0.12,            // większe = mocniejsze przećhylanie w zakrętach
-      maxSuspensionTravel: 0.6,       // większy zakres ruchu zawieszenia
+      suspensionStiffness:   SUSPENSION_STIFFNESS,
+      suspensionRestLength:  SUSPENSION_REST_LENGTH,
+      frictionSlip:          FRICTION_SLIP_FRONT_STATIC,
+      dampingRelaxation:     DAMPING_RELAXATION,
+      dampingCompression:    DAMPING_COMPRESSION,
+      maxSuspensionForce:    SUSPENSION_MAX_FORCE,
+      rollInfluence:         ROLL_INFLUENCE,
+      maxSuspensionTravel:   SUSPENSION_MAX_TRAVEL,
       useCustomSlidingRotationalSpeed: true,
       customSlidingRotationalSpeed: -30,
     };
 
     const wheelPositions = [
-      new CANNON.Vec3(-1.15, 0,  1.85),  // FL
-      new CANNON.Vec3( 1.15, 0,  1.85),  // FR
-      new CANNON.Vec3(-1.15, 0, -1.85),  // RL
-      new CANNON.Vec3( 1.15, 0, -1.85),  // RR
+      new CANNON.Vec3(-WHEEL_POS_X, 0,  WHEEL_POS_Z_FRONT),  // FL
+      new CANNON.Vec3( WHEEL_POS_X, 0,  WHEEL_POS_Z_FRONT),  // FR
+      new CANNON.Vec3(-WHEEL_POS_X, 0, -WHEEL_POS_Z_REAR),   // RL
+      new CANNON.Vec3( WHEEL_POS_X, 0, -WHEEL_POS_Z_REAR),   // RR
     ];
     wheelPositions.forEach(pos => {
       wheelOpts.chassisConnectionPointLocal.copy(pos);
@@ -137,11 +162,11 @@ export class Car {
     const steerVal = steer * MAX_STEER * steerMultiplier;
     const brakeVal = brake ? BRAKE_FORCE : 0;
 
-    // Rear-wheel drive only — negacja bo cannon-es indexForwardAxis=2 (+Z = tył auta)
-    this.vehicle.applyEngineForce(-force, 2);
-    this.vehicle.applyEngineForce(-force, 3);
-    this.vehicle.applyEngineForce(0, 0);
-    this.vehicle.applyEngineForce(0, 1);
+    // Front-wheel drive only — negacja bo cannon-es indexForwardAxis=2 (+Z = tył auta)
+    this.vehicle.applyEngineForce(-force, 0);
+    this.vehicle.applyEngineForce(-force, 1);
+    this.vehicle.applyEngineForce(0, 2);
+    this.vehicle.applyEngineForce(0, 3);
 
     // Front wheels steer only — negacja bo oś X odwrócona
     this.vehicle.setSteeringValue(-steerVal, 0);
@@ -153,13 +178,12 @@ export class Car {
 
     // Dynamic grip loss: rear tyres lose traction faster than front
     if (this.chassisBody && this.vehicle.wheelInfos.length === 4) {
-      const speed = this.chassisBody.velocity.length(); // m/s
-      // Partial loss between 12 m/s (~43 km/h) and 28 m/s (~100 km/h)
-      const t = Math.max(0, Math.min(1, (speed - 12) / 16));
-      this.vehicle.wheelInfos[0].frictionSlip = 2.75 - 1.0  * t; // FL: 2.75→1.75
-      this.vehicle.wheelInfos[1].frictionSlip = 2.75 - 1.0  * t; // FR: 2.75→1.75
-      this.vehicle.wheelInfos[2].frictionSlip = 2.75 - 1.875 * t; // RL: 2.75→0.875
-      this.vehicle.wheelInfos[3].frictionSlip = 2.75 - 1.875 * t; // RR: 2.75→0.875
+      const speed = this.chassisBody.velocity.length();
+      const t = Math.max(0, Math.min(1, (speed - SLIP_SPEED_MIN) / (SLIP_SPEED_MAX - SLIP_SPEED_MIN)));
+      this.vehicle.wheelInfos[0].frictionSlip = FRICTION_SLIP_FRONT_STATIC - (FRICTION_SLIP_FRONT_STATIC - FRICTION_SLIP_FRONT_DYNAMIC) * t;
+      this.vehicle.wheelInfos[1].frictionSlip = FRICTION_SLIP_FRONT_STATIC - (FRICTION_SLIP_FRONT_STATIC - FRICTION_SLIP_FRONT_DYNAMIC) * t;
+      this.vehicle.wheelInfos[2].frictionSlip = FRICTION_SLIP_REAR_STATIC  - (FRICTION_SLIP_REAR_STATIC  - FRICTION_SLIP_REAR_DYNAMIC)  * t;
+      this.vehicle.wheelInfos[3].frictionSlip = FRICTION_SLIP_REAR_STATIC  - (FRICTION_SLIP_REAR_STATIC  - FRICTION_SLIP_REAR_DYNAMIC)  * t;
     }
   }
 
