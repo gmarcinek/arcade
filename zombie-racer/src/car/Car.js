@@ -8,15 +8,15 @@ import { CAR_MASS, MAX_ENGINE_FORCE, MAX_STEER, BRAKE_FORCE,
          SUSPENSION_MAX_FORCE, DAMPING_RELAXATION, DAMPING_COMPRESSION, ROLL_INFLUENCE,
          FRICTION_SLIP_FRONT_STATIC, FRICTION_SLIP_REAR_STATIC,
          FRICTION_SLIP_FRONT_DYNAMIC, FRICTION_SLIP_REAR_DYNAMIC,
-         SLIP_SPEED_MIN, SLIP_SPEED_MAX } from '../physicsConfig.js';
+         SLIP_SPEED_MIN, SLIP_SPEED_MAX,
+         DAMAGE_PER_IMPULSE, WHEEL_SLIDE_SPEED } from '../physicsConfig.js';
 import { carBodyMaterial, wheelMaterial } from '../physics/PhysicsWorld.js';
 import { DamageSystem } from './DamageSystem.js';
 import { CarStats } from './CarStats.js';
-import { makeWheelTexture } from '../utils/ProceduralTextures.js';
-
-const _wheelTex = makeWheelTexture();
 
 export class Car {
+  static suvGltf = null; // ustawiane z main.js po załadowaniu modelu
+
   constructor({ stats } = {}) {
     this.stats = stats instanceof CarStats ? stats : new CarStats(stats || {});
     this.damageSystem = new DamageSystem();
@@ -35,60 +35,107 @@ export class Car {
   }
 
   build(scene, world, spawnX, spawnY, spawnZ, color = 0xff2200) {
-    // ── Three.js visuals ──────────────────────────────────
-    const chassisGeo = new THREE.BoxGeometry(2.4, 0.7, 4.8);
-    const chassisMat = new THREE.MeshPhongMaterial({ color, shininess: 80, specular: 0x443322 });
-    this.chassisMesh = new THREE.Mesh(chassisGeo, chassisMat);
-    this.chassisMesh.castShadow = true;
-
-    // Zderzaki
-    const bumperMat = new THREE.MeshPhongMaterial({ color: 0x111111, shininess: 40 });
-    const bumperFGeo = new THREE.BoxGeometry(2.2, 0.35, 0.4);
-    const bumperF = new THREE.Mesh(bumperFGeo, bumperMat);
-    bumperF.position.set(0, -0.18, 2.6);
-    this.chassisMesh.add(bumperF);
-    const bumperR = new THREE.Mesh(bumperFGeo.clone(), bumperMat);
-    bumperR.position.set(0, -0.18, -2.6);
-    this.chassisMesh.add(bumperR);
-
-    // Kabina
-    const cabinGeo = new THREE.BoxGeometry(1.8, 0.65, 2.4);
-    const cabinMat = new THREE.MeshPhongMaterial({ color: 0x222233, shininess: 120, specular: 0x4466aa });
-    const cabinMesh = new THREE.Mesh(cabinGeo, cabinMat);
-    cabinMesh.position.set(0, 0.68, 0.15);
-    this.chassisMesh.add(cabinMesh);
-
-    // Maska silnika
-    const hoodMat = new THREE.MeshPhongMaterial({ color, shininess: 60 });
-    const hoodMesh = new THREE.Mesh(new THREE.BoxGeometry(2.1, 0.25, 1.5), hoodMat);
-    hoodMesh.position.set(0, 0.47, 1.65);
-    this.chassisMesh.add(hoodMesh);
-
-    // Bagażnik
-    const trunkMesh = new THREE.Mesh(new THREE.BoxGeometry(2.0, 0.2, 1.1), hoodMat);
-    trunkMesh.position.set(0, 0.45, -1.8);
-    this.chassisMesh.add(trunkMesh);
-
-    // Lusterka
-    const mirrorMat = new THREE.MeshPhongMaterial({ color: 0x444455, shininess: 60 });
-    [-1.02, 1.02].forEach(x => {
-      const m = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.1, 0.22), mirrorMat);
-      m.position.set(x, 0.78, 0.95);
-      this.chassisMesh.add(m);
+    // ── Materiały (PBR) ──────────────────────────────────
+    const paintMat = new THREE.MeshPhysicalMaterial({
+      color,
+      metalness: 0.55,
+      roughness: 0.26,
+      clearcoat: 1.0,
+      clearcoatRoughness: 0.07,
     });
+    const glassMat = new THREE.MeshPhysicalMaterial({
+      color: 0x6688aa,
+      metalness: 0.0,
+      roughness: 0.05,
+      transparent: true,
+      opacity: 0.38,
+      side: THREE.DoubleSide,
+      depthWrite: false,
+    });
+    const hlMat = new THREE.MeshStandardMaterial({
+      color: 0xfff8e0,
+      emissive: new THREE.Color(0xffeeaa),
+      emissiveIntensity: 2.0,
+      roughness: 0.05,
+      metalness: 0.1,
+    });
+    const tlMat = new THREE.MeshStandardMaterial({
+      color: 0xff0800,
+      emissive: new THREE.Color(0xff0000),
+      emissiveIntensity: 1.8,
+      roughness: 0.10,
+      transparent: true,
+      opacity: 0.90,
+    });
+
+    // ── Karoseria — model GLTF (Quaternius SUV, CC0) ─────
+    this.chassisMesh = new THREE.Group();
+    if (Car.suvGltf) {
+      // Pobieramy tylko mesh nadwozia, bez kół (koła są proceduralne)
+      const src = Car.suvGltf.scene.getObjectByName('SUV_Cube');
+      if (src) {
+        const body = src.clone(true);
+        body.traverse(child => {
+          if (!child.isMesh) return;
+          child.castShadow = true;
+          child.receiveShadow = true;
+          // Zamień materiały wg nazwy na PBR
+          const mats = Array.isArray(child.material) ? child.material : [child.material];
+          child.material = mats.map(m => {
+            if (m.name === 'White')      return paintMat;
+            if (m.name === 'Windows')    return glassMat;
+            if (m.name === 'Headlights') return hlMat;
+            if (m.name === 'TailLights') return tlMat;
+            return m; // Black / Grey — trzymamy oryginał
+          });
+          if (!Array.isArray(child.material) && child.material.length === 1)
+            child.material = child.material[0];
+        });
+        // Model ma y=0 = poziom ziemi. chassisBody.position.y ≈ ground + 0.745
+        // (wheel_radius + suspension_rest_length). Przesuwamy body tak, żeby
+        // y=0 modelu był na poziomie gruntu, czyli -0.745 w układzie grupy.
+        body.position.y = -0.745;
+        body.rotation.y = Math.PI; // front modelu Quaternius SUV skierowany w -Z, obracamy do +Z
+        this.chassisMesh.add(body);
+      }
+    } else {
+      // Fallback: prosty box
+      const m = new THREE.Mesh(new THREE.BoxGeometry(2.1, 1.2, 4.3), paintMat);
+      m.castShadow = true;
+      m.position.y = 0.3;
+      this.chassisMesh.add(m);
+    }
 
     this.group.add(this.chassisMesh);
     scene.add(this.group);
 
-    // Koła z teksturą
-    const wheelGeo = new THREE.CylinderGeometry(0.4, 0.4, 0.3, 16);
-    wheelGeo.rotateZ(Math.PI / 2);
-    const wheelMat = new THREE.MeshPhongMaterial({ map: _wheelTex, shininess: 30 });
+    // ═══════════════════════════════════════════════════════
+    //  KOŁA — opona + obręcz wieloramienna + piasta
+    // ═══════════════════════════════════════════════════════
+    const tireMat   = new THREE.MeshStandardMaterial({ color: 0x161616, roughness: 0.95, metalness: 0.0 });
+    const rimMat    = new THREE.MeshStandardMaterial({ color: 0xaaaaaa, roughness: 0.14, metalness: 0.98 });
+    const hubCapMat = new THREE.MeshStandardMaterial({ color: 0x888888, roughness: 0.20, metalness: 0.95 });
+
+    const R = WHEEL_RADIUS;
+    // Opona — lekko szersza niż obręcz
+    const tireGeo = new THREE.CylinderGeometry(R, R, 0.26, 24);
+    tireGeo.rotateZ(Math.PI / 2);
+    // Obręcz — 5-ramienna (pentagon prism)
+    const rimGeo  = new THREE.CylinderGeometry(R * 0.62, R * 0.62, 0.28, 5);
+    rimGeo.rotateZ(Math.PI / 2);
+    // Piasta
+    const hubGeo  = new THREE.CylinderGeometry(R * 0.17, R * 0.17, 0.30, 6);
+    hubGeo.rotateZ(Math.PI / 2);
+
     for (let i = 0; i < 4; i++) {
-      const wm = new THREE.Mesh(wheelGeo, wheelMat);
-      wm.castShadow = true;
-      scene.add(wm);
-      this.wheelMeshes.push(wm);
+      const wg = new THREE.Group();
+      const tire = new THREE.Mesh(tireGeo, tireMat);
+      const rim  = new THREE.Mesh(rimGeo,  rimMat);
+      const hub  = new THREE.Mesh(hubGeo,  hubCapMat);
+      tire.castShadow = rim.castShadow = true;
+      wg.add(tire, rim, hub);
+      scene.add(wg);
+      this.wheelMeshes.push(wg);
     }
 
     // ── Cannon-es physics ─────────────────────────────────
@@ -139,7 +186,7 @@ export class Car {
       rollInfluence:         ROLL_INFLUENCE,
       maxSuspensionTravel:   SUSPENSION_MAX_TRAVEL,
       useCustomSlidingRotationalSpeed: true,
-      customSlidingRotationalSpeed: -30,
+      customSlidingRotationalSpeed: WHEEL_SLIDE_SPEED,
     };
 
     const wheelPositions = [
@@ -206,7 +253,7 @@ export class Car {
     invQ.vmult(contactNormalWorld, localNormal);
     const threeNormal = { x: localNormal.x, y: localNormal.y, z: localNormal.z };
 
-    const rawDamage = impulse * 0.0008;
+    const rawDamage = impulse * DAMAGE_PER_IMPULSE;
     if (rawDamage < 0.01) return;
 
     this.damageSystem.applyDamage(rawDamage, threeNormal, this.stats);

@@ -82,4 +82,8 @@ export class TouchInput {
     gasBtn.addEventListener('touchstart', e => { e.preventDefault(); this.throttle = 1; }, { passive: false });
     gasBtn.addEventListener('touchend',   e => { e.preventDefault(); this.throttle = 0; }, { passive: false });
   }
+
+  get boost() { return false; }
+
+  consumeHeal() { return false; }
 }

@@ -1,8 +1,10 @@
 import * as THREE from 'three';
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { createPhysicsWorld } from './physics/PhysicsWorld.js';
 import { Terrain } from './world/Terrain.js';
 import { CityBuilder } from './world/CityBuilder.js';
 import { PlayerCar } from './car/PlayerCar.js';
+import { Car } from './car/Car.js';
 import { NPCCar } from './entities/NPCCar.js';
 import { Zombie } from './entities/Zombie.js';
 import { KeyboardInput } from './input/KeyboardInput.js';
@@ -14,6 +16,15 @@ import { HUD } from './ui/HUD.js';
 import { DamageOverlay } from './ui/DamageOverlay.js';
 import { ParticleSystem } from './effects/ParticleSystem.js';
 import { MAP } from './world/mapData.js';
+import suvModelUrl from './assets/suv.glb?url';
+import { BOOST_FOV_NORMAL, BOOST_FOV_ACTIVE, BOOST_FOV_LERP } from './physicsConfig.js';
+
+// ── Wczytaj model auta (async, przed inicjalizacją) ───────────────
+try {
+  Car.suvGltf = await new GLTFLoader().loadAsync(suvModelUrl);
+} catch (e) {
+  console.warn('GLB load failed, using fallback car model:', e);
+}
 
 // ── Renderer ──────────────────────────────────────────────────────
 const canvas = document.getElementById('game');
@@ -30,8 +41,10 @@ scene.background = new THREE.Color(0x87ceeb);
 scene.fog = new THREE.Fog(0x87ceeb, 200, 600);
 
 // ── Lighting ──────────────────────────────────────────────────────
-scene.add(new THREE.AmbientLight(0xffffff, 0.55));
-const sun = new THREE.DirectionalLight(0xfff0d0, 1.2);
+scene.add(new THREE.AmbientLight(0xc8d8ff, 0.50));   // chłodny ambient (niebo)
+
+// Słońce główne (ciepłe, cienie)
+const sun = new THREE.DirectionalLight(0xfff0d0, 1.4);
 sun.position.set(50, 80, 30);
 sun.castShadow = true;
 sun.shadow.mapSize.set(2048, 2048);
@@ -39,6 +52,18 @@ sun.shadow.camera.near = 1; sun.shadow.camera.far = 400;
 sun.shadow.camera.left = sun.shadow.camera.bottom = -400;
 sun.shadow.camera.right = sun.shadow.camera.top = 400;
 scene.add(sun);
+
+// Fill light (miękki, z lewej) — wypełnia cień po prawej stronie auta
+const fill = new THREE.DirectionalLight(0xaabbff, 0.35);
+fill.position.set(-60, 30, 0);
+scene.add(fill);
+
+// Rim light (zimny niebieski, z tyłu) — podkreśla krawędzie clearcoat
+const rim = new THREE.DirectionalLight(0x88bbff, 0.25);
+rim.position.set(0, 10, -80);
+scene.add(rim);
+
+renderer.toneMappingExposure = 1.05;
 
 // ── Camera ────────────────────────────────────────────────────────
 const camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.1, 500);
@@ -54,7 +79,8 @@ const city = new CityBuilder();
 city.build(scene, world, terrain);
 
 // ── Input ─────────────────────────────────────────────────────────
-const isTouchDevice = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+// pointer: coarse = palec/rysik (prawdziwy dotyk); fine = myszka/touchpad
+const isTouchDevice = window.matchMedia('(pointer: coarse)').matches;
 const input = isTouchDevice ? new TouchInput() : new KeyboardInput();
 
 // ── Player ────────────────────────────────────────────────────────
@@ -100,8 +126,6 @@ const CREDITS_CAR_HIT   =  30;   // za uderzenie w NPC (per collision)
 const CREDITS_CAR_KILL  = 200;   // za zniszczenie NPC auta
 const CREDITS_HEAL_COST =  50;   // koszt leczenia
 const HEAL_AMOUNT       =  30;   // ile HP odzyskujemy
-const HEAL_COOLDOWN_MS  = 2000;  // ms między leczeniami
-let lastHealTime = 0;
 
 function addCredits(amount, label, color) {
   credits += amount;
@@ -246,23 +270,19 @@ function gameLoop() {
 
   player.update(input, dt);
 
-  // ── Healing ──
-  if (input.healPressed) {
-    const now = Date.now();
-    if (now - lastHealTime > HEAL_COOLDOWN_MS) {
-      if (credits >= CREDITS_HEAL_COST) {
-        credits -= CREDITS_HEAL_COST;
-        player.hp = Math.min(player.maxHp, player.hp + HEAL_AMOUNT);
-        // Reset damage system proportionally
-        const ratio = player.hp / player.maxHp;
-        for (const key of Object.keys(player.damageSystem.state)) {
-          player.damageSystem.state[key] *= (1 - ratio * 0.3);
-        }
-        lastHealTime = now;
-        hud.showMessage(`-${CREDITS_HEAL_COST} CR  ❤️ +${HEAL_AMOUNT} HP`, '#ff88aa', 1500);
-      } else {
-        hud.showMessage('Za mało creditów!', '#ff4444', 1000);
+  // ── Healing — każde wciśnięcie Backspace = 1 leczenie instant ──
+  while (input.consumeHeal()) {
+    if (credits >= CREDITS_HEAL_COST) {
+      credits -= CREDITS_HEAL_COST;
+      player.hp = Math.min(player.maxHp, player.hp + HEAL_AMOUNT);
+      const ratio = player.hp / player.maxHp;
+      for (const key of Object.keys(player.damageSystem.state)) {
+        player.damageSystem.state[key] *= (1 - ratio * 0.3);
       }
+      hud.showMessage(`-${CREDITS_HEAL_COST} CR  ❤️ +${HEAL_AMOUNT} HP`, '#ff88aa', 1500);
+    } else {
+      hud.showMessage('Za mało creditów!', '#ff4444', 1000);
+      break; // nie próbuj kolejnych jeśli brak kasy
     }
   }
   _checkRespawn();
@@ -289,8 +309,14 @@ function gameLoop() {
   particles.update(dt);
   timer.update(dt);
   thirdPersonCam.update(player.group, input.throttle);
+
+  // ── Boost FOV ──
+  const targetFov = player.boostActive ? BOOST_FOV_ACTIVE : BOOST_FOV_NORMAL;
+  camera.fov += (targetFov - camera.fov) * BOOST_FOV_LERP;
+  camera.updateProjectionMatrix();
+
   const speedKmh = player.chassisBody ? player.chassisBody.velocity.length() * 3.6 : 0;
-  hud.update(timer.getDisplay(), zombieKills, carKills, player.hp, credits, speedKmh);
+  hud.update(timer.getDisplay(), zombieKills, carKills, player.hp, credits, speedKmh, player._boostFuel, player.boostActive);
   damageOverlay.update(player.damageSystem.state);
 
   renderer.render(scene, camera);

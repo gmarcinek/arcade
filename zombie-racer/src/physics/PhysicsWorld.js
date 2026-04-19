@@ -1,5 +1,5 @@
 import * as CANNON from 'cannon-es';
-import { GRAVITY, FRICTION_GRASS, FRICTION_ASPHALT, FRICTION_SLICK } from '../physicsConfig.js';
+import { GRAVITY, FRICTION_GRASS, FRICTION_ASPHALT, FRICTION_SLICK, DEFAULT_CONTACT_FRICTION } from '../physicsConfig.js';
 
 export const groundMaterial  = new CANNON.Material('ground');    // trawa
 export const asphaltMaterial = new CANNON.Material('asphalt');   // asfalt
@@ -12,7 +12,7 @@ export function createPhysicsWorld() {
   const world = new CANNON.World({ gravity: new CANNON.Vec3(0, GRAVITY, 0) });
   world.broadphase = new CANNON.SAPBroadphase(world);
   world.allowSleep = true;
-  world.defaultContactMaterial.friction = 0.3;
+  world.defaultContactMaterial.friction = DEFAULT_CONTACT_FRICTION;
 
   // Kolo vs nawierzchnie — wartosci z physicsConfig.js
   const wheelGrass = new CANNON.ContactMaterial(groundMaterial, wheelMaterial, {

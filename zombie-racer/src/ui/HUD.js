@@ -11,16 +11,23 @@ export class HUD {
           <div id="hud-hp-bar" style="height:100%;width:100%;background:#22cc44;transition:width .2s,background .2s;border-radius:6px;"></div>
         </div>
       </div>
+      <div id="hud-boost" style="margin-top:8px;">
+        <div style="font-size:12px;color:#aaa;margin-bottom:2px;">BOOST &nbsp;<span style="color:#666;">[Shift]</span></div>
+        <div style="width:180px;height:10px;background:#333;border-radius:5px;overflow:hidden;">
+          <div id="hud-boost-bar" style="height:100%;width:100%;background:#00ccff;transition:background .1s;border-radius:5px;"></div>
+        </div>
+      </div>
       <div id="hud-speed" style="position:absolute;bottom:24px;right:32px;font-size:38px;font-weight:900;color:#fff;text-shadow:0 2px 10px #000;text-align:right;letter-spacing:1px;"></div>
     `;
-    this._timer   = document.getElementById('hud-timer');
-    this._kills   = document.getElementById('hud-kills');
-    this._credits = document.getElementById('hud-credits');
-    this._hpBar   = document.getElementById('hud-hp-bar');
-    this._speed   = document.getElementById('hud-speed');
+    this._timer     = document.getElementById('hud-timer');
+    this._kills     = document.getElementById('hud-kills');
+    this._credits   = document.getElementById('hud-credits');
+    this._hpBar     = document.getElementById('hud-hp-bar');
+    this._boostBar  = document.getElementById('hud-boost-bar');
+    this._speed     = document.getElementById('hud-speed');
   }
 
-  update(timerDisplay, zombieKills, carKills, hpPercent, credits = 0, speedKmh = 0) {
+  update(timerDisplay, zombieKills, carKills, hpPercent, credits = 0, speedKmh = 0, boostFuel = 1, boostActive = false) {
     this._timer.textContent   = timerDisplay;
     this._kills.textContent   = `🧟 ×${zombieKills}   🚗 ×${carKills}`;
     this._credits.textContent = `💰 ${credits >= 0 ? '+' : ''}${credits} CR`;
@@ -28,6 +35,9 @@ export class HUD {
     const pct = Math.max(0, Math.min(100, hpPercent));
     this._hpBar.style.width      = pct + '%';
     this._hpBar.style.background = pct > 50 ? '#22cc44' : pct > 25 ? '#ffaa00' : '#ff3333';
+    const bpct = Math.max(0, Math.min(100, boostFuel * 100));
+    this._boostBar.style.width      = bpct + '%';
+    this._boostBar.style.background = boostActive ? '#ffffff' : bpct > 50 ? '#00ccff' : bpct > 20 ? '#ffaa00' : '#ff4444';
     this._speed.textContent = `${Math.round(speedKmh)} km/h`;
   }
 

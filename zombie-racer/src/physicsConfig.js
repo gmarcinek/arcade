@@ -41,14 +41,14 @@ export const ANGULAR_DAMPING = 0.35;
 // Wyzsze = auto samo zwalnia szybciej gdy puszczasz gaz.
 // Zakres: [0.01 slizga sie jak lod … 0.1 normalne … 0.5 bardzo duze tlumienie]
 // Kodiaq: Cx=0.36, przy G=-9.8 niskie liniowe tlumienie jest realistyczne
-export const LINEAR_DAMPING = 0.03;
+export const LINEAR_DAMPING = 0.02;
 
 // ── Silnik / sterowanie ────────────────────────────────────────────
 // Maksymalna sila silnika na kolo napedowe [N].
 // Wyzsze = szybsze przyspieszenie i wyzsza predkosc max.
 // Zakres: [2000 slabe … 5000 normalne … 10000 wyscigowe]
 // Kodiaq 2.0 TSI 140kW: 0-100 ~7.5s → F=1750*3.7=6475N łącznie / 2 kola FWD
-export const MAX_ENGINE_FORCE = 6500;
+export const MAX_ENGINE_FORCE = 12500;
 
 // Maksymalny kat skretu kol przednich [rad].
 // Wyzsze = ostrzejsze skrety, ale tez latwiej wpasc w poslizg.
@@ -60,7 +60,7 @@ export const MAX_STEER = 0.45;
 // Wyzsze = krotszy dystans hamowania. Za wysokie = natychmiastowe blokowanie kol.
 // Zakres: [20 slabe … 60 normalne … 150 wyscigowe]
 // Kodiaq: opoznienie hamowania ~9.5 m/s2 → F=1750*9.5/4=4156N/kolo, w sim ~80
-export const BRAKE_FORCE = 80;
+export const BRAKE_FORCE = 120;
 
 // ── Kola — geometria ──────────────────────────────────────────────
 // Promien kola [m]. Wplywa na predkosc obrotowa i przesit.
@@ -190,6 +190,17 @@ export const FRICTION_ASPHALT = 0.8;
 // Realistyczne: mokra nawierzchnia μ ≈ 0.15-0.25
 export const FRICTION_SLICK = 0.18;
 
+// Predkosc obrotu kola [rad/s] gdy kolo slizga sie (frictionSlip przekroczony).
+// Ujemna = kolo obraca sie do przodu (normalny poślizg). Bardziej ujemna = szybszy spin.
+// Wplywa glownie na wizualny efekt (obrot meshu kola), nie na sile fizyczna.
+// Zakres: [-60 szybki spin … -30 normalne … -10 wolny]
+export const WHEEL_SLIDE_SPEED = -30;
+
+// Domyslna przyczepnosc dla par materialow bez dedykowanego ContactMaterial.
+// Uzywa jej np. fizyczne ciala budynkow vs. podloze. Nie wplywa bezposrednio na kola.
+// Zakres: [0.1 … 0.3 normalne … 0.8]
+export const DEFAULT_CONTACT_FRICTION = 0.3;
+
 // ── Zderzenia — obrazenia ─────────────────────────────────────────
 // Predkosc [m/s] ponizej ktorej zderzak calkowicie pochlania uderzenie (brak obrazen).
 // (~18 km/h przy 5). Wyzsze = auto bardziej odporne na drobne stluczki.
@@ -209,6 +220,27 @@ export const CAR_IMPACT_SCALE = 400;
 // Przelicznik impulsu na HP obrazen.
 // Zakres: [0.0001 bardzo odporne … 0.0008 normalne … 0.003 bardzo kruche]
 export const DAMAGE_PER_IMPULSE = 0.0008;
+
+// ── Dopalaacz (Shift) ─────────────────────────────────────────────
+// Czas [s] pełnego zbiornika dopalacza. Po wyczerpaniu trzeba odczekać na naładowanie.
+// Zakres: [2 krótki … 4 normalne … 8 długi]
+export const BOOST_DURATION      = 4.0;
+
+// Mnożnik siły silnika podczas dopalacza (1.0 = brak efektu, 2.0 = podwójna siła).
+// Zakres: [1.2 … 1.65 normalne … 2.5 ekstremalny]
+export const BOOST_MULTIPLIER    = 1.65;
+
+// Prędkość ładowania zbiornika [1/s]. 0.20 = pełne naładowanie w 5s.
+// Zakres: [0.10 wolne … 0.20 normalne … 0.50 szybkie]
+export const BOOST_RECHARGE_RATE = 0.20;
+
+// FOV kamery w stanie normalnym i podczas dopalacza.
+export const BOOST_FOV_NORMAL    = 70;
+export const BOOST_FOV_ACTIVE    = 90;
+
+// Szybkość lerpu FOV (wyższe = szybsza zmiana).
+// Zakres: [0.03 … 0.08 normalne … 0.20]
+export const BOOST_FOV_LERP      = 0.07;
 
 // ── Kamera ────────────────────────────────────────────────────────
 // Odleglosc kamery za autem [m].
