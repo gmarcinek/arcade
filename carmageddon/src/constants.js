@@ -1,0 +1,11 @@
+export const ARENA_W = 3000;
+export const ARENA_H = 3000;
+export const WALL_T = 40;
+export const CAR_W = 36;
+export const CAR_H = 60;
+export const MAX_SPEED = 6;
+export const ACCELERATION = 0.3;
+export const STEERING = 0.045;
+export const FRICTION = 0.94;
+export const PHYSICS_SCALE = 0.1;
+export const CAMERA_LERP = 0.1;

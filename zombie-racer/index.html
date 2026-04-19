@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="pl">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>Zombie Racer</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            background: #000;
+            overflow: hidden;
+        }
+
+        canvas,
+        #hud {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+        }
+
+        #hud {
+            pointer-events: none;
+            padding: 16px 20px;
+            font-family: -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+        }
+
+        #mobileControls {
+            display: none;
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+        }
+
+        #backBtn {
+            position: absolute;
+            top: 12px;
+            right: 14px;
+            padding: 8px 16px;
+            font-size: 13px;
+            font-weight: 700;
+            background: rgba(0, 0, 0, 0.55);
+            color: #ccc;
+            border: 1px solid #444;
+            border-radius: 8px;
+            cursor: pointer;
+            z-index: 50;
+            pointer-events: auto;
+        }
+
+        #backBtn:hover {
+            background: rgba(0, 0, 0, 0.8);
+            color: #fff;
+        }
+
+        @keyframes fadeOut {
+            0% {
+                opacity: 1;
+                transform: translate(-50%, -50%) scale(1.1);
+            }
+
+            80% {
+                opacity: 1;
+            }
+
+            100% {
+                opacity: 0;
+                transform: translate(-50%, -50%) scale(1);
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <canvas id="game" style="display:block;width:100%;height:100%;touch-action:none"></canvas>
+    <div id="hud"></div>
+    <div id="mobileControls"></div>
+    <button id="backBtn" onclick="location.href='../index.html'">← Arcade</button>
+    <script type="module" src="src/main.js"></script>
+</body>
+
+</html>

@@ -29,7 +29,7 @@ if (typeof ALL_SHAPES === 'undefined') throw new Error('shapes.js must be loaded
 
 // ── Color settings ──────────────────────────────
 // Three independent colors stored in localStorage.
-const DEFAULTS = { bg: '#ffffff', block: '#224baa', grid: '#383838' };
+const DEFAULTS = { bg: '#292929', block: '#ff4788', grid: '#303030' };
 
 function getBgColor()    { return localStorage.getItem('BD_BG')    || DEFAULTS.bg;    }
 function getBlockColor() { return localStorage.getItem('BD_BLOCK') || DEFAULTS.block; }

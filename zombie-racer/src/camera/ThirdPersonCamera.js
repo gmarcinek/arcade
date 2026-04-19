@@ -1,0 +1,51 @@
+import * as THREE from 'three';
+import { CAMERA_OFFSET_BEHIND, CAMERA_OFFSET_UP } from '../constants.js';
+
+const YAW_LERP     = 0.04;  // lag obrotu kamery za autem
+const POS_LERP     = 0.06;  // lag pozycji
+const REVERSE_LERP = 0.03;  // wolniejszy obrót przy cofaniu
+
+export class ThirdPersonCamera {
+  constructor(camera) {
+    this.camera   = camera;
+    this._camYaw  = 0;       // aktualny kąt kamery (world Y)
+    this._idealPos = new THREE.Vector3();
+    this._lookTarget = new THREE.Vector3();
+  }
+
+  update(carGroup, throttle = 0) {
+    const carPos = carGroup.position;
+
+    // Wyciągnij yaw auta z quaternionu
+    const q = carGroup.quaternion;
+    const carYaw = Math.atan2(
+      2 * (q.w * q.y + q.x * q.z),
+      1 - 2 * (q.y * q.y + q.z * q.z)
+    );
+
+    // Kiedy cofamy — kamera ma być z przodu auta (obrót o PI)
+    const targetYaw = throttle < 0 ? carYaw + Math.PI : carYaw;
+
+    // Lerp kąta kamery — interpolacja po okręgu (shortest path)
+    let diff = targetYaw - this._camYaw;
+    while (diff >  Math.PI) diff -= 2 * Math.PI;
+    while (diff < -Math.PI) diff += 2 * Math.PI;
+    const lerpFactor = throttle < 0 ? REVERSE_LERP : YAW_LERP;
+    this._camYaw += diff * lerpFactor;
+
+    // Pozycja idealna: ZA autem według kąta kamery (nie kąta auta)
+    const sinY = Math.sin(this._camYaw);
+    const cosY = Math.cos(this._camYaw);
+    this._idealPos.set(
+      carPos.x - sinY * CAMERA_OFFSET_BEHIND,
+      carPos.y + CAMERA_OFFSET_UP,
+      carPos.z - cosY * CAMERA_OFFSET_BEHIND
+    );
+
+    this.camera.position.lerp(this._idealPos, POS_LERP);
+
+    // Patrz na auto (lekko powyżej środka)
+    this._lookTarget.set(carPos.x, carPos.y + 1.2, carPos.z);
+    this.camera.lookAt(this._lookTarget);
+  }
+}

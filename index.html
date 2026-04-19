@@ -96,6 +96,18 @@
             overflow: hidden;
         }
 
+        /* Carmageddon thumbnail */
+        .thumb-carmageddon {
+            background: linear-gradient(135deg, #1a1a2e 0%, #2d1b2e 50%, #3d0000 100%);
+            position: relative;
+            overflow: hidden;
+        }
+
+        /* Zombie Racer thumbnail */
+        .thumb-zombieracer {
+            background: linear-gradient(135deg, #0d1f0d 0%, #1a3d1a 50%, #2d4a0a 100%);
+        }
+
         /* Block Dock thumbnail */
         .thumb-blockdock {
             background: linear-gradient(135deg, #e8ecf8 0%, #d4daf2 100%);
@@ -224,6 +236,26 @@
                 thumb: 'blockdock',
                 accentColor: '#3b82f6',
             },
+            {
+                id: 'carmageddon',
+                title: 'Carmageddon',
+                tag: 'RACING',
+                desc: 'Wyścigi i demolka w stylu lat 90. Taranuj, niszcz, przeżyj. Wyeliminuj wszystkich wrogów albo przeżyj do końca odliczania.',
+                badges: ['Racing', 'Combat'],
+                url: 'carmageddon/index.html',
+                thumb: 'carmageddon',
+                accentColor: '#ef4444',
+            },
+            {
+                id: 'zombie-racer',
+                title: 'Zombie Racer',
+                tag: 'SURVIVAL',
+                desc: 'Rozjeżdżaj zombie i rozbijaj wrogie auta, zanim skończy się czas. Teren 3D, fizyka, widok za autem.',
+                badges: ['3D', 'Survival', 'Racing'],
+                url: 'zombie-racer/dist/index.html',
+                thumb: 'zombieracer',
+                accentColor: '#22cc44',
+            },
         ];
 
         const PALETTE = [
@@ -288,6 +320,24 @@
             if (game.thumb === 'blockdock') {
                 thumb.classList.add('thumb-blockdock');
                 thumb.appendChild(renderBlockDockThumb());
+            } else if (game.thumb === 'carmageddon') {
+                thumb.classList.add('thumb-carmageddon');
+                thumb.innerHTML = `
+                  <div style="position:relative;width:80px;height:80px;">
+                    <div style="position:absolute;bottom:0;width:80px;height:40px;background:#333;border-radius:4px;"></div>
+                    <div style="position:absolute;bottom:20px;left:50%;transform:translateX(-50%);width:18px;height:30px;background:#00ff88;border-radius:3px;box-shadow:0 0 12px #00ff88;"></div>
+                    <div style="position:absolute;top:10px;right:10px;width:14px;height:22px;background:#ef4444;border-radius:2px;transform:rotate(-20deg);"></div>
+                  </div>`;
+            } else if (game.thumb === 'zombieracer') {
+                thumb.classList.add('thumb-zombieracer');
+                thumb.innerHTML = `
+                  <div style="position:relative;width:90px;height:90px;">
+                    <div style="position:absolute;bottom:0;width:90px;height:45px;background:#2a2a2a;border-radius:4px;"></div>
+                    <div style="position:absolute;bottom:22px;left:50%;transform:translateX(-50%);width:16px;height:28px;background:#00dd66;border-radius:3px;box-shadow:0 0 10px #00ff66;"></div>
+                    <div style="position:absolute;top:8px;left:15px;width:8px;height:16px;background:#44bb44;border-radius:50% 50% 0 0;"></div>
+                    <div style="position:absolute;top:8px;right:12px;width:8px;height:16px;background:#55cc33;border-radius:50% 50% 0 0;"></div>
+                    <div style="position:absolute;top:0;right:0;background:#ef4444;color:#fff;font-size:9px;font-weight:900;padding:2px 5px;border-radius:4px;">TIMER</div>
+                  </div>`;
             }
             a.appendChild(thumb);
 
