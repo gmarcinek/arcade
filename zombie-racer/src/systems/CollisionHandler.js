@@ -1,3 +1,4 @@
+import * as CANNON from 'cannon-es';
 import { BUMPER_SPEED_THRESHOLD, BUILDING_IMPACT_SCALE, CAR_IMPACT_SCALE, DAMAGE_PER_IMPULSE } from '../physicsConfig.js';
 
 export class CollisionHandler {
@@ -68,6 +69,14 @@ export class CollisionHandler {
 
         const impactForce = relSpeed * 0.5;
         this.player.receiveImpact(impactForce * CAR_IMPACT_SCALE, contactNormal);
+
+        // Impuls na NPC — ograniczony cap żeby nie odlatywały w kosmos
+        const kickMag = Math.min(relSpeed * npc.chassisBody.mass * 0.08, 2500);
+        npc.chassisBody.applyImpulse(
+          new CANNON.Vec3(contactNormal.x * kickMag, 0, contactNormal.z * kickMag),
+          npc.chassisBody.position
+        );
+        npc.chassisBody.angularVelocity.y += (Math.random() - 0.5) * relSpeed * 0.05;
 
         const npcHpBefore = npc.hp;
         const npcDamageHP = (relSpeed * relSpeed * this.player.stats.offence) / (npc.stats.defence * 3);

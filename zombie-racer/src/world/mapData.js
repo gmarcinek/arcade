@@ -76,17 +76,29 @@ export const MAP = {
   ],
 
   ramps: [
-    { x:  30,  z:  30,  length: 16, width: 8, rotY: 0,    angleX: 0.35 },
-    { x: -50,  z: -50,  length: 14, width: 7, rotY: 1.57, angleX: 0.3  },
-    { x:  90,  z: -30,  length: 18, width: 9, rotY: 0.8,  angleX: 0.4  },
-    { x: -30,  z: 100,  length: 12, width: 7, rotY: 2.5,  angleX: 0.3  },
-    { x: 200,  z: 100,  length: 16, width: 8, rotY: 0,    angleX: 0.32 },
-    { x:-200,  z:-100,  length: 16, width: 8, rotY: 3.14, angleX: 0.32 },
-    { x:-100,  z: 150,  length: 18, width:10, rotY: 0.4,  angleX: 0.4  },
-    { x: 150,  z:-100,  length: 20, width:10, rotY: 2.0,  angleX: 0.45 },
-    { x:-150,  z:-150,  length: 16, width: 8, rotY: 3.14, angleX: 0.38 },
-    { x: 250,  z: 200,  length: 22, width:10, rotY: 1.0,  angleX: 0.42 },
-    { x:-250,  z:-200,  length: 18, width: 9, rotY: 4.0,  angleX: 0.35 },
+    { x:   0,  z:  90,  length: 36, width:14,  rotY: 0,    angleX: 0.30 },
+    { x: 180,  z:   0,  length: 36, width:14,  rotY: 1.57, angleX: 0.30 },
+  ],
+
+  // Banki — przechylone nawierzchnie wzdluż dróg (jak velodrom / ściana do wall-ride)
+  // ax/az = kąt przechylenia (euler XYZ); ay = obrót poziomy
+  // Dodatni az = prawa strona idzie w górę (bank po wschodniej stronie drogi N-S)
+  // Ujemny az = lewa strona w górę (bank po zachodniej stronie drogi N-S)
+  banks: [
+    // ── Banki wzdluż wewnętrznej drogi N-S (x=±60) ──
+    { x:  68, z:   0, w: 10, d: 50, ax: 0,    ay: 0,    az:  0.65 },
+    { x: -68, z:   0, w: 10, d: 50, ax: 0,    ay: 0,    az: -0.65 },
+    // ── Banki wzdluż wewnętrznej drogi E-W (z=±60) ──
+    { x:   0, z:  68, w: 50, d: 10, ax:  0.65, ay: 0,    az: 0    },
+    { x:   0, z: -68, w: 50, d: 10, ax: -0.65, ay: 0,    az: 0    },
+    // ── Banki przy środkowym pierścieniu (x=±130) ──
+    { x: 138, z:  40, w: 12, d: 70, ax: 0,    ay: 0,    az:  0.70 },
+    { x:-138, z: -40, w: 12, d: 70, ax: 0,    ay: 0,    az: -0.70 },
+    // ── Duży bank łukowy na zewnętrznym pierścieniu ──
+    { x: 268, z:  30, w: 14, d: 80, ax: 0,    ay: 0,    az:  0.75 },
+    { x:-268, z: -30, w: 14, d: 80, ax: 0,    ay: 0,    az: -0.75 },
+    { x:  30, z: 268, w: 80, d: 14, ax:  0.75, ay: 0,    az: 0    },
+    { x: -30, z:-268, w: 80, d: 14, ax: -0.75, ay: 0,    az: 0    },
   ],
 
   trees: [
@@ -106,26 +118,7 @@ export const MAP = {
     { x: 170, z: -80 }, { x:-170, z:  80 },
   ],
 
-  obstacles: [
-    { x:  40, z:   0, rotY: 0    },
-    { x: -40, z:   0, rotY: 0    },
-    { x:   0, z:  40, rotY: 1.57 },
-    { x:   0, z: -40, rotY: 1.57 },
-    { x: 100, z:   0, rotY: 0    },
-    { x:-100, z:   0, rotY: 0    },
-    { x:   0, z: 100, rotY: 1.57 },
-    { x:   0, z:-100, rotY: 1.57 },
-    { x:  60, z:  60, rotY: 0.785},
-    { x: -60, z: -60, rotY: 0.785},
-    { x: 150, z:  50, rotY: 0    },
-    { x:-150, z: -50, rotY: 0    },
-    { x: 200, z: -30, rotY: 1.57 },
-    { x:-200, z:  30, rotY: 1.57 },
-    { x:  80, z: 250, rotY: 0.5  },
-    { x: -80, z:-250, rotY: 0.5  },
-    { x: 270, z: -70, rotY: 0.3  },
-    { x:-270, z:  70, rotY: 0.3  },
-  ],
+  obstacles: [],
 
   roads: [
     // główne arterie
@@ -206,6 +199,36 @@ export const MAP = {
       { x:-200, z: 200 }, { x:-300, z:   0 },
       { x:-200, z:-200 }, { x:   0, z:-350 },
       { x: 200, z:-200 },
+    ],
+    // trasa 6 – kwadrat NW
+    [
+      { x: -20, z:  20 }, { x: -80, z:  20 },
+      { x: -80, z:  80 }, { x: -20, z:  80 },
+    ],
+    // trasa 7 – kwadrat SE
+    [
+      { x:  20, z: -20 }, { x:  80, z: -20 },
+      { x:  80, z: -80 }, { x:  20, z: -80 },
+    ],
+    // trasa 8 – średni okrąg W
+    [
+      { x:-130, z:   0 }, { x:-130, z: 130 },
+      { x:   0, z: 130 }, { x: 130, z:   0 },
+      { x:   0, z:-130 }, { x:-130, z:-130 },
+    ],
+    // trasa 9 – przekątna NE-SW
+    [
+      { x: 250, z: 250 }, { x: 100, z:  50 },
+      { x:  50, z:-100 }, { x:-250, z:-250 },
+      { x:-100, z: -50 }, { x: -50, z: 100 },
+    ],
+    // trasa 10 – zewnętrzna pętla E
+    [
+      { x: 350, z:   0 }, { x: 350, z: 150 },
+      { x: 200, z: 300 }, { x:   0, z: 300 },
+      { x:   0, z: 150 }, { x: 150, z:   0 },
+      { x:   0, z:-150 }, { x:   0, z:-300 },
+      { x: 200, z:-300 }, { x: 350, z:-150 },
     ],
   ],
 

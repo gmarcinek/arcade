@@ -7,8 +7,6 @@ import { CAR_MASS, MAX_ENGINE_FORCE, MAX_STEER, BRAKE_FORCE,
          SUSPENSION_STIFFNESS, SUSPENSION_REST_LENGTH, SUSPENSION_MAX_TRAVEL,
          SUSPENSION_MAX_FORCE, DAMPING_RELAXATION, DAMPING_COMPRESSION, ROLL_INFLUENCE,
          FRICTION_SLIP_FRONT_STATIC, FRICTION_SLIP_REAR_STATIC,
-         FRICTION_SLIP_FRONT_DYNAMIC, FRICTION_SLIP_REAR_DYNAMIC,
-         SLIP_SPEED_MIN, SLIP_SPEED_MAX,
          DAMAGE_PER_IMPULSE, WHEEL_SLIDE_SPEED } from '../physicsConfig.js';
 import { carBodyMaterial, wheelMaterial } from '../physics/PhysicsWorld.js';
 import { DamageSystem } from './DamageSystem.js';
@@ -42,6 +40,7 @@ export class Car {
       roughness: 0.26,
       clearcoat: 1.0,
       clearcoatRoughness: 0.07,
+      side: THREE.DoubleSide,
     });
     const glassMat = new THREE.MeshPhysicalMaterial({
       color: 0x6688aa,
@@ -59,7 +58,7 @@ export class Car {
       roughness: 0.05,
       metalness: 0.1,
     });
-    const tlMat = new THREE.MeshStandardMaterial({
+    this._tlMat = new THREE.MeshStandardMaterial({
       color: 0xff0800,
       emissive: new THREE.Color(0xff0000),
       emissiveIntensity: 1.8,
@@ -67,6 +66,7 @@ export class Car {
       transparent: true,
       opacity: 0.90,
     });
+    const tlMat = this._tlMat;
 
     // ── Karoseria — model GLTF (Quaternius SUV, CC0) ─────
     this.chassisMesh = new THREE.Group();
@@ -79,23 +79,21 @@ export class Car {
           if (!child.isMesh) return;
           child.castShadow = true;
           child.receiveShadow = true;
-          // Zamień materiały wg nazwy na PBR
-          const mats = Array.isArray(child.material) ? child.material : [child.material];
-          child.material = mats.map(m => {
+          const wasArray = Array.isArray(child.material);
+          const mats = wasArray ? child.material : [child.material];
+          const newMats = mats.map(m => {
             if (m.name === 'White')      return paintMat;
             if (m.name === 'Windows')    return glassMat;
             if (m.name === 'Headlights') return hlMat;
             if (m.name === 'TailLights') return tlMat;
-            return m; // Black / Grey — trzymamy oryginał
+            return m;
           });
-          if (!Array.isArray(child.material) && child.material.length === 1)
-            child.material = child.material[0];
+          child.material = wasArray ? newMats : newMats[0];
         });
         // Model ma y=0 = poziom ziemi. chassisBody.position.y ≈ ground + 0.745
         // (wheel_radius + suspension_rest_length). Przesuwamy body tak, żeby
         // y=0 modelu był na poziomie gruntu, czyli -0.745 w układzie grupy.
         body.position.y = -0.745;
-        body.rotation.y = Math.PI; // front modelu Quaternius SUV skierowany w -Z, obracamy do +Z
         this.chassisMesh.add(body);
       }
     } else {
@@ -209,7 +207,7 @@ export class Car {
     const steerVal = steer * MAX_STEER * steerMultiplier;
     const brakeVal = brake ? BRAKE_FORCE : 0;
 
-    // Front-wheel drive only — negacja bo cannon-es indexForwardAxis=2 (+Z = tył auta)
+    // Front-wheel drive — tylko koła 0 i 1 (przód)
     this.vehicle.applyEngineForce(-force, 0);
     this.vehicle.applyEngineForce(-force, 1);
     this.vehicle.applyEngineForce(0, 2);
@@ -222,16 +220,6 @@ export class Car {
     this.vehicle.setSteeringValue(0, 3);
 
     for (let i = 0; i < 4; i++) this.vehicle.setBrake(brakeVal, i);
-
-    // Dynamic grip loss: rear tyres lose traction faster than front
-    if (this.chassisBody && this.vehicle.wheelInfos.length === 4) {
-      const speed = this.chassisBody.velocity.length();
-      const t = Math.max(0, Math.min(1, (speed - SLIP_SPEED_MIN) / (SLIP_SPEED_MAX - SLIP_SPEED_MIN)));
-      this.vehicle.wheelInfos[0].frictionSlip = FRICTION_SLIP_FRONT_STATIC - (FRICTION_SLIP_FRONT_STATIC - FRICTION_SLIP_FRONT_DYNAMIC) * t;
-      this.vehicle.wheelInfos[1].frictionSlip = FRICTION_SLIP_FRONT_STATIC - (FRICTION_SLIP_FRONT_STATIC - FRICTION_SLIP_FRONT_DYNAMIC) * t;
-      this.vehicle.wheelInfos[2].frictionSlip = FRICTION_SLIP_REAR_STATIC  - (FRICTION_SLIP_REAR_STATIC  - FRICTION_SLIP_REAR_DYNAMIC)  * t;
-      this.vehicle.wheelInfos[3].frictionSlip = FRICTION_SLIP_REAR_STATIC  - (FRICTION_SLIP_REAR_STATIC  - FRICTION_SLIP_REAR_DYNAMIC)  * t;
-    }
   }
 
   sync() {

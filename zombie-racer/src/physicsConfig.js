@@ -6,13 +6,13 @@
 // ── Swiat ──────────────────────────────────────────────────────────
 // Sila grawitacji. Wyzsze odczucia ciezkosci, szybsze ladowanie po skoku.
 // Zakres: [-9.8 ziemska … -30 bardzo ciezkie]
-export const GRAVITY = -9.8;
+export const GRAVITY = -10.8;
 
 // ── Podwozie / masa ────────────────────────────────────────────────
 // Masa nadwozia [kg]. Wyzsza = wolniejsze przyspieszenie i hamowanie, wiekszy impet przy zderzeniu.
 // Zakres: [400 sportowe … 800 normalne … 1200 SUV/ciezarowka]
 // Skoda Kodiaq 2.0 TSI: masa wlasna ~1750 kg
-export const CAR_MASS = 1750;
+export const CAR_MASS = 1250;
 
 // Przesuniecie srodka masy w bok [m]. 0 = symetria. Zmiana powoduje nierowne przechyly L/P.
 // Zakres: [-0.3 … 0.3]  (zwykle 0)
@@ -22,45 +22,45 @@ export const CHASSIS_COM_OFFSET_X = 0;
 // Wyzej = auto chetniej sie przechyla i wywraca w zakretech.
 // Zakres: [0.0 nisko/stabilnie … 0.6 wysoko/niestabilnie]
 // Kodiaq: CoM ~620mm od ziemi, SUV wiec wysoko
-export const CHASSIS_COM_OFFSET_Y = 0.50;
+export const CHASSIS_COM_OFFSET_Y = 0.30;
 
 // Przesuniecie srodka masy w przod/tyl [m].
 // Ujemne (przod) = understeer (auto jedzie prosto, trudniej skrecic).
 // Dodatnie (tyl) = oversteer (tyl wyslizguje sie w zakretech).
 // Zakres: [-0.5 … 0.5]  (zwykle 0)
 // Kodiaq FWD: nieznacznie przesuniete do przodu (lekki understeer)
-export const CHASSIS_COM_OFFSET_Z = -0.08;
+export const CHASSIS_COM_OFFSET_Z = 0;
 
 // Tlumienie obrotu nadwozia. Zapobiega kreceniu sie w miejscu po zderzeniu.
 // Wyzsze = auto szybciej przestaje sie krecic, mniej "pinball".
 // Zakres: [0.1 brak tlumienia … 0.9 normalne … 1.0 natychmiastowe zatrzymanie obrotu]
 // Kodiaq: realistyczne tlumienie — auto moze sie krecic po wywrotce
-export const ANGULAR_DAMPING = 0.35;
+export const ANGULAR_DAMPING = 0.1;
 
 // Tlumienie predkosci liniowej (opor powietrza + toczenia).
 // Wyzsze = auto samo zwalnia szybciej gdy puszczasz gaz.
 // Zakres: [0.01 slizga sie jak lod … 0.1 normalne … 0.5 bardzo duze tlumienie]
 // Kodiaq: Cx=0.36, przy G=-9.8 niskie liniowe tlumienie jest realistyczne
-export const LINEAR_DAMPING = 0.02;
+export const LINEAR_DAMPING = 0.001;
 
 // ── Silnik / sterowanie ────────────────────────────────────────────
 // Maksymalna sila silnika na kolo napedowe [N].
 // Wyzsze = szybsze przyspieszenie i wyzsza predkosc max.
 // Zakres: [2000 slabe … 5000 normalne … 10000 wyscigowe]
 // Kodiaq 2.0 TSI 140kW: 0-100 ~7.5s → F=1750*3.7=6475N łącznie / 2 kola FWD
-export const MAX_ENGINE_FORCE = 12500;
+export const MAX_ENGINE_FORCE = 16000;
 
 // Maksymalny kat skretu kol przednich [rad].
 // Wyzsze = ostrzejsze skrety, ale tez latwiej wpasc w poslizg.
 // Zakres: [0.3 mala skretnosc … 0.5 normalna … 0.8 bardzo skretne]
 // Kodiaq: promien skretu 11.1m, rozstaw 2.79m → kat ~0.26rad, z zapasem ~0.45
-export const MAX_STEER = 0.45;
+export const MAX_STEER = 0.80;
 
 // Sila hamulcow na kazde kolo [N*m].
 // Wyzsze = krotszy dystans hamowania. Za wysokie = natychmiastowe blokowanie kol.
 // Zakres: [20 slabe … 60 normalne … 150 wyscigowe]
 // Kodiaq: opoznienie hamowania ~9.5 m/s2 → F=1750*9.5/4=4156N/kolo, w sim ~80
-export const BRAKE_FORCE = 120;
+export const BRAKE_FORCE = 320;
 
 // ── Kola — geometria ──────────────────────────────────────────────
 // Promien kola [m]. Wplywa na predkosc obrotowa i przesit.
@@ -88,7 +88,7 @@ export const WHEEL_POS_Z_REAR = 1.40;
 // Nizsze = miekkie (duze bujanie, dobra absorpcja), wyzsze = twarde (stabilne, malo ugiecia).
 // Zakres: [10 bardzo miekkie … 22 normalne … 50 twarde sportowe]
 // Kodiaq: komfortowe zawieszenie, z G=-9.8 potrzeba wyzszej wartosci niz z G=-20
-export const SUSPENSION_STIFFNESS = 35;
+export const SUSPENSION_STIFFNESS = 22;
 
 // Naturalna dlugosc amortyzatora w spoczynku [m].
 // Wplywa na przesit auta nad ziemia. Za male = kola wchodza w podwozie.
@@ -145,24 +145,22 @@ export const FRICTION_SLIP_FRONT_STATIC = 3.5;
 // Kodiaq FWD: tyl lzejszy, nieznacznie mniejsza przyczepnosc
 export const FRICTION_SLIP_REAR_STATIC = 3.2;
 
-// Przyczepnosc przednich kol przy wysokiej predkosci (przy pelnym poslizgu).
-// Zakres: [1.0 … FRICTION_SLIP_FRONT_STATIC]
-export const FRICTION_SLIP_FRONT_DYNAMIC = 2.4;
+// Przyczepnosc przednich kol przy pelnym bocznym poslizgu.
+// Im nizsze wzgledem STATIC, tym bardziej wyrazisty poslizg.
+export const FRICTION_SLIP_FRONT_DYNAMIC = 0.5;
 
-// Przyczepnosc tylnych kol przy wysokiej predkosci.
-// Nizsze niz przod = oversteer przy duzych predkosciach.
-// Zakres: [1.0 … FRICTION_SLIP_REAR_STATIC]
-export const FRICTION_SLIP_REAR_DYNAMIC = 1.8;
+// Przyczepnosc tylnych kol przy pelnym bocznym poslizgu.
+// Tyl traci przyczepnosc szybciej → naturalne oversteer zachowanie.
+export const FRICTION_SLIP_REAR_DYNAMIC = 0.1;
 
-// Predkosc [m/s] od ktorej zaczyna sie tracic przyczepnosc dynamicznie.
-// (~54 km/h przy 15, ~79 km/h przy 22)
-// Zakres: [8 … 22 normalne … 35]
-// Kodiaq: letnie opony, poślizg od ~60 km/h
-export const SLIP_SPEED_MIN = 17;
+// Boczna predkosc poslizgu kola [m/s] od ktorej zaczyna sie degradacja.
+// Ponizej tej wartosci: pelna przyczepnosc. 2 m/s ≈ opona zaczyna sie slizgac bocznie.
+// Zakres: [1.0 czule … 3.0 normalne … 6.0 odporne]
+export const LAT_SLIP_SPEED_MIN = 1.0;
 
-// Predkosc [m/s] przy ktorej osiagamy pelny poslizg dynamiczny.
-// Zakres: [SLIP_SPEED_MIN+4 … 28 normalne … 50]
-export const SLIP_SPEED_MAX = 38;
+// Boczna predkosc [m/s] przy ktorej osiagamy pelny poslizg dynamiczny.
+// Zakres: [LAT_SLIP_SPEED_MIN+2 … 8.0 normalne … 15.0]
+export const LAT_SLIP_SPEED_MAX = 7.0;
 
 // ── Nawierzchnie — przyczepnosc kolo-podloze ──────────────────────
 // ContactMaterial friction w cannon-es. Mnozy przyczepnosc przy kontakcie kola z podlozem.
@@ -177,13 +175,13 @@ export const SLIP_SPEED_MAX = 38;
 // Trawa — bazowa przyczepnosc (1x). Grunt miedzy drogami.
 // Zakres: [0.1 bloto … 0.5 trawa … 0.9 sucha ziemia]
 // Realistyczne: sucha trawa μ ≈ 0.35-0.45
-export const FRICTION_GRASS = 0.4;
+export const FRICTION_GRASS = 0.2;
 
 // Asfalt — lepsza przyczepnosc niz trawa (2x). Drogi i chodniki.
 // Im wieksza roznica miedzy GRASS a ASPHALT, tym silniejszy "snap" przy przejezdzie podczas poslizgu.
 // Zakres: [0.7 mokry … 1.0 suchy … 1.3 racing tarmac]
 // Realistyczne: suchy asfalt μ ≈ 0.7-0.9
-export const FRICTION_ASPHALT = 0.8;
+export const FRICTION_ASPHALT = 0.4;
 
 // Kaluz / piasek — niska przyczepnosc (0.4x). Trudny teren.
 // Zakres: [0.05 lod … 0.2 kaluz/piasek … 0.4 zwir]
@@ -194,7 +192,7 @@ export const FRICTION_SLICK = 0.18;
 // Ujemna = kolo obraca sie do przodu (normalny poślizg). Bardziej ujemna = szybszy spin.
 // Wplywa glownie na wizualny efekt (obrot meshu kola), nie na sile fizyczna.
 // Zakres: [-60 szybki spin … -30 normalne … -10 wolny]
-export const WHEEL_SLIDE_SPEED = -30;
+export const WHEEL_SLIDE_SPEED = -50;
 
 // Domyslna przyczepnosc dla par materialow bez dedykowanego ContactMaterial.
 // Uzywa jej np. fizyczne ciala budynkow vs. podloze. Nie wplywa bezposrednio na kola.
@@ -205,7 +203,7 @@ export const DEFAULT_CONTACT_FRICTION = 0.3;
 // Predkosc [m/s] ponizej ktorej zderzak calkowicie pochlania uderzenie (brak obrazen).
 // (~18 km/h przy 5). Wyzsze = auto bardziej odporne na drobne stluczki.
 // Zakres: [2 bardzo czule … 5 normalne … 12 bardzo odporne]
-export const BUMPER_SPEED_THRESHOLD = 5;
+export const BUMPER_SPEED_THRESHOLD = 15;
 
 // Mnoznik sily przy uderzeniu w budynek/drzewo/bariere.
 // damage_hp = (speed - threshold) * SCALE * DAMAGE_PER_IMPULSE * 100
@@ -215,7 +213,7 @@ export const BUILDING_IMPACT_SCALE = 400;
 
 // Mnoznik sily przy zderzeniu auto-auto.
 // Zakres: [100 … 400 normalne … 1000 brutalne]
-export const CAR_IMPACT_SCALE = 400;
+export const CAR_IMPACT_SCALE = 500;
 
 // Przelicznik impulsu na HP obrazen.
 // Zakres: [0.0001 bardzo odporne … 0.0008 normalne … 0.003 bardzo kruche]
@@ -224,41 +222,55 @@ export const DAMAGE_PER_IMPULSE = 0.0008;
 // ── Dopalaacz (Shift) ─────────────────────────────────────────────
 // Czas [s] pełnego zbiornika dopalacza. Po wyczerpaniu trzeba odczekać na naładowanie.
 // Zakres: [2 krótki … 4 normalne … 8 długi]
-export const BOOST_DURATION      = 4.0;
+export const BOOST_DURATION      = 3.0;
 
 // Mnożnik siły silnika podczas dopalacza (1.0 = brak efektu, 2.0 = podwójna siła).
 // Zakres: [1.2 … 1.65 normalne … 2.5 ekstremalny]
-export const BOOST_MULTIPLIER    = 1.65;
+export const BOOST_MULTIPLIER    = 4.5;
 
 // Prędkość ładowania zbiornika [1/s]. 0.20 = pełne naładowanie w 5s.
 // Zakres: [0.10 wolne … 0.20 normalne … 0.50 szybkie]
 export const BOOST_RECHARGE_RATE = 0.20;
 
 // FOV kamery w stanie normalnym i podczas dopalacza.
-export const BOOST_FOV_NORMAL    = 70;
-export const BOOST_FOV_ACTIVE    = 90;
+export const BOOST_FOV_NORMAL    = 80;
+export const BOOST_FOV_ACTIVE    = 100;
 
 // Szybkość lerpu FOV (wyższe = szybsza zmiana).
 // Zakres: [0.03 … 0.08 normalne … 0.20]
-export const BOOST_FOV_LERP      = 0.07;
+export const BOOST_FOV_LERP      = 0.1;
+
+// Szybkość narastania/opadania mnożnika boosta [1/s].
+// 0.5 = pełne narastanie w 2s, 2.0 = w 0.5s
+export const BOOST_RAMP_RATE     = 0.8;
+
+// O ile metrów kamera opada podczas boosta [m].
+export const BOOST_CAMERA_DIP    = 1.0;
+
+// Opór powietrza — siła hamująca proporcjonalna do v².
+// F_drag = AIR_DRAG * v²  [N/(m/s)²]
+// Przy 30 m/s (~108 km/h): F = 15 * 900 = 13500 N (wyraźny efekt)
+// Przy 10 m/s (~36 km/h):  F = 15 * 100 = 1500 N (ledwo wyczuwalny)
+// Zakres: [3 słaby … 15 normalne … 40 bardzo agresywny]
+export const AIR_DRAG = 0.4;
 
 // ── Kamera ────────────────────────────────────────────────────────
 // Odleglosc kamery za autem [m].
 // Zakres: [5 bliskie … 10 normalne … 20 dalekie]
-export const CAMERA_OFFSET_BEHIND = 10;
+export const CAMERA_OFFSET_BEHIND = 5;
 
 // Wysokosc kamery nad autem [m].
 // Zakres: [2 nisko … 4 normalne … 8 z gory]
-export const CAMERA_OFFSET_UP = 4;
+export const CAMERA_OFFSET_UP = 2;
 
 // Szybkosc lerpu obrotu kamery za autem (yaw). Nizsze = kamera bardziej "leniwa".
 // Zakres: [0.01 bardzo leniwa … 0.04 normalna … 0.15 natychmiastowa]
-export const CAMERA_YAW_LERP = 0.04;
+export const CAMERA_YAW_LERP = 0.1;
 
 // Szybkosc lerpu pozycji kamery za autem. Nizsze = camera lag (kinowy efekt).
 // Zakres: [0.02 duzy lag … 0.06 normalna … 0.2 natychmiastowa]
-export const CAMERA_POS_LERP = 0.06;
+export const CAMERA_POS_LERP = 0.1;
 
 // Szybkosc lerpu kamery przy cofaniu (zwykle wolniejszy obrot niz do przodu).
 // Zakres: [0.01 … 0.03 normalne … 0.1]
-export const CAMERA_REVERSE_LERP = 0.03;
+export const CAMERA_REVERSE_LERP = 0.015;

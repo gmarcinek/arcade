@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { CAMERA_OFFSET_BEHIND, CAMERA_OFFSET_UP,
-         CAMERA_YAW_LERP, CAMERA_POS_LERP, CAMERA_REVERSE_LERP } from '../physicsConfig.js';
+         CAMERA_YAW_LERP, CAMERA_POS_LERP, CAMERA_REVERSE_LERP,
+         BOOST_CAMERA_DIP } from '../physicsConfig.js';
 
 export class ThirdPersonCamera {
   constructor(camera) {
@@ -10,7 +11,7 @@ export class ThirdPersonCamera {
     this._lookTarget = new THREE.Vector3();
   }
 
-  update(carGroup, throttle = 0) {
+  update(carGroup, throttle = 0, boostLevel = 0) {
     const carPos = carGroup.position;
 
     // Wyciągnij yaw auta z quaternionu
@@ -33,9 +34,10 @@ export class ThirdPersonCamera {
     // Pozycja idealna: ZA autem według kąta kamery (nie kąta auta)
     const sinY = Math.sin(this._camYaw);
     const cosY = Math.cos(this._camYaw);
+    const upOffset = CAMERA_OFFSET_UP - BOOST_CAMERA_DIP * boostLevel;
     this._idealPos.set(
       carPos.x - sinY * CAMERA_OFFSET_BEHIND,
-      carPos.y + CAMERA_OFFSET_UP,
+      carPos.y + upOffset,
       carPos.z - cosY * CAMERA_OFFSET_BEHIND
     );
 

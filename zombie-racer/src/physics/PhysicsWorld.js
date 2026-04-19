@@ -26,16 +26,21 @@ export function createPhysicsWorld() {
   });
 
   const carGround = new CANNON.ContactMaterial(groundMaterial, carBodyMaterial, {
-    friction: 0.4, restitution: 0.2
+    friction: 0.05, restitution: 0.2
+  });
+  // Karoseria na asfalcie/rampie — friction bliskie 0, inaczej chassis "przyklejone" do rampy hamuje auto
+  const carAsphalt = new CANNON.ContactMaterial(asphaltMaterial, carBodyMaterial, {
+    friction: 0.01, restitution: 0.1
   });
   const carCar = new CANNON.ContactMaterial(carBodyMaterial, carBodyMaterial, {
-    friction: 0.3, restitution: 0.4
+    friction: 0.05, restitution: 0.25
   });
 
   world.addContactMaterial(wheelGrass);
   world.addContactMaterial(wheelAsphalt);
   world.addContactMaterial(wheelSlick);
   world.addContactMaterial(carGround);
+  world.addContactMaterial(carAsphalt);
   world.addContactMaterial(carCar);
 
   return world;

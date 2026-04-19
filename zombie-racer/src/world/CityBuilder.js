@@ -12,6 +12,7 @@ export class CityBuilder {
     this._buildRoads(scene, world, terrain);
     this._buildBuildings(scene, world, terrain);
     this._buildRamps(scene, world, terrain);
+    this._buildBanks(scene, world, terrain);
     this._buildTrees(scene, world, terrain);
     this._buildObstacles(scene, world, terrain);
   }
@@ -75,25 +76,133 @@ export class CityBuilder {
   }
 
   _buildRamps(scene, world, terrain) {
-    const rampMat = new THREE.MeshLambertMaterial({ color: 0x888866, side: THREE.DoubleSide });
+    // Angles: 5° / 8° / 12° — gradual approach, gentle launch
+    const SEG_ANGLES = [5, 8, 12].map(d => d * Math.PI / 180);
+    const THICK = 1.6;  // physics box thickness (buried below surface)
+    const rampMat = new THREE.MeshLambertMaterial({ color: 0x998866, side: THREE.DoubleSide });
+
     for (const r of MAP.ramps) {
       const hy = terrain.getHeightAt(r.x, r.z);
-      const rampY = hy + (r.length / 2) * Math.sin(r.angleX);
+      const segLen = r.length / 3;
+      const sinY = Math.sin(r.rotY), cosY = Math.cos(r.rotY);
 
-      const geo = new THREE.PlaneGeometry(r.width, r.length);
-      const mesh = new THREE.Mesh(geo, rampMat);
-      mesh.rotation.x = -Math.PI / 2 + r.angleX;
+      // Total projected length and height of the full ramp
+      const totalZ = SEG_ANGLES.reduce((s, a) => s + segLen * Math.cos(a), 0);
+      const totalH = SEG_ANGLES.reduce((s, a) => s + segLen * Math.sin(a), 0);
+
+      // ── Visual: single wedge prism — no visible rectangular cross-sections ──
+      const wedgeGeo = this._makeWedgeGeometry(r.width, totalZ, totalH, THICK);
+      const mesh = new THREE.Mesh(wedgeGeo, rampMat);
       mesh.rotation.y = r.rotY;
-      mesh.position.set(r.x, rampY, r.z);
+      mesh.position.set(r.x, hy, r.z);
       mesh.castShadow = true;
       mesh.receiveShadow = true;
       scene.add(mesh);
 
-      const shape = new CANNON.Box(new CANNON.Vec3(r.width / 2, 0.1, r.length / 2));
-      const body = new CANNON.Body({ mass: 0, material: groundMaterial });
+      // ── Physics: 3 CANNON.Box bodies — one per segment, mathematically exact ──
+      let ex = r.x - (totalZ / 2) * sinY;
+      let ey = hy;
+      let ez = r.z - (totalZ / 2) * cosY;
+
+      for (const a of SEG_ANGLES) {
+        const ca = Math.cos(a), sa = Math.sin(a);
+        const L = segLen;
+        // Center of this box so its entry-top corner is exactly at (ex, ey, ez)
+        const fwd = THICK / 2 * sa + L / 2 * ca;
+        const cx = ex + fwd * sinY;
+        const cy = ey - THICK / 2 * ca + L / 2 * sa;
+        const cz = ez + fwd * cosY;
+
+        const shape = new CANNON.Box(new CANNON.Vec3(r.width / 2, THICK / 2, L / 2));
+        const body = new CANNON.Body({ mass: 0, material: asphaltMaterial });
+        body.addShape(shape);
+        body.position.set(cx, cy, cz);
+        body.quaternion.setFromEuler(-a, r.rotY, 0, 'YXZ');
+        world.addBody(body);
+
+        ex += L * ca * sinY;
+        ey += L * sa;
+        ez += L * ca * cosY;
+      }
+    }
+  }
+
+  // Triangular prism (wedge) geometry:
+  // approach end: z = -totalZ/2, y = 0 (ground level)
+  // launch end:   z = +totalZ/2, y = height
+  // buried base:  y = -sinkDepth (below ground, no visible front lip)
+  _makeWedgeGeometry(width, totalZ, height, sinkDepth) {
+    const geo = new THREE.BufferGeometry();
+    const w = width / 2;
+    const zh = -totalZ / 2;  // approach Z (low end)
+    const zl =  totalZ / 2;  // launch  Z (high end)
+    const bot = -sinkDepth;
+
+    // 8 vertices
+    const v = new Float32Array([
+      // Bottom (buried)
+      -w, bot, zh,  // 0
+       w, bot, zh,  // 1
+       w, bot, zl,  // 2
+      -w, bot, zl,  // 3
+      // Top surface (ramp face, car drives on this)
+      -w, 0,      zh,  // 4  approach top-left   (y = ground level)
+       w, 0,      zh,  // 5  approach top-right
+       w, height, zl,  // 6  launch  top-right   (y = height)
+      -w, height, zl,  // 7  launch  top-left
+    ]);
+
+    // Winding: CCW when viewed from outside (normal points outward)
+    const idx = new Uint16Array([
+      // Top ramp surface — normal points UP and slightly toward approach
+      4, 6, 5,   4, 7, 6,
+      // Bottom face — normal points DOWN
+      0, 1, 2,   0, 2, 3,
+      // Approach (front) face — normal toward -Z (approach side)
+      0, 5, 1,   0, 4, 5,
+      // Launch (back) face — normal toward +Z
+      3, 2, 6,   3, 6, 7,
+      // Left side — normal toward -X
+      0, 3, 7,   0, 7, 4,
+      // Right side — normal toward +X
+      1, 6, 2,   1, 5, 6,
+    ]);
+
+    geo.setIndex(new THREE.BufferAttribute(idx, 1));
+    geo.setAttribute('position', new THREE.BufferAttribute(v, 3));
+    geo.computeVertexNormals();
+    return geo;
+  }
+
+  _buildBanks(scene, world, terrain) {
+    if (!MAP.banks) return;
+    const bankMat = new THREE.MeshLambertMaterial({ color: 0x556677, side: THREE.DoubleSide });
+    for (const b of MAP.banks) {
+      const hy = terrain.getHeightAt(b.x, b.z);
+      const thick = 0.5;
+
+      // Sink bank so the LOW approach edge is BELOW ground — car rides onto surface smoothly
+      // heightOffset = center_y - hy; designed so low-side top surface ≈ hy - 0.3 (underground)
+      const heightOffset = (b.w / 2) * Math.abs(Math.sin(b.az || 0))
+                         + (b.d / 2) * Math.abs(Math.sin(b.ax || 0))
+                         - thick;  // subtract full thickness → approach edge buried ~0.3m under
+
+      const geo = new THREE.BoxGeometry(b.w, thick, b.d);
+      const mesh = new THREE.Mesh(geo, bankMat);
+      mesh.position.set(b.x, hy + heightOffset, b.z);
+      mesh.rotation.order = 'XYZ';
+      mesh.rotation.x = b.ax || 0;
+      mesh.rotation.y = b.ay || 0;
+      mesh.rotation.z = b.az || 0;
+      mesh.castShadow = true;
+      mesh.receiveShadow = true;
+      scene.add(mesh);
+
+      const shape = new CANNON.Box(new CANNON.Vec3(b.w / 2, thick / 2, b.d / 2));
+      const body = new CANNON.Body({ mass: 0, material: asphaltMaterial });
       body.addShape(shape);
-      body.position.set(r.x, rampY, r.z);
-      body.quaternion.setFromEuler(-Math.PI / 2 + r.angleX, r.rotY, 0);
+      body.position.set(b.x, hy + heightOffset, b.z);
+      body.quaternion.setFromEuler(b.ax || 0, b.ay || 0, b.az || 0);
       world.addBody(body);
     }
   }

@@ -13,11 +13,13 @@ import { ThirdPersonCamera } from './camera/ThirdPersonCamera.js';
 import { GameTimer } from './systems/GameTimer.js';
 import { CollisionHandler } from './systems/CollisionHandler.js';
 import { HUD } from './ui/HUD.js';
+import { Minimap } from './ui/Minimap.js';
 import { DamageOverlay } from './ui/DamageOverlay.js';
 import { ParticleSystem } from './effects/ParticleSystem.js';
 import { MAP } from './world/mapData.js';
 import suvModelUrl from './assets/suv.glb?url';
 import { BOOST_FOV_NORMAL, BOOST_FOV_ACTIVE, BOOST_FOV_LERP } from './physicsConfig.js';
+import { AudioManager } from './audio/AudioManager.js';
 
 // ── Wczytaj model auta (async, przed inicjalizacją) ───────────────
 try {
@@ -90,8 +92,8 @@ player.build(scene, world, MAP.playerSpawn.x, spawnH + 0.9, MAP.playerSpawn.z, 0
 
 // ── NPC Cars ──────────────────────────────────────────────────────
 const npcCars = [];
-const npcColors = [0xcc2200, 0x2200cc, 0xcc8800, 0xaa00cc, 0x00aacc];
-for (let i = 0; i < Math.min(MAP.npcWaypoints.length, 5); i++) {
+const npcColors = [0xcc2200, 0x2200cc, 0xcc8800, 0xaa00cc, 0x00aacc, 0xddcc00, 0x00cc44, 0xff6600, 0x8800cc, 0xcc0066];
+for (let i = 0; i < Math.min(MAP.npcWaypoints.length, 10); i++) {
   const npc = new NPCCar(MAP.npcWaypoints[i], npcColors[i % npcColors.length]);
   npc.buildNPC(scene, world, terrain);
   npcCars.push(npc);
@@ -114,12 +116,50 @@ for (const sp of MAP.zombieSpawns) {
 const particles = new ParticleSystem(scene);
 const thirdPersonCam = new ThirdPersonCamera(camera);
 const timer = new GameTimer();
-const hud = new HUD();
+const hud     = new HUD();
+const minimap = new Minimap();
 const damageOverlay = new DamageOverlay();
+const audio = new AudioManager();
+
+// AudioContext wymaga gestu użytkownika — startujemy przy pierwszym naciśnięciu klawisza / dotyku
+const KBD = 'display:inline-block;background:#222;border:1px solid #555;border-radius:4px;padding:2px 9px;font-size:14px;color:#fff;font-family:monospace;';
+const _controlsOverlay = document.createElement('div');
+_controlsOverlay.id = 'controls-overlay';
+_controlsOverlay.innerHTML = `
+  <div style="
+    position:fixed;inset:0;display:flex;align-items:center;justify-content:center;
+    background:rgba(0,0,0,0.72);z-index:9999;font-family:system-ui,sans-serif;
+  ">
+    <div style="
+      background:rgba(10,10,10,0.9);border:2px solid rgba(255,255,255,0.18);
+      border-radius:12px;padding:36px 52px;text-align:center;min-width:320px;
+    ">
+      <div style="font-size:28px;font-weight:900;color:#fff;letter-spacing:3px;margin-bottom:24px;">ZOMBIE RACER</div>
+      <table style="margin:0 auto;border-collapse:collapse;font-size:17px;color:#ddd;">
+        <tr><td style="text-align:right;padding:6px 14px 6px 0;"><kbd style="${KBD}">↑ ↓ ← →</kbd></td><td style="color:#aaa;">Jedź</td></tr>
+        <tr><td style="text-align:right;padding:6px 14px 6px 0;"><kbd style="${KBD}">Shift</kbd></td><td style="color:#aaa;">TURBO</td></tr>
+        <tr><td style="text-align:right;padding:6px 14px 6px 0;"><kbd style="${KBD}">Backspace</kbd></td><td style="color:#aaa;">Reperowanie <span style="color:#666;font-size:13px;">(-50 CR)</span></td></tr>
+        <tr><td style="text-align:right;padding:6px 14px 6px 0;"><kbd style="${KBD}">Home</kbd></td><td style="color:#aaa;">Respawn</td></tr>
+      </table>
+      <div style="margin-top:28px;font-size:14px;color:#555;letter-spacing:1px;">NACIŚNIJ DOWOLNY KLAWISZ LUB KLIKNIJ</div>
+    </div>
+  </div>
+`;
+document.body.appendChild(_controlsOverlay);
+const _dismissOverlay = () => { _controlsOverlay.remove(); };
+
+const _startAudio = () => { audio.start(); window.removeEventListener('keydown', _startAudio); window.removeEventListener('touchstart', _startAudio); window.removeEventListener('click', _startAudio); };
+window.addEventListener('keydown',   _startAudio);
+window.addEventListener('touchstart', _startAudio);
+window.addEventListener('click',      _startAudio);
+window.addEventListener('keydown',    _dismissOverlay, { once: true });
+window.addEventListener('click',      _dismissOverlay, { once: true });
+window.addEventListener('touchstart', _dismissOverlay, { once: true });
 
 let zombieKills = 0;
 let carKills = 0;
 let credits = 0;
+let _prevBoostActive = false;
 
 const CREDITS_ZOMBIE    = 200;   // za rozjechanie zombie (było 50)
 const CREDITS_CAR_HIT   =  30;   // za uderzenie w NPC (per collision)
@@ -139,6 +179,7 @@ function onZombieKill(zombie) {
   addCredits(CREDITS_ZOMBIE, '🧟 +20s', '#44ff44');
   const pos = zombie.mesh ? zombie.mesh.position : { x: 0, z: 0 };
   particles.spawnBloodSplatter(pos.x, 1, pos.z);
+  audio.playZombieHit();
   checkWinConditions();
 }
 
@@ -177,13 +218,14 @@ function onCarKill(npc) {
   timer.addTime(80);
   carKills++;
   addCredits(CREDITS_CAR_KILL, '🚗💥 +80s', '#ffcc00');
+  audio.playCarExplosion();
   checkWinConditions();
 }
 
 function onCarHit(damageDealt) {
-  // Kredyty = rzeczywiste HP zadane oponentowi
   const earned = Math.max(1, Math.round(damageDealt));
   addCredits(earned, '💥 hit', '#ffaa44');
+  audio.playImpact(Math.min(1.0, damageDealt / 20));
 }
 
 // ── Collision handler ─────────────────────────────────────────────
@@ -238,6 +280,7 @@ function _checkRespawn() {
     player.chassisBody.quaternion.setFromEuler(0, 0, 0);
     _respawnCooldown = 120; // 2s cooldown
     hud.showMessage('RESPAWN!', '#ffaa00', 1500);
+    audio.playRespawn();
   } else if (pos.y > terrain.getHeightAt(pos.x, pos.z) - 1) {
     // Only save valid position when above terrain
     _lastValidPos = { x: pos.x, z: pos.z };
@@ -296,10 +339,11 @@ function gameLoop() {
     player.chassisBody.quaternion.setFromEuler(0, 0, 0);
     _respawnCooldown = 120;
     hud.showMessage('RESPAWN!', '#ffaa00', 1500);
+    audio.playRespawn();
   }
 
   for (const npc of npcCars) {
-    if (npc.isAlive) npc.update(terrain, player.chassisBody.position);
+    if (npc.isAlive) npc.update(terrain, player.chassisBody.position, player.chassisBody.velocity, npcCars);
   }
 
   for (const z of zombies) {
@@ -308,16 +352,24 @@ function gameLoop() {
 
   particles.update(dt);
   timer.update(dt);
-  thirdPersonCam.update(player.group, input.throttle);
+  thirdPersonCam.update(player.group, input.throttle, player._boostLevel);
 
-  // ── Boost FOV ──
-  const targetFov = player.boostActive ? BOOST_FOV_ACTIVE : BOOST_FOV_NORMAL;
+  // ── Boost FOV — narasta proporcjonalnie do _boostLevel ──
+  const targetFov = BOOST_FOV_NORMAL + (BOOST_FOV_ACTIVE - BOOST_FOV_NORMAL) * player._boostLevel;
   camera.fov += (targetFov - camera.fov) * BOOST_FOV_LERP;
   camera.updateProjectionMatrix();
 
   const speedKmh = player.chassisBody ? player.chassisBody.velocity.length() * 3.6 : 0;
+
+  // ── Audio ──
+  audio.updateEngine(speedKmh, input.throttle, player._boostLevel);
+  if (player.boostActive && !_prevBoostActive) audio.playBoostStart();
+  if (!player.boostActive && _prevBoostActive && player._boostFuel <= 0.01) audio.playBoostEmpty();
+  _prevBoostActive = player.boostActive;
+
   hud.update(timer.getDisplay(), zombieKills, carKills, player.hp, credits, speedKmh, player._boostFuel, player.boostActive);
   damageOverlay.update(player.damageSystem.state);
+  minimap.update(player.chassisBody.position, npcCars);
 
   renderer.render(scene, camera);
 }
