@@ -2,12 +2,13 @@ import * as CANNON from 'cannon-es';
 import { BUMPER_SPEED_THRESHOLD, BUILDING_IMPACT_SCALE, CAR_IMPACT_SCALE, DAMAGE_PER_IMPULSE } from '../physicsConfig.js';
 
 export class CollisionHandler {
-  constructor(world, player, zombies, npcCars, timer, hud, onZombieKill, onCarKill, onCarHit) {
+  constructor(world, player, zombies, npcCars, timer, hud, audio, onZombieKill, onCarKill, onCarHit) {
     this.player      = player;
     this.zombies     = zombies;
     this.npcCars     = npcCars;
     this.timer       = timer;
     this.hud         = hud;
+    this.audio       = audio;
     this.onZombieKill = onZombieKill;
     this.onCarKill   = onCarKill;
     this.onCarHit    = onCarHit || (() => {});
@@ -25,6 +26,20 @@ export class CollisionHandler {
   tick(dt) {
     if (this._speedupCooldown > 0) this._speedupCooldown -= dt;
     if (this._launchCooldown  > 0) this._launchCooldown  -= dt;
+  }
+
+  _playScrapeFromBodies(bodyA, bodyB, normalX, normalZ, multiplier = 1) {
+    if (!this.audio) return;
+    const velB = bodyB.velocity || CANNON.Vec3.ZERO;
+    const relVelX = bodyA.velocity.x - velB.x;
+    const relVelZ = bodyA.velocity.z - velB.z;
+    const normalDot = relVelX * normalX + relVelZ * normalZ;
+    const tangentX = relVelX - normalDot * normalX;
+    const tangentZ = relVelZ - normalDot * normalZ;
+    const tangentialSpeed = Math.sqrt(tangentX * tangentX + tangentZ * tangentZ);
+    if (tangentialSpeed > 1.2) {
+      this.audio.playScrape(Math.min(1.0, tangentialSpeed / 10) * multiplier);
+    }
   }
 
   _handleContact(bodyA, bodyB) {
@@ -66,6 +81,10 @@ export class CollisionHandler {
       const len = Math.sqrt(nx * nx + nz * nz) || 1;
       const contactNormal = { x: nx / len, y: 0, z: nz / len };
       this.player.receiveImpact(effectiveSpeed * BUILDING_IMPACT_SCALE, contactNormal);
+      if (this.audio) {
+        this.audio.playImpact(Math.min(1.0, effectiveSpeed / 14));
+        this._playScrapeFromBodies(bodyA, bodyB, contactNormal.x, contactNormal.z, 1.0);
+      }
       const hpLost = Math.round(effectiveSpeed * BUILDING_IMPACT_SCALE * DAMAGE_PER_IMPULSE * 100);
       if (hpLost > 0) this.hud.showMessage(`🏗️ BUDYNEK -${hpLost} HP`, '#ff6600', 900);
       return;
@@ -79,6 +98,10 @@ export class CollisionHandler {
         const relVelZ = bodyA.velocity.z - bodyB.velocity.z;
         const relSpeed = Math.sqrt(relVelX * relVelX + relVelZ * relVelZ);
         if (relSpeed > 2) {
+          const nx = bodyB.position.x - bodyA.position.x;
+          const nz = bodyB.position.z - bodyA.position.z;
+          const len = Math.sqrt(nx * nx + nz * nz) || 1;
+          this._playScrapeFromBodies(bodyA, bodyB, nx / len, nz / len, 0.7);
           // Zombie: dokładnie 1 HP obrażeń dla gracza
           this.player.hp = Math.max(0, this.player.hp - 1);
           this.onZombieKill(zombie);
@@ -103,6 +126,7 @@ export class CollisionHandler {
 
         const impactForce = relSpeed * 0.5;
         this.player.receiveImpact(impactForce * CAR_IMPACT_SCALE, contactNormal);
+        this._playScrapeFromBodies(bodyA, bodyB, contactNormal.x, contactNormal.z, 0.9);
 
         // Wymiana pędu: siła proporcjonalna do pędu gracza (jego masa × relSpeed)
         // gracz x1.05 przewagi nad masą NPC → lekka ale fizyczna dominacja

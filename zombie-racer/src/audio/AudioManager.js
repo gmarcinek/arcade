@@ -26,6 +26,7 @@ export class AudioManager {
 
     this._started   = false;
     this._impactCooldown = 0;
+    this._scrapeCooldown = 0;
   }
 
   // ── Inicjalizacja (musi być po geście użytkownika) ────────────────
@@ -38,7 +39,7 @@ export class AudioManager {
     const ctx = this._ctx;
 
     this._masterGain = ctx.createGain();
-    this._masterGain.gain.value = 1.0;
+    this._masterGain.gain.value = 1.18;
     this._masterGain.connect(ctx.destination);
 
     // ── Silnik — dwa oscylatory sawtooth + filtr ──────────────────
@@ -153,6 +154,7 @@ export class AudioManager {
     this._dmgNoiseFilter.frequency.setTargetAtTime(70 + freq1 * 0.5, t, 0.2);
 
     if (this._impactCooldown > 0) this._impactCooldown--;
+    if (this._scrapeCooldown > 0) this._scrapeCooldown--;
   }
 
   // ── Pomocnik: noise burst ─────────────────────────────────────────
@@ -208,28 +210,40 @@ export class AudioManager {
 
     const vol = Math.min(1.0, intensity);
     // Niski "thud" + noise
-    this._playNoise(0.22, vol * 0.55, 120, 'lowpass');
-    this._playTone(80 - intensity * 20, 'sine', 0.18, vol * 0.35, 0.15);
+    this._playNoise(0.28, vol * 0.95, 110, 'lowpass');
+    this._playTone(78 - intensity * 18, 'sine', 0.22, vol * 0.52, 0.18);
     if (intensity > 0.5) {
       // Przy mocnych uderzeniach — metaliczny dzwonek
-      this._playTone(420, 'triangle', 0.3, vol * 0.2, 0.28);
+      this._playTone(420, 'triangle', 0.34, vol * 0.34, 0.30);
+      this._playNoise(0.14, vol * 0.28, 1400, 'bandpass');
     }
+  }
+
+  // ── Tarcie / szorowanie ──────────────────────────────────────────
+  playScrape(intensity = 1.0) {
+    if (!this._ctx || this._scrapeCooldown > 0) return;
+    this._scrapeCooldown = 3;
+
+    const vol = Math.min(1.0, Math.max(0.08, intensity));
+    this._playNoise(0.12 + vol * 0.10, vol * 0.42, 2200 + vol * 1600, 'bandpass');
+    this._playNoise(0.08 + vol * 0.06, vol * 0.20, 5200, 'highpass');
   }
 
   // ── Rozjechanie zombie ────────────────────────────────────────────
   playZombieHit() {
     if (!this._ctx) return;
-    this._playNoise(0.14, 0.4, 300, 'bandpass');
-    this._playTone(55, 'sine', 0.12, 0.25, 0.10);
+    this._playNoise(0.18, 0.58, 260, 'bandpass');
+    this._playTone(52, 'sine', 0.14, 0.34, 0.11);
   }
 
   // ── Eksplozja NPC auta ────────────────────────────────────────────
   playCarExplosion() {
     if (!this._ctx) return;
     // Gruba eksplozja — niski noise + krótki "boom"
-    this._playNoise(0.9, 0.9, 80, 'lowpass');
-    this._playNoise(0.4, 0.6, 600, 'bandpass');
-    this._playTone(40, 'sine', 0.6, 0.7, 0.5);
+    this._playNoise(1.1, 1.25, 75, 'lowpass');
+    this._playNoise(0.55, 0.92, 540, 'bandpass');
+    this._playNoise(0.18, 0.45, 2600, 'highpass');
+    this._playTone(38, 'sine', 0.75, 0.95, 0.58);
   }
 
   // ── Leczenie ─────────────────────────────────────────────────────

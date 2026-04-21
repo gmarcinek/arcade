@@ -384,7 +384,7 @@ function onCarHit(damageDealt) {
 }
 
 // ── Collision handler ─────────────────────────────────────────────
-const collisions = new CollisionHandler(world, player, zombies, npcCars, timer, hud, onZombieKill, onCarKill, onCarHit);
+const collisions = new CollisionHandler(world, player, zombies, npcCars, timer, hud, audio, onZombieKill, onCarKill, onCarHit);
 
 // ── Game Over ─────────────────────────────────────────────────────
 let gameOverVisible = false;
