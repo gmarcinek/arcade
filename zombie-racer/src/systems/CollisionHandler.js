@@ -70,8 +70,12 @@ export class CollisionHandler {
         const impactForce = relSpeed * 0.5;
         this.player.receiveImpact(impactForce * CAR_IMPACT_SCALE, contactNormal);
 
-        // Impuls na NPC — ograniczony cap żeby nie odlatywały w kosmos
-        const kickMag = Math.min(relSpeed * npc.chassisBody.mass * 0.08, 2500);
+        // Wymiana pędu: siła proporcjonalna do pędu gracza (jego masa × relSpeed)
+        // gracz x1.05 przewagi nad masą NPC → lekka ale fizyczna dominacja
+        const mP = this.player.chassisBody.mass * 1.05;
+        const mN = npc.chassisBody.mass;
+        const kickMag = Math.min(relSpeed * (mP / mN) * mN * 0.04, 1800);
+        // upraszcza się do: min(mP * relSpeed * 0.04, 1800)
         npc.chassisBody.applyImpulse(
           new CANNON.Vec3(contactNormal.x * kickMag, 0, contactNormal.z * kickMag),
           npc.chassisBody.position
@@ -82,6 +86,12 @@ export class CollisionHandler {
         const npcDamageHP = (relSpeed * relSpeed * this.player.stats.offence) / (npc.stats.defence * 3);
         npc.hp = Math.max(0, npc.hp - npcDamageHP);
         const actualDamage = Math.floor(npcHpBefore - npc.hp);
+
+        // Sync damage state so smoke/fire visuals reflect HP loss
+        const _dr = Math.min(1, 1 - (npc.hp / npc.maxHp));
+        npc.damageSystem.state.engine      = Math.min(1, _dr * 1.3);
+        npc.damageSystem.state.bumperFront = Math.min(1, _dr);
+        npc.damageSystem.state.bumperRear  = Math.min(1, _dr * 0.9);
 
         if (npc.hp <= 0 && npc.isAlive) {
           this.onCarKill(npc);

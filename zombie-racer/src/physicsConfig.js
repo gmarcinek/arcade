@@ -217,7 +217,7 @@ export const CAR_IMPACT_SCALE = 500;
 
 // Przelicznik impulsu na HP obrazen.
 // Zakres: [0.0001 bardzo odporne … 0.0008 normalne … 0.003 bardzo kruche]
-export const DAMAGE_PER_IMPULSE = 0.0008;
+export const DAMAGE_PER_IMPULSE = 0.0002;
 
 // ── Dopalaacz (Shift) ─────────────────────────────────────────────
 // Czas [s] pełnego zbiornika dopalacza. Po wyczerpaniu trzeba odczekać na naładowanie.

@@ -9,9 +9,20 @@ export class ThirdPersonCamera {
     this._camYaw  = 0;       // aktualny kąt kamery (world Y)
     this._idealPos = new THREE.Vector3();
     this._lookTarget = new THREE.Vector3();
+    this._currentLookPos = null; // null = niezainicjalizowany
   }
 
-  update(carGroup, throttle = 0, boostLevel = 0) {
+  // Wywołaj przed pierwszym update() po kill-cam, żeby nie było skoku
+  syncFromKillCam(lookX, lookY, lookZ, playerGroup) {
+    if (!this._currentLookPos) this._currentLookPos = new THREE.Vector3();
+    this._currentLookPos.set(lookX, lookY, lookZ);
+    // Synchronizuj camYaw z aktualnej pozycji kamery względem gracza
+    const dx = playerGroup.position.x - this.camera.position.x;
+    const dz = playerGroup.position.z - this.camera.position.z;
+    this._camYaw = Math.atan2(dx, dz);
+  }
+
+  update(carGroup, throttle = 0, boostLevel = 0, distOverride = CAMERA_OFFSET_BEHIND) {
     const carPos = carGroup.position;
 
     // Wyciągnij yaw auta z quaternionu
@@ -36,15 +47,20 @@ export class ThirdPersonCamera {
     const cosY = Math.cos(this._camYaw);
     const upOffset = CAMERA_OFFSET_UP - BOOST_CAMERA_DIP * boostLevel;
     this._idealPos.set(
-      carPos.x - sinY * CAMERA_OFFSET_BEHIND,
+      carPos.x - sinY * distOverride,
       carPos.y + upOffset,
-      carPos.z - cosY * CAMERA_OFFSET_BEHIND
+      carPos.z - cosY * distOverride
     );
 
     this.camera.position.lerp(this._idealPos, CAMERA_POS_LERP);
 
-    // Patrz na auto (lekko powyżej środka)
+    // Patrz na auto — z lerpem jeśli _currentLookPos jest zainicjalizowany
     this._lookTarget.set(carPos.x, carPos.y + 1.2, carPos.z);
-    this.camera.lookAt(this._lookTarget);
+    if (this._currentLookPos) {
+      this._currentLookPos.lerp(this._lookTarget, CAMERA_POS_LERP);
+      this.camera.lookAt(this._currentLookPos);
+    } else {
+      this.camera.lookAt(this._lookTarget);
+    }
   }
 }

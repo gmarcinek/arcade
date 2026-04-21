@@ -9,8 +9,15 @@ import { CAR_MASS, MAX_ENGINE_FORCE, MAX_STEER, BRAKE_FORCE,
          FRICTION_SLIP_FRONT_STATIC, FRICTION_SLIP_REAR_STATIC,
          DAMAGE_PER_IMPULSE, WHEEL_SLIDE_SPEED } from '../physicsConfig.js';
 import { carBodyMaterial, wheelMaterial } from '../physics/PhysicsWorld.js';
-import { DamageSystem } from './DamageSystem.js';
+import { DamageSystem, PARTS } from './DamageSystem.js';
 import { CarStats } from './CarStats.js';
+
+// Module-level reusable objects — avoids per-frame GC pressure
+const _camberQ    = new THREE.Quaternion();
+const _camberAxis = new THREE.Vector3();
+const _WHEEL_PARTS = [PARTS.WHEEL_FL, PARTS.WHEEL_FR, PARTS.WHEEL_RL, PARTS.WHEEL_RR];
+const _wobbleForce = new CANNON.Vec3();
+const _wobblePoint = new CANNON.Vec3(0, 0, 0);
 
 export class Car {
   static suvGltf = null; // ustawiane z main.js po załadowaniu modelu
@@ -30,6 +37,7 @@ export class Car {
     // Cannon
     this.chassisBody = null;
     this.vehicle = null;
+    this._wobbleTime = 0;
   }
 
   build(scene, world, spawnX, spawnY, spawnZ, color = 0xff2200) {
@@ -202,28 +210,36 @@ export class Car {
   }
 
   applyControl(throttle, steer, brake) {
-    const { speedMultiplier, steerMultiplier } = this.damageSystem.getHandlingModifier();
-    const force    = throttle * MAX_ENGINE_FORCE * this.stats.engine * speedMultiplier;
-    const steerVal = steer * MAX_STEER * steerMultiplier;
-    const brakeVal = brake ? BRAKE_FORCE : 0;
+    const engineMult  = this.damageSystem.getEngineMultiplier();
+    const wheelMods   = this.damageSystem.getWheelModifiers(); // [FL, FR, RL, RR]
+    const toeOffset   = this.damageSystem.getToeOffset();
+    const brakeVal    = brake ? BRAKE_FORCE : 0;
 
-    // Front-wheel drive — tylko koła 0 i 1 (przód)
-    this.vehicle.applyEngineForce(-force, 0);
-    this.vehicle.applyEngineForce(-force, 1);
-    this.vehicle.applyEngineForce(0, 2);
-    this.vehicle.applyEngineForce(0, 3);
+    // Front-wheel drive — siła per koło × uszkodzenie danego koła × silnik
+    const baseForce = throttle * MAX_ENGINE_FORCE * this.stats.engine * engineMult;
+    this.vehicle.applyEngineForce(-baseForce * wheelMods[0].tractionMult, 0); // FL
+    this.vehicle.applyEngineForce(-baseForce * wheelMods[1].tractionMult, 1); // FR
+    this.vehicle.applyEngineForce(0, 2); // RL — brak napędu
+    this.vehicle.applyEngineForce(0, 3); // RR — brak napędu
 
-    // Front wheels steer only — negacja bo oś X odwrócona
-    this.vehicle.setSteeringValue(-steerVal, 0);
-    this.vehicle.setSteeringValue(-steerVal, 1);
+    // Niezależny skręt per koło przód
+    const steerFL = (steer * wheelMods[0].steerMult + toeOffset) * MAX_STEER;
+    const steerFR = (steer * wheelMods[1].steerMult + toeOffset) * MAX_STEER;
+    this.vehicle.setSteeringValue(-steerFL, 0);
+    this.vehicle.setSteeringValue(-steerFR, 1);
     this.vehicle.setSteeringValue(0, 2);
     this.vehicle.setSteeringValue(0, 3);
 
-    for (let i = 0; i < 4; i++) this.vehicle.setBrake(brakeVal, i);
+    // Niezależne hamulce per koło
+    this.vehicle.setBrake(brakeVal * wheelMods[0].brakeMult, 0);
+    this.vehicle.setBrake(brakeVal * wheelMods[1].brakeMult, 1);
+    this.vehicle.setBrake(brakeVal * wheelMods[2].brakeMult, 2);
+    this.vehicle.setBrake(brakeVal * wheelMods[3].brakeMult, 3);
   }
 
-  sync() {
+  sync(dt = 0) {
     if (!this.chassisBody) return;
+    this._wobbleTime += dt;
     this.group.position.copy(this.chassisBody.position);
     this.group.quaternion.copy(this.chassisBody.quaternion);
 
@@ -232,6 +248,29 @@ export class Car {
       const t = info.worldTransform;
       this.wheelMeshes[i].position.copy(t.position);
       this.wheelMeshes[i].quaternion.copy(t.quaternion);
+
+      // Visual camber: tilt damaged wheels outward around the chassis forward axis
+      const dmg = this.damageSystem.state[_WHEEL_PARTS[i]];
+      if (dmg > 0.05) {
+        const side = (i === 0 || i === 2) ? 1 : -1; // FL/RL tilt left, FR/RR tilt right
+        const camberRad = dmg * 0.22 * side; // max ~12.6° at 100% damage
+        _camberAxis.set(0, 0, 1).applyQuaternion(this.group.quaternion);
+        _camberQ.setFromAxisAngle(_camberAxis, camberRad);
+        this.wheelMeshes[i].quaternion.premultiply(_camberQ);
+      }
+
+      // Eccentric axle wobble — jajowate kolo, os przesunieta
+      if (dmg > 0.60 && dt > 0) {
+        const wobbleAmt = (dmg - 0.60) / 0.40; // 0..1 from 60%→100% damage
+        const speed = this.chassisBody.velocity.length();
+        const freq  = (2.5 + speed * 0.22) * Math.PI * 2; // rad/s, faster at speed
+        const phase = this._wobbleTime * freq + i * (Math.PI * 0.5); // stagger wheels
+        // Visual offset — koło "skacze" zamiast toczyć się gładko
+        this.wheelMeshes[i].position.y += Math.sin(phase) * wobbleAmt * 0.15;
+        // Physical jitter — auto odczuwa wibracje
+        _wobbleForce.set(0, Math.sin(phase) * wobbleAmt * 90, 0);
+        this.chassisBody.applyForce(_wobbleForce, _wobblePoint);
+      }
     });
   }
 

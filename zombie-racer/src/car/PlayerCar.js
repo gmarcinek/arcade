@@ -76,6 +76,6 @@ export class PlayerCar extends Car {
       }
     }
 
-    this.sync();
+    this.sync(dt);
   }
 }

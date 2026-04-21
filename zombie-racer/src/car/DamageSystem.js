@@ -10,8 +10,6 @@ export const PARTS = {
   ENGINE:       'engine',
 };
 
-const CRITICAL_THRESHOLD = 0.6; // 60% damage = critical
-
 export class DamageSystem {
   constructor() {
     this.state = {};
@@ -58,18 +56,40 @@ export class DamageSystem {
     this.state[part] = Math.min(1, this.state[part] + amount);
   }
 
-  getHandlingModifier() {
+  // Globalny mnożnik silnika (degradacja z uszkodzenia ENGINE).
+  getEngineMultiplier() {
+    return 1.0 - this.state[PARTS.ENGINE] * 0.70;
+  }
+
+  // Per-wheel modifiers — każde koło psuje się niezależnie.
+  // Zwraca tablicę [FL, FR, RL, RR] z obiektami { tractionMult, steerMult, brakeMult }.
+  getWheelModifiers() {
+    const fl = this.state[PARTS.WHEEL_FL];
+    const fr = this.state[PARTS.WHEEL_FR];
+    const rl = this.state[PARTS.WHEEL_RL];
+    const rr = this.state[PARTS.WHEEL_RR];
+    return [
+      { tractionMult: 1.0 - fl * 0.65, steerMult: 1.0 - fl * 0.60, brakeMult: 1.0 - fl * 0.50 },
+      { tractionMult: 1.0 - fr * 0.65, steerMult: 1.0 - fr * 0.60, brakeMult: 1.0 - fr * 0.50 },
+      { tractionMult: 1.0,              steerMult: 1.0,              brakeMult: 1.0 - rl * 0.50 },
+      { tractionMult: 1.0,              steerMult: 1.0,              brakeMult: 1.0 - rr * 0.50 },
+    ];
+  }
+
+  // Steering pull caused by asymmetric front wheel damage.
+  // Returns an offset in normalised steer space (−1..1 fraction × MAX_STEER applied by caller).
+  getToeOffset() {
+    const fl = this.state[PARTS.WHEEL_FL];
+    const fr = this.state[PARTS.WHEEL_FR];
+    // Pull toward the more-damaged side; left damage → negative (pull left)
+    return (fl - fr) * 0.35;
+  }
+
+  // 0..1 smoke intensity driven by engine + rear wheel damage.
+  getSmokeLevel() {
     const engineDmg = this.state[PARTS.ENGINE];
-    const speedMultiplier = engineDmg > CRITICAL_THRESHOLD
-      ? 0.3 + (1 - engineDmg) * 0.7
-      : 1.0;
-
-    const avgFrontWheelDmg = (this.state[PARTS.WHEEL_FL] + this.state[PARTS.WHEEL_FR]) / 2;
-    const steerMultiplier = avgFrontWheelDmg > CRITICAL_THRESHOLD
-      ? 0.4 + (1 - avgFrontWheelDmg) * 0.6
-      : 1.0;
-
-    return { speedMultiplier, steerMultiplier };
+    const rearDmg = (this.state[PARTS.WHEEL_RL] + this.state[PARTS.WHEEL_RR]) / 2;
+    return Math.max(engineDmg, rearDmg * 0.6);
   }
 
   getTotalDamagePercent() {

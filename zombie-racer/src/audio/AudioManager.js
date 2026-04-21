@@ -14,9 +14,15 @@ export class AudioManager {
     this._engGain2  = null;
     this._engFilter = null;
 
-    // Boost layer
-    this._boostOsc  = null;
-    this._boostGain = null;
+    // Boost layer (rocket)
+    this._boostRumbleOsc = null;
+    this._boostGain      = null;
+    this._boostNoiseSrc  = null;
+    this._boostHissGain  = null;
+    // Engine damage roughness
+    this._dmgNoiseSrc    = null;
+    this._dmgNoiseFilter = null;
+    this._dmgGain        = null;
 
     this._started   = false;
     this._impactCooldown = 0;
@@ -62,40 +68,89 @@ export class AudioManager {
     this._engOsc2.connect(this._engGain2);
     this._engOsc2.start();
 
-    // ── Boost layer — oscylator square na wyższych częstotliwościach
+    // ── Boost layer — rakietowy rąmk + szum ──────────────────────────────
+    // Głębokie wibracje silnika rakietowego
     this._boostGain = ctx.createGain();
     this._boostGain.gain.value = 0.0;
     this._boostGain.connect(this._masterGain);
 
-    this._boostOsc = ctx.createOscillator();
-    this._boostOsc.type = 'square';
-    this._boostOsc.frequency.value = 180;
-    this._boostOsc.connect(this._boostGain);
-    this._boostOsc.start();
+    this._boostRumbleOsc = ctx.createOscillator();
+    this._boostRumbleOsc.type = 'sawtooth';
+    this._boostRumbleOsc.frequency.value = 45;
+    this._boostRumbleOsc.connect(this._boostGain);
+    this._boostRumbleOsc.start();
+
+    // Syk rakiety — pętla szumu przez highpass
+    const boostNoiseLen = ctx.sampleRate * 2;
+    const boostNoiseBuf = ctx.createBuffer(1, boostNoiseLen, ctx.sampleRate);
+    const bnd = boostNoiseBuf.getChannelData(0);
+    for (let i = 0; i < boostNoiseLen; i++) bnd[i] = Math.random() * 2 - 1;
+    this._boostNoiseSrc = ctx.createBufferSource();
+    this._boostNoiseSrc.buffer = boostNoiseBuf;
+    this._boostNoiseSrc.loop = true;
+    const boostHissFilter = ctx.createBiquadFilter();
+    boostHissFilter.type = 'highpass';
+    boostHissFilter.frequency.value = 1400;
+    boostHissFilter.Q.value = 0.7;
+    this._boostHissGain = ctx.createGain();
+    this._boostHissGain.gain.value = 0.0;
+    this._boostNoiseSrc.connect(boostHissFilter);
+    boostHissFilter.connect(this._boostHissGain);
+    this._boostHissGain.connect(this._masterGain);
+    this._boostNoiseSrc.start();
+
+    // ── Warstwa uszkodzeń silnika — chropowaty szum ──────────────────
+    const dmgNoiseLen = ctx.sampleRate * 1;
+    const dmgNoiseBuf = ctx.createBuffer(1, dmgNoiseLen, ctx.sampleRate);
+    const dnd = dmgNoiseBuf.getChannelData(0);
+    for (let i = 0; i < dmgNoiseLen; i++) dnd[i] = Math.random() * 2 - 1;
+    this._dmgNoiseSrc = ctx.createBufferSource();
+    this._dmgNoiseSrc.buffer = dmgNoiseBuf;
+    this._dmgNoiseSrc.loop = true;
+    this._dmgNoiseFilter = ctx.createBiquadFilter();
+    this._dmgNoiseFilter.type = 'bandpass';
+    this._dmgNoiseFilter.frequency.value = 120;
+    this._dmgNoiseFilter.Q.value = 1.5;
+    this._dmgGain = ctx.createGain();
+    this._dmgGain.gain.value = 0.0;
+    this._dmgNoiseSrc.connect(this._dmgNoiseFilter);
+    this._dmgNoiseFilter.connect(this._dmgGain);
+    this._dmgGain.connect(this._masterGain);
+    this._dmgNoiseSrc.start();
   }
 
   // ── Aktualizacja silnika (co klatkę) ──────────────────────────────
-  updateEngine(speedKmh, throttle, boostLevel) {
+  updateEngine(speedKmh, throttle, boostLevel, damagePct = 0) {
     if (!this._ctx || !this._started) return;
     const t = this._ctx.currentTime;
 
     // Częstotliwość = idle + prędkość + throttle
     const freq1 = 50 + speedKmh * 0.85 + Math.abs(throttle) * 25 + boostLevel * 55;
     const freq2 = freq1 * 0.5;
-    const freq3 = freq1 * 1.8 + boostLevel * 40; // boost tone
 
-    this._engOsc1.frequency.setTargetAtTime(Math.min(320, freq1), t, 0.08);
+    // Silnik — jitter przy dużych uszkodzeniach (nierowny bieg)
+    const jitter = damagePct > 0.4 ? (Math.random() - 0.5) * damagePct * 18 : 0;
+    this._engOsc1.frequency.setTargetAtTime(Math.min(320, freq1 + jitter), t, 0.08);
     this._engOsc2.frequency.setTargetAtTime(Math.min(160, freq2), t, 0.08);
-    this._boostOsc.frequency.setTargetAtTime(Math.min(500, freq3), t, 0.06);
 
     // Głośność — cicho na biegu jałowym, głośniej przy gazie
     const baseVol = 0.04 + Math.abs(throttle) * 0.035;
     this._engGain1.gain.setTargetAtTime(baseVol, t, 0.06);
     this._engGain2.gain.setTargetAtTime(baseVol * 1.3, t, 0.06);
-    this._boostGain.gain.setTargetAtTime(boostLevel * 0.05, t, 0.05);
 
-    // Filtr otwiera się przy wyższych obrotach
-    this._engFilter.frequency.setTargetAtTime(400 + freq1 * 2, t, 0.1);
+    // Filtr — bardziej przytłumiony przy uszkodzeniu (stłumiony warkot)
+    const filterFreq = (400 + freq1 * 2) * (1.0 - damagePct * 0.45);
+    this._engFilter.frequency.setTargetAtTime(Math.max(180, filterFreq), t, 0.1);
+
+    // Boost — rakietowy rumbłe + syk
+    this._boostRumbleOsc.frequency.setTargetAtTime(45 + boostLevel * 30 + speedKmh * 0.2, t, 0.06);
+    this._boostGain.gain.setTargetAtTime(boostLevel * 0.12, t, 0.05);
+    this._boostHissGain.gain.setTargetAtTime(boostLevel * 0.055, t, 0.05);
+
+    // Uszkodzenia — chropowaty szum (kwadratowy wzrost z damage)
+    const dmgNoise = damagePct * damagePct * 0.10;
+    this._dmgGain.gain.setTargetAtTime(dmgNoise, t, 0.3);
+    this._dmgNoiseFilter.frequency.setTargetAtTime(70 + freq1 * 0.5, t, 0.2);
 
     if (this._impactCooldown > 0) this._impactCooldown--;
   }
@@ -232,16 +287,21 @@ export class AudioManager {
     if (!this._ctx) return;
     const ctx = this._ctx;
     const t = ctx.currentTime;
-    const osc = ctx.createOscillator();
-    osc.type = 'sawtooth';
-    osc.frequency.setValueAtTime(120, t);
-    osc.frequency.linearRampToValueAtTime(280, t + 0.2);
-    const g = ctx.createGain();
-    g.gain.setValueAtTime(0.18, t);
-    g.gain.exponentialRampToValueAtTime(0.001, t + 0.22);
-    osc.connect(g);
-    g.connect(this._masterGain);
-    osc.start(t);
-    osc.stop(t + 0.25);
+    // Głęboki bas — ⋅ impuls odpalenia
+    this._playTone(38, 'sawtooth', 0.35, 0.38, 0.30);
+    // Sweep od 80 → 700 Hz — rakietowy wyrzut
+    const sweep = ctx.createOscillator();
+    sweep.type = 'sawtooth';
+    sweep.frequency.setValueAtTime(80, t);
+    sweep.frequency.exponentialRampToValueAtTime(700, t + 0.18);
+    const sg = ctx.createGain();
+    sg.gain.setValueAtTime(0.26, t);
+    sg.gain.exponentialRampToValueAtTime(0.001, t + 0.22);
+    sweep.connect(sg);
+    sg.connect(this._masterGain);
+    sweep.start(t);
+    sweep.stop(t + 0.25);
+    // Wysoki syk — rozpędzony strumień gazu
+    this._playNoise(0.30, 0.28, 2800, 'highpass');
   }
 }
