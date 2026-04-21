@@ -29,6 +29,7 @@ export class NPCCar extends Car {
     this.onSmoke        = null; // callback(x, y, z, type)
     this._smokeOffset   = new THREE.Vector3();
     this.onFireExplode   = null; // callback() — 1s po wejściu w fazę ogień
+    this.onBoundsExit    = null; // callback(npc) — wyjechał poza planszę → cichy respawn
     this._fireTimer      = 0;   // 0=nie startował; >0=odliczanie; 2=wybuchło
     this._isDying        = false;
     this._dyingTimer     = 0;   // akumulowany czas od śmierci
@@ -64,6 +65,7 @@ export class NPCCar extends Car {
     this._dyingTimer    = 0;
     this._dyingExplodeAt = 0;
     this.onDyingExplode = null;
+    this.onBoundsExit   = null;
     this._fireTimer     = 0;
     this._steerSmooth   = 0;
     this._throttleFiltered = 0;
@@ -84,7 +86,7 @@ export class NPCCar extends Car {
 
     if (Math.abs(pos.x) > NPC_BOUNDS || Math.abs(pos.z) > NPC_BOUNDS) {
       this.isAlive = false;
-      if (typeof this.onDestroy === 'function') this.onDestroy();
+      if (typeof this.onBoundsExit === 'function') this.onBoundsExit(this);
       return;
     }
 

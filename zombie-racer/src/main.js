@@ -10,7 +10,7 @@ import { NPCCar } from './entities/NPCCar.js';
 import { Zombie } from './entities/Zombie.js';
 import { KeyboardInput } from './input/KeyboardInput.js';
 import { TouchInput } from './input/TouchInput.js';
-import { ThirdPersonCamera } from './camera/ThirdPersonCamera.js';
+import { CameraController, CamState } from './camera/CameraController.js';
 import { GameTimer } from './systems/GameTimer.js';
 import { CollisionHandler } from './systems/CollisionHandler.js';
 import { HUD } from './ui/HUD.js';
@@ -21,7 +21,7 @@ import { DebrisSystem } from './effects/DebrisSystem.js';
 import { MAP } from './world/mapData.js';
 import { WORLD_SIZE } from './constants.js';
 import suvModelUrl from './assets/suv.glb?url';
-import { BOOST_FOV_NORMAL, BOOST_FOV_ACTIVE, BOOST_FOV_LERP, CAMERA_OFFSET_BEHIND, CAMERA_OFFSET_UP } from './physicsConfig.js';
+import { CAMERA_OFFSET_BEHIND } from './physicsConfig.js';
 import { AudioManager } from './audio/AudioManager.js';
 
 // ── Wczytaj model auta (async, przed inicjalizacją) ───────────────
@@ -99,8 +99,10 @@ const npcColors = [0xcc2200, 0x2200cc, 0xcc8800, 0xaa00cc, 0x00aacc, 0xddcc00, 0
 for (let i = 0; i < Math.min(MAP.npcWaypoints.length, 10); i++) {
   const npc = new NPCCar(MAP.npcWaypoints[i], npcColors[i % npcColors.length]);
   npc.buildNPC(scene, world, terrain);
-  npc.onSmoke = (x, y, z, type) => particles.spawnSmoke(x, y, z, type);
-  npc.onFireExplode = () => onCarKill(npc); // równoznaczne — startuje fazę dying
+  npc.onSmoke      = (x, y, z, type) => particles.spawnSmoke(x, y, z, type);
+  npc.onFireExplode = () => onCarKill(npc);
+  npc.onDestroy    = () => onCarKill(npc);         // hp=0 przez receiveImpact
+  npc.onBoundsExit = () => setTimeout(() => _respawnNPC(npc), 500); // cichy respawn
   npcCars.push(npc);
 }
 
@@ -120,7 +122,7 @@ for (const sp of MAP.zombieSpawns) {
 // ── Systems ───────────────────────────────────────────────────────
 const particles = new ParticleSystem(scene);
 const debris    = new DebrisSystem(scene, world);
-const thirdPersonCam = new ThirdPersonCamera(camera);
+const camCtrl = new CameraController(camera);
 const timer = new GameTimer();
 const hud     = new HUD();
 const minimap = new Minimap();
@@ -171,24 +173,7 @@ let _smokeTimer = 0;
 let _oilTimer   = 0;
 const _smokeOffset = new THREE.Vector3();
 
-// ── Kill-cam state ──────────────────────────────────────────
-const KILLCAM_ORBIT_DIST   = 20;    // [m] odległość kamery od NPC
-const KILLCAM_ORBIT_HEIGHT = 3.5;  // [m] wysokość nad NPC
-const KILLCAM_ORBIT_SPEED  = 0.45; // [rad/s] prędkość obrotu
-const KILLCAM_FOV_WATCH    = 90;   // FOV podczas obserwacji
-const KILLCAM_RETURN_TIME  = 3.5;  // [s] czas powrotu do gracza
-const _killCamPos = new THREE.Vector3();
-let _killCam = {
-  active:      false,
-  phase:       'watch', // 'watch' | 'return'
-  target:      null,    // THREE.Group obserwowanego NPC
-  orbitAngle:  0,
-  returnTimer: 0,
-  fov:         BOOST_FOV_NORMAL,
-  lastLookX:   0,  // ostatni look target (do sync przy powrócie)
-  lastLookY:   0,
-  lastLookZ:   0,
-};
+
 
 const CREDITS_ZOMBIE    = 200;   // za rozjechanie zombie (było 50)
 const CREDITS_CAR_HIT   =  30;   // za uderzenie w NPC (per collision)
@@ -265,6 +250,9 @@ function _explodeNPC(npc, velX = 0, velY = 0, velZ = 0) {
     (x, y, z, type) => particles.spawnSmoke(x, y, z, type)
   );
 
+  // Zniszcz fizykę auta (model już nie będzie widoczny)
+  if (npc.vehicle) npc.destroy(world, scene);
+
   // ── Blast wave — odpycha wszystko w promieniu 5m, siła malejąca z dystansem ──
   const BLAST_RADIUS  = 10;   // [m] — maksymalny zasięg
   const BLAST_FORCE   = 2800; // [N·s] — impulse przy epicentrum (dist=0)
@@ -303,37 +291,23 @@ function _explodeNPC(npc, velX = 0, velY = 0, velZ = 0) {
     body.angularVelocity.z += (Math.random() - 0.5) * (strength / 4000);
   }
 
-  // Zniszcz fizykę auta (model już nie będzie widoczny)
-  if (npc.vehicle) npc.destroy(world, scene);
-
-  // Po wybuchu: przełącz kill-cam na powrót do gracza
-  if (_killCam.active && _killCam.phase === 'watch') {
-    setTimeout(() => {
-      thirdPersonCam.syncFromKillCam(
-        _killCam.lastLookX, _killCam.lastLookY, _killCam.lastLookZ,
-        player.group
-      );
-      _killCam.phase       = 'return';
-      _killCam.returnTimer = 0;
-      _killCam.target      = null;
-    }, 1500);
-  }
+  // Po wybuchu: przełącz kamerę z powrotem na gracza (blending 500ms)
+  setTimeout(() => camCtrl.setState(CamState.PLAYER), 1500);
 
   timer.addTime(80);
   carKills++;
   addCredits(CREDITS_CAR_KILL, '🚗💥 +80s', '#ffcc00');
   checkWinConditions();
-
-  // Odradzaj NPC po 8–12s (gra nie kończy się przez brak NPCów)
-  setTimeout(() => _respawnNPC(npc), 8000 + Math.random() * 4000);
+  // brak respawnu po zabiciu — NPC odradzają się TYLKO po wyleceniu za planszę
 }
 
 function _respawnNPC(npc) {
   if (gameOverVisible) return;
   npc.respawn(scene, world, terrain);
-  npc.onSmoke       = (x, y, z, type) => particles.spawnSmoke(x, y, z, type);
+  npc.onSmoke      = (x, y, z, type) => particles.spawnSmoke(x, y, z, type);
   npc.onFireExplode = () => onCarKill(npc);
-  hud.showMessage('NPC ↩ odrodzony', '#ffaa44', 1200);
+  npc.onDestroy    = () => onCarKill(npc);
+  npc.onBoundsExit = () => setTimeout(() => _respawnNPC(npc), 500);
 }
 
 function onCarKill(npc) {
@@ -363,19 +337,14 @@ function onCarKill(npc) {
     _explodeNPC(n, vx, vy, vz);
   };
 
-  // Uruchom kill-cam: kamera skacze za NPC i obserwuje do wybuchu
+  // Uruchom kamerę orbit za NPC
   if (npc.group) {
-    _killCam.active      = true;
-    _killCam.phase       = 'watch';
-    _killCam.target      = npc.group;
-    _killCam.returnTimer = 0;
-    _killCam.fov         = camera.fov;
-    // Orbit startuje od strony gracza, żeby nie skakać nagle
-    const dx = player.chassisBody
-      ? player.chassisBody.position.x - npc.group.position.x : 0;
-    const dz = player.chassisBody
-      ? player.chassisBody.position.z - npc.group.position.z : 1;
-    _killCam.orbitAngle = Math.atan2(dx, dz);
+    const dx = player.chassisBody ? player.chassisBody.position.x - npc.group.position.x : 0;
+    const dz = player.chassisBody ? player.chassisBody.position.z - npc.group.position.z : 1;
+    camCtrl.setState(CamState.NPC_DESTROY, {
+      target:     npc.group,
+      startAngle: Math.atan2(dx, dz),
+    });
   }
 }
 
@@ -539,48 +508,14 @@ function gameLoop() {
   timer.update(dt);
   collisions.tick(dt);
 
-  // ── Kill-cam: obserwacja NPC lub powrót do gracza ──────────────────
-  if (_killCam.active) {
-    if (_killCam.phase === 'watch' && _killCam.target) {
-      // Orbit wokół NPC
-      _killCam.orbitAngle += KILLCAM_ORBIT_SPEED * dt;
-      const tp = _killCam.target.position;
-      _killCamPos.set(
-        tp.x - Math.sin(_killCam.orbitAngle) * KILLCAM_ORBIT_DIST,
-        tp.y + KILLCAM_ORBIT_HEIGHT,
-        tp.z - Math.cos(_killCam.orbitAngle) * KILLCAM_ORBIT_DIST
-      );
-      camera.position.lerp(_killCamPos, 0.01);
-      // Zapisz look target do sync przy powrócie
-      _killCam.lastLookX = tp.x;
-      _killCam.lastLookY = tp.y + 1.2;
-      _killCam.lastLookZ = tp.z;
-      camera.lookAt(tp.x, tp.y + 1.2, tp.z);
-      // FOV płynnie do KILLCAM_FOV_WATCH
-      _killCam.fov += (KILLCAM_FOV_WATCH - _killCam.fov) * 0.01;
-      camera.fov = _killCam.fov;
-      camera.updateProjectionMatrix();
-    } else if (_killCam.phase === 'return') {
-      // Oddaj kamerę graczowi — thirdPersonCam płynnie ją przyciągnie
-      _killCam.returnTimer += dt;
-      thirdPersonCam.update(player.group, input.throttle, player._boostLevel, CAMERA_OFFSET_BEHIND, false, player.chassisBody?.velocity, dt);
-      _killCam.fov += (BOOST_FOV_NORMAL - _killCam.fov) * 0.01;
-      camera.fov = _killCam.fov;
-      camera.updateProjectionMatrix();
-      if (_killCam.returnTimer >= KILLCAM_RETURN_TIME
-          && Math.abs(_killCam.fov - BOOST_FOV_NORMAL) < 0.5) {
-        _killCam.active = false;
-        _killCam.target = null;
-      }
-    }
-  } else {
-    const _isAirborne = player.vehicle ? !player.wheelsOnGround : false;
-    thirdPersonCam.update(player.group, input.throttle, player._boostLevel, CAMERA_OFFSET_BEHIND, _isAirborne, player.chassisBody?.velocity, dt);
-    // ── Boost FOV (tylko poza kill-cam) ──
-    const targetFov = BOOST_FOV_NORMAL + (BOOST_FOV_ACTIVE - BOOST_FOV_NORMAL) * player._boostLevel;
-    camera.fov += (targetFov - camera.fov) * BOOST_FOV_LERP;
-    camera.updateProjectionMatrix();
-  }
+  // ── Kamera — CameraController obsługuje oba stany ────────────────
+  camCtrl.update(dt, {
+    group:      player.group,
+    throttle:   input.throttle,
+    boostLevel: player._boostLevel,
+    velocity:   player.chassisBody?.velocity,
+    isAirborne: player.vehicle ? !player.wheelsOnGround : false,
+  });
 
   const speedKmh = player.chassisBody ? player.chassisBody.velocity.length() * 3.6 : 0;
   const engineDmgPct = player.damageSystem.getTotalDamagePercent();

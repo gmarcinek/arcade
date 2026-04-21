@@ -260,14 +260,14 @@ export const BOOST_CAMERA_DIP    = 1.0;
 
 // O ile metrów kamera oddala się podczas boosta [m].
 // 0 = brak oddalenia, dodatnie wartości dają efekt "odjazdu" kamery przy przyspieszaniu.
-export const BOOST_CAMERA_PULLBACK = 2.2;
+export const BOOST_CAMERA_PULLBACK = 2.0;
 
 // Opór powietrza — siła hamująca proporcjonalna do v².
 // F_drag = AIR_DRAG * v²  [N/(m/s)²]
 // Przy 30 m/s (~108 km/h): F = 15 * 900 = 13500 N (wyraźny efekt)
 // Przy 10 m/s (~36 km/h):  F = 15 * 100 = 1500 N (ledwo wyczuwalny)
 // Zakres: [3 słaby … 15 normalne … 40 bardzo agresywny]
-export const AIR_DRAG = 0.4;
+export const AIR_DRAG = 0.3;
 
 // ── Kamera ────────────────────────────────────────────────────────
 // Odleglosc kamery za autem [m].
