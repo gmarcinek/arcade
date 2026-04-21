@@ -12,7 +12,7 @@ export const GRAVITY = -10.8;
 // Masa nadwozia [kg]. Wyzsza = wolniejsze przyspieszenie i hamowanie, wiekszy impet przy zderzeniu.
 // Zakres: [400 sportowe … 800 normalne … 1200 SUV/ciezarowka]
 // Skoda Kodiaq 2.0 TSI: masa wlasna ~1750 kg
-export const CAR_MASS = 1250;
+export const CAR_MASS = 1750;
 
 // Przesuniecie srodka masy w bok [m]. 0 = symetria. Zmiana powoduje nierowne przechyly L/P.
 // Zakres: [-0.3 … 0.3]  (zwykle 0)
@@ -22,7 +22,7 @@ export const CHASSIS_COM_OFFSET_X = 0;
 // Wyzej = auto chetniej sie przechyla i wywraca w zakretech.
 // Zakres: [0.0 nisko/stabilnie … 0.6 wysoko/niestabilnie]
 // Kodiaq: CoM ~620mm od ziemi, SUV wiec wysoko
-export const CHASSIS_COM_OFFSET_Y = 0.30;
+export const CHASSIS_COM_OFFSET_Y = 0.1;
 
 // Przesuniecie srodka masy w przod/tyl [m].
 // Ujemne (przod) = understeer (auto jedzie prosto, trudniej skrecic).
@@ -35,26 +35,27 @@ export const CHASSIS_COM_OFFSET_Z = 0;
 // Wyzsze = auto szybciej przestaje sie krecic, mniej "pinball".
 // Zakres: [0.1 brak tlumienia … 0.9 normalne … 1.0 natychmiastowe zatrzymanie obrotu]
 // Kodiaq: realistyczne tlumienie — auto moze sie krecic po wywrotce
-export const ANGULAR_DAMPING = 0.1;
+// 2× podwyższone dla lepszego feel'u + dynamiczne zwiększenie przy szybkim obrocie
+export const ANGULAR_DAMPING = 0.2;
 
 // Tlumienie predkosci liniowej (opor powietrza + toczenia).
 // Wyzsze = auto samo zwalnia szybciej gdy puszczasz gaz.
 // Zakres: [0.01 slizga sie jak lod … 0.1 normalne … 0.5 bardzo duze tlumienie]
 // Kodiaq: Cx=0.36, przy G=-9.8 niskie liniowe tlumienie jest realistyczne
-export const LINEAR_DAMPING = 0.001;
+export const LINEAR_DAMPING = 0.005;
 
 // ── Silnik / sterowanie ────────────────────────────────────────────
 // Maksymalna sila silnika na kolo napedowe [N].
 // Wyzsze = szybsze przyspieszenie i wyzsza predkosc max.
 // Zakres: [2000 slabe … 5000 normalne … 10000 wyscigowe]
 // Kodiaq 2.0 TSI 140kW: 0-100 ~7.5s → F=1750*3.7=6475N łącznie / 2 kola FWD
-export const MAX_ENGINE_FORCE = 16000;
+export const MAX_ENGINE_FORCE = 18000;
 
 // Maksymalny kat skretu kol przednich [rad].
 // Wyzsze = ostrzejsze skrety, ale tez latwiej wpasc w poslizg.
 // Zakres: [0.3 mala skretnosc … 0.5 normalna … 0.8 bardzo skretne]
 // Kodiaq: promien skretu 11.1m, rozstaw 2.79m → kat ~0.26rad, z zapasem ~0.45
-export const MAX_STEER = 0.80;
+export const MAX_STEER = 0.75;
 
 // Sila hamulcow na kazde kolo [N*m].
 // Wyzsze = krotszy dystans hamowania. Za wysokie = natychmiastowe blokowanie kol.
@@ -66,18 +67,18 @@ export const BRAKE_FORCE = 320;
 // Promien kola [m]. Wplywa na predkosc obrotowa i przesit.
 // Zakres: [0.3 male … 0.55 normalne … 0.8 monster truck]
 // Kodiaq: opona 235/55R17 → r = (17*25.4/2 + 235*0.55) / 1000 = 0.345m
-export const WHEEL_RADIUS = 0.345;
+export const WHEEL_RADIUS = 0.35;
 
 // Odleglosc kola od osi symetrii auta (pulos) [m].
 // Szerzej = stabilniejsze w zakretech, wezej = bardziej zwrotne.
 // Zakres: [0.8 … 1.15 normalne … 1.5]
 // Kodiaq: tor przedni 1598mm / 2 = 799mm = 0.80m
-export const WHEEL_POS_X = 0.80;
+export const WHEEL_POS_X = 0.9;
 
 // Odleglosc przednich kol od srodka auta [m] (rozstaw osi przod).
 // Zakres: [1.2 … 1.85 normalne … 2.5]
 // Kodiaq: rozstaw osi 2791mm / 2 = 1396mm = 1.40m
-export const WHEEL_POS_Z_FRONT = 1.40;
+export const WHEEL_POS_Z_FRONT = 1.45;
 
 // Odleglosc tylnych kol od srodka auta [m] (rozstaw osi tyl).
 // Zakres: [1.2 … 1.85 normalne … 2.5]
@@ -274,3 +275,8 @@ export const CAMERA_POS_LERP = 0.1;
 // Szybkosc lerpu kamery przy cofaniu (zwykle wolniejszy obrot niz do przodu).
 // Zakres: [0.01 … 0.03 normalne … 0.1]
 export const CAMERA_REVERSE_LERP = 0.015;
+
+// Szybkość lerpu kamery gdy auto jest w powietrzu — znacznie wolniejszy,
+// żeby kamera nie szalała przy obrocie bryły podczas lotu.
+export const CAMERA_YAW_LERP_AIR  = 0.012;
+export const CAMERA_POS_LERP_AIR  = 0.04;

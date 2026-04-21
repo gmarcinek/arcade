@@ -38,6 +38,7 @@ export class Car {
     this.chassisBody = null;
     this.vehicle = null;
     this._wobbleTime = 0;
+    this._throttleFiltered = 0.0;
   }
 
   build(scene, world, spawnX, spawnY, spawnZ, color = 0xff2200) {
@@ -201,22 +202,42 @@ export class Car {
       new CANNON.Vec3(-WHEEL_POS_X, 0, -WHEEL_POS_Z_REAR),   // RL
       new CANNON.Vec3( WHEEL_POS_X, 0, -WHEEL_POS_Z_REAR),   // RR
     ];
-    wheelPositions.forEach(pos => {
+    wheelPositions.forEach((pos, index) => {
       wheelOpts.chassisConnectionPointLocal.copy(pos);
-      this.vehicle.addWheel({ ...wheelOpts });
+      this.vehicle.addWheel({
+        ...wheelOpts,
+        frictionSlip: index < 2 ? FRICTION_SLIP_FRONT_STATIC : FRICTION_SLIP_REAR_STATIC,
+      });
     });
 
     this.vehicle.addToWorld(world);
   }
 
-  applyControl(throttle, steer, brake) {
+  // Getter: true gdy wszystkie 4 koła są w powietrzu
+  get wheelsOnGround() {
+    if (!this.vehicle) return true;
+    return this.vehicle.wheelInfos.some(w => w.isInContact);
+  }
+
+  applyControl(throttle, steer, brake, dt = 1 / 60) {
+    const throttleTarget = throttle;
+    const throttleRiseRate = 2.4;
+    const throttleFallRate = 4.8;
+    const throttleFlipRate = 7.5;
+    const sameDirection = this._throttleFiltered === 0 || Math.sign(this._throttleFiltered) === Math.sign(throttleTarget);
+    const throttleRate = !sameDirection ? throttleFlipRate : (Math.abs(throttleTarget) > Math.abs(this._throttleFiltered) ? throttleRiseRate : throttleFallRate);
+    const throttleDelta = throttleTarget - this._throttleFiltered;
+    const throttleStep = Math.sign(throttleDelta) * Math.min(Math.abs(throttleDelta), throttleRate * dt);
+    this._throttleFiltered += throttleStep;
+    const effectiveThrottle = this._throttleFiltered;
+
     const engineMult  = this.damageSystem.getEngineMultiplier();
     const wheelMods   = this.damageSystem.getWheelModifiers(); // [FL, FR, RL, RR]
     const toeOffset   = this.damageSystem.getToeOffset();
     const brakeVal    = brake ? BRAKE_FORCE : 0;
 
     // Front-wheel drive — siła per koło × uszkodzenie danego koła × silnik
-    const baseForce = throttle * MAX_ENGINE_FORCE * this.stats.engine * engineMult;
+    const baseForce = effectiveThrottle * MAX_ENGINE_FORCE * this.stats.engine * engineMult;
     this.vehicle.applyEngineForce(-baseForce * wheelMods[0].tractionMult, 0); // FL
     this.vehicle.applyEngineForce(-baseForce * wheelMods[1].tractionMult, 1); // FR
     this.vehicle.applyEngineForce(0, 2); // RL — brak napędu
@@ -230,7 +251,7 @@ export class Car {
     this.vehicle.setSteeringValue(0, 2);
     this.vehicle.setSteeringValue(0, 3);
 
-    // Niezależne hamulce per koło
+    // Hamowanie na 4 kola, ale z ciut lzejszym tylem dla latwiejszego driftu.
     this.vehicle.setBrake(brakeVal * wheelMods[0].brakeMult, 0);
     this.vehicle.setBrake(brakeVal * wheelMods[1].brakeMult, 1);
     this.vehicle.setBrake(brakeVal * wheelMods[2].brakeMult, 2);

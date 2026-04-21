@@ -37,9 +37,42 @@ export class NPCCar extends Car {
   }
 
   buildNPC(scene, world, terrain) {
-    const spawn = this.waypointRoute[0];
+    const spawn = this.waypointRoute[this.waypointIdx % this.waypointRoute.length];
     const hy = terrain.getHeightAt(spawn.x, spawn.z) + 2.5;
     this.build(scene, world, spawn.x, hy, spawn.z, this.npcColor);
+  }
+
+  // Odrodzenie po wybuchu — czyści stary stan, buduje na nowo
+  respawn(scene, world, terrain) {
+    // Usuń stare obiekty z silnika fizyki / sceny
+    if (this.vehicle)    { try { this.vehicle.removeFromWorld(world); } catch(_) {} }
+    if (this.chassisBody){ try { world.removeBody(this.chassisBody); }   catch(_) {} }
+    for (const wm of this.wheelMeshes) { scene.remove(wm); }
+    scene.remove(this.group);
+
+    // Utwórz nowe grupy (build() wymaga świeżych obiektów Three.js)
+    this.group        = new THREE.Group();
+    this.wheelMeshes  = [];
+    this.chassisMesh  = null;
+    this.vehicle      = null;
+    this.chassisBody  = null;
+
+    // Reset stanu
+    this.hp             = NPC_MAX_HP;
+    this.isAlive        = true;
+    this._isDying       = false;
+    this._dyingTimer    = 0;
+    this._dyingExplodeAt = 0;
+    this.onDyingExplode = null;
+    this._fireTimer     = 0;
+    this._steerSmooth   = 0;
+    this._throttleFiltered = 0;
+    this._wobbleTime    = 0;
+    for (const k of Object.keys(this.damageSystem.state)) this.damageSystem.state[k] = 0;
+    // Losowy punkt trasy jako spawn
+    this.waypointIdx = Math.floor(Math.random() * this.waypointRoute.length);
+
+    this.buildNPC(scene, world, terrain);
   }
 
   update(terrain, playerPos, playerVel, allNpcs) {
@@ -129,7 +162,7 @@ export class NPCCar extends Car {
     const turnPenalty = this._chasing ? 0 : Math.abs(this._steerSmooth) * 0.35;
     const throttle = Math.max(0.55, 1.0 - turnPenalty);
 
-    this.applyControl(throttle, this._steerSmooth, false);
+    this.applyControl(throttle, this._steerSmooth, false, dt);
     this.sync(dt);
 
     this._updateSmoke(dt);

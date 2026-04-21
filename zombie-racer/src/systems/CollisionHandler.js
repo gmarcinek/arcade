@@ -12,14 +12,48 @@ export class CollisionHandler {
     this.onCarKill   = onCarKill;
     this.onCarHit    = onCarHit || (() => {});
 
+    // Cooldown żeby speedup/launchpad nie aplikował się co klatkę
+    this._speedupCooldown = 0;
+    this._launchCooldown  = 0;
+
     world.addEventListener('beginContact', (event) => {
       this._handleContact(event.bodyA, event.bodyB);
       this._handleContact(event.bodyB, event.bodyA);
     });
   }
 
+  tick(dt) {
+    if (this._speedupCooldown > 0) this._speedupCooldown -= dt;
+    if (this._launchCooldown  > 0) this._launchCooldown  -= dt;
+  }
+
   _handleContact(bodyA, bodyB) {
     if (bodyA !== this.player.chassisBody) return;
+
+    // ── Speedup bank ──────────────────────────────────────────────
+    if (bodyB.userData?.speedup && this._speedupCooldown <= 0) {
+      const vel = bodyA.velocity;
+      const spd = Math.sqrt(vel.x * vel.x + vel.z * vel.z);
+      if (spd > 1.0) {
+        const boost = bodyB.userData.speedupForce || 18;
+        const scale = (spd + boost) / (spd || 0.01);
+        bodyA.velocity.set(vel.x * scale, vel.y, vel.z * scale);
+        this._speedupCooldown = 1.5;
+        this.hud.showMessage('⚡ SPEED BOOST!', '#44aaff', 900);
+      }
+      return;
+    }
+
+    // ── Launch pad ────────────────────────────────────────────────
+    if (bodyB.userData?.launchPad && this._launchCooldown <= 0) {
+      const force = bodyB.userData.launchForce || 22;
+      const vel = bodyA.velocity;
+      bodyA.velocity.set(vel.x * 0.7, force, vel.z * 0.7);
+      bodyA.angularVelocity.set(0, bodyA.angularVelocity.y, 0);
+      this._launchCooldown = 2.0;
+      this.hud.showMessage('🚀 LAUNCH!', '#ffff00', 1000);
+      return;
+    }
 
     // Player hits building
     if (bodyB.userData?.building) {

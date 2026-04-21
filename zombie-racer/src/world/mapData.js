@@ -80,25 +80,32 @@ export const MAP = {
     { x: 180,  z:   0,  length: 36, width:14,  rotY: 1.57, angleX: 0.30 },
   ],
 
-  // Banki — przechylone nawierzchnie wzdluż dróg (jak velodrom / ściana do wall-ride)
-  // ax/az = kąt przechylenia (euler XYZ); ay = obrót poziomy
-  // Dodatni az = prawa strona idzie w górę (bank po wschodniej stronie drogi N-S)
-  // Ujemny az = lewa strona w górę (bank po zachodniej stronie drogi N-S)
+  // Banki — frustumy (śc. ostrosłup): prostokątna baza, kwadratowy wierzchołek, 4m wys.
+  // bw = szerokość bazy (X), bd = głębokość bazy (Z), tw = szerokość topu liczona z równym insetem
+  // Wysokość i top są dodatkowo clampowane w builderze tak, by każdy bok miał <= 35 stopni.
   banks: [
-    // ── Banki wzdluż wewnętrznej drogi N-S (x=±60) ──
-    { x:  68, z:   0, w: 10, d: 50, ax: 0,    ay: 0,    az:  0.65 },
-    { x: -68, z:   0, w: 10, d: 50, ax: 0,    ay: 0,    az: -0.65 },
-    // ── Banki wzdluż wewnętrznej drogi E-W (z=±60) ──
-    { x:   0, z:  68, w: 50, d: 10, ax:  0.65, ay: 0,    az: 0    },
-    { x:   0, z: -68, w: 50, d: 10, ax: -0.65, ay: 0,    az: 0    },
-    // ── Banki przy środkowym pierścieniu (x=±130) ──
-    { x: 138, z:  40, w: 12, d: 70, ax: 0,    ay: 0,    az:  0.70 },
-    { x:-138, z: -40, w: 12, d: 70, ax: 0,    ay: 0,    az: -0.70 },
-    // ── Duży bank łukowy na zewnętrznym pierścieniu ──
-    { x: 268, z:  30, w: 14, d: 80, ax: 0,    ay: 0,    az:  0.75 },
-    { x:-268, z: -30, w: 14, d: 80, ax: 0,    ay: 0,    az: -0.75 },
-    { x:  30, z: 268, w: 80, d: 14, ax:  0.75, ay: 0,    az: 0    },
-    { x: -30, z:-268, w: 80, d: 14, ax: -0.75, ay: 0,    az: 0    },
+    // ── Banki przy wewnętrznej drodze N-S (x=±68) ──
+    { x:  68, z:   0, bw: 24, bd: 28, tw: 8, h: 5, rotY: 0 },
+    { x: -68, z:   0, bw: 24, bd: 28, tw: 8, h: 5, rotY: 0 },
+    // ── Banki przy wewnętrznej drodze E-W (z=±68) ──
+    { x:   0, z:  68, bw: 28, bd: 24, tw: 8, h: 5, rotY: 0 },
+    { x:   0, z: -68, bw: 28, bd: 24, tw: 8, h: 5, rotY: 0 },
+    // ── Banki przy środkowym pierścieniu ──
+    { x: 138, z:  40, bw: 25, bd: 30, tw: 9, h: 5, rotY: 0 },
+    { x:-138, z: -40, bw: 25, bd: 30, tw: 9, h: 5, rotY: 0 },
+    // ── Łukowe banki ze speedup na zewnętrznym pierścieniu ──
+    { x: 268, z:  30, bw: 10, bd: 22, h: 5, type: 'arc', rotY: 0,       speedup: true, speedupForce: 20 },
+    { x:-268, z: -30, bw: 10, bd: 22, h: 5, type: 'arc', rotY: 0,       speedup: true, speedupForce: 20 },
+    { x:  30, z: 268, bw: 22, bd: 10, h: 5, type: 'arc', rotY: 1.5708,  speedup: true, speedupForce: 20 },
+    { x: -30, z:-268, bw: 22, bd: 10, h: 5, type: 'arc', rotY: 1.5708,  speedup: true, speedupForce: 20 },
+  ],
+
+  // Wyrzutnie w górę — podskakuje auto na padzie
+  launchPads: [
+    { x: 130, z:   0, w: 7, d: 7, launchForce: 24 },
+    { x:-130, z:   0, w: 7, d: 7, launchForce: 24 },
+    { x:   0, z: 130, w: 7, d: 7, launchForce: 24 },
+    { x:   0, z:-130, w: 7, d: 7, launchForce: 24 },
   ],
 
   trees: [
@@ -116,6 +123,8 @@ export const MAP = {
     { x: 350, z: -50 }, { x:-350, z:  50 },
     { x:  45, z: 240 }, { x: -45, z:-240 },
     { x: 170, z: -80 }, { x:-170, z:  80 },
+    { x: 160, z: -76 }, { x:-160, z:  76 },
+    { x: 154, z: -76 }, { x:-154, z:  76 },
   ],
 
   obstacles: [],

@@ -1,11 +1,12 @@
 import * as CANNON from 'cannon-es';
 import { GRAVITY, FRICTION_GRASS, FRICTION_ASPHALT, FRICTION_SLICK, DEFAULT_CONTACT_FRICTION } from '../physicsConfig.js';
 
-export const groundMaterial  = new CANNON.Material('ground');    // trawa
-export const asphaltMaterial = new CANNON.Material('asphalt');   // asfalt
-export const slickMaterial   = new CANNON.Material('slick');     // kaluz/piasek
-export const wheelMaterial   = new CANNON.Material('wheel');
-export const carBodyMaterial = new CANNON.Material('carBody');
+export const groundMaterial       = new CANNON.Material('ground');       // trawa
+export const asphaltMaterial      = new CANNON.Material('asphalt');      // asfalt
+export const slickMaterial        = new CANNON.Material('slick');        // kaluz/piasek
+export const wheelMaterial        = new CANNON.Material('wheel');
+export const carBodyMaterial      = new CANNON.Material('carBody');
+export const buildingWallMaterial = new CANNON.Material('buildingWall'); // ściany budynków — bardzo niskie tarcie
 
 
 export function createPhysicsWorld() {
@@ -24,6 +25,9 @@ export function createPhysicsWorld() {
   const wheelSlick = new CANNON.ContactMaterial(slickMaterial, wheelMaterial, {
     friction: FRICTION_SLICK, restitution: 0.0, contactEquationStiffness: 1e8
   });
+  const wheelWall = new CANNON.ContactMaterial(buildingWallMaterial, wheelMaterial, {
+    friction: FRICTION_ASPHALT, restitution: 0.0, contactEquationStiffness: 1e8
+  });
 
   const carGround = new CANNON.ContactMaterial(groundMaterial, carBodyMaterial, {
     friction: 0.05, restitution: 0.2
@@ -35,13 +39,19 @@ export function createPhysicsWorld() {
   const carCar = new CANNON.ContactMaterial(carBodyMaterial, carBodyMaterial, {
     friction: 0.05, restitution: 0.25
   });
+  // Karoseria vs ściana budynku — 0.1× tarcia carGround → ślizganie się po ścianie
+  const carWall = new CANNON.ContactMaterial(carBodyMaterial, buildingWallMaterial, {
+    friction: 0.005, restitution: 0.15
+  });
 
   world.addContactMaterial(wheelGrass);
   world.addContactMaterial(wheelAsphalt);
   world.addContactMaterial(wheelSlick);
+  world.addContactMaterial(wheelWall);
   world.addContactMaterial(carGround);
   world.addContactMaterial(carAsphalt);
   world.addContactMaterial(carCar);
+  world.addContactMaterial(carWall);
 
   return world;
 }
