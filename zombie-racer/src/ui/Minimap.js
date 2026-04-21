@@ -1,4 +1,6 @@
-const MAP_HALF  = 400;  // świat: -400..+400
+import { WORLD_SIZE } from '../constants.js';
+
+const MAP_HALF  = WORLD_SIZE * 0.5;
 const SIZE      = 160;  // px — rozmiar canvasu
 const PADDING   = 8;    // px — margines wewnętrzny
 
@@ -34,9 +36,10 @@ export class Minimap {
 
   /**
    * @param {{ x, z }} playerPos
+   * @param {number} playerYaw yaw w radianach, 0 = przód mapy (+Z)
    * @param {Array<{ chassisBody: { position: { x, z } }, isAlive: boolean }>} npcs
    */
-  update(playerPos, npcs) {
+  update(playerPos, playerYaw, npcs) {
     const ctx = this._ctx;
     ctx.clearRect(0, 0, SIZE, SIZE);
 
@@ -65,8 +68,18 @@ export class Minimap {
     // Gracz — biały trójkąt
     if (playerPos) {
       const [px, pz] = this._toCanvas(playerPos.x, playerPos.z);
+      const yaw = playerYaw ?? 0;
+      const tipX = Math.sin(yaw) * 7;
+      const tipY = -Math.cos(yaw) * 7;
+      const leftX = Math.sin(yaw - 2.45) * 6.5;
+      const leftY = -Math.cos(yaw - 2.45) * 6.5;
+      const rightX = Math.sin(yaw + 2.45) * 6.5;
+      const rightY = -Math.cos(yaw + 2.45) * 6.5;
       ctx.beginPath();
-      ctx.arc(px, pz, 5, 0, Math.PI * 2);
+      ctx.moveTo(px + tipX, pz + tipY);
+      ctx.lineTo(px + leftX, pz + leftY);
+      ctx.lineTo(px + rightX, pz + rightY);
+      ctx.closePath();
       ctx.fillStyle = '#ffffff';
       ctx.fill();
       ctx.strokeStyle = '#00ffcc';

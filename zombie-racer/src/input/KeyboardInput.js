@@ -42,4 +42,8 @@ export class KeyboardInput {
   get homePressed() {
     return this.keys.has('Home');
   }
+
+  get insertPressed() {
+    return this.keys.has('Insert');
+  }
 }

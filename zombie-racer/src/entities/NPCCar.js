@@ -68,6 +68,8 @@ export class NPCCar extends Car {
     this._steerSmooth   = 0;
     this._throttleFiltered = 0;
     this._wobbleTime    = 0;
+    this._wheelDetached = [false, false, false, false];
+    this._detachedWheelState = [null, null, null, null];
     for (const k of Object.keys(this.damageSystem.state)) this.damageSystem.state[k] = 0;
     // Losowy punkt trasy jako spawn
     this.waypointIdx = Math.floor(Math.random() * this.waypointRoute.length);

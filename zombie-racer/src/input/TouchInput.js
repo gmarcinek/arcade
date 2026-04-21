@@ -86,4 +86,8 @@ export class TouchInput {
   get boost() { return false; }
 
   consumeHeal() { return false; }
+
+  get homePressed() { return false; }
+
+  get insertPressed() { return false; }
 }

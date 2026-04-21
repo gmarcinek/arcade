@@ -18,6 +18,7 @@ const _camberAxis = new THREE.Vector3();
 const _WHEEL_PARTS = [PARTS.WHEEL_FL, PARTS.WHEEL_FR, PARTS.WHEEL_RL, PARTS.WHEEL_RR];
 const _wobbleForce = new CANNON.Vec3();
 const _wobblePoint = new CANNON.Vec3(0, 0, 0);
+const _detachedStep = new THREE.Euler();
 
 export class Car {
   static suvGltf = null; // ustawiane z main.js po załadowaniu modelu
@@ -39,6 +40,8 @@ export class Car {
     this.vehicle = null;
     this._wobbleTime = 0;
     this._throttleFiltered = 0.0;
+    this._wheelDetached = [false, false, false, false];
+    this._detachedWheelState = [null, null, null, null];
   }
 
   build(scene, world, spawnX, spawnY, spawnZ, color = 0xff2200) {
@@ -219,6 +222,36 @@ export class Car {
     return this.vehicle.wheelInfos.some(w => w.isInContact);
   }
 
+  restoreDetachedWheels(force = true) {
+    for (let i = 0; i < this._wheelDetached.length; i++) {
+      if (!this._wheelDetached[i]) continue;
+      if (!force && this.damageSystem.state[_WHEEL_PARTS[i]] > 0.75) continue;
+      this._wheelDetached[i] = false;
+      this._detachedWheelState[i] = null;
+      this.wheelMeshes[i].visible = true;
+    }
+  }
+
+  _detachWheel(index) {
+    if (this._wheelDetached[index]) return;
+    const mesh = this.wheelMeshes[index];
+    const floorY = mesh.position.y - WHEEL_RADIUS * 0.9;
+    this._wheelDetached[index] = true;
+    this._detachedWheelState[index] = {
+      velocity: new THREE.Vector3(
+        this.chassisBody.velocity.x + (Math.random() - 0.5) * 4,
+        2.2 + Math.random() * 2.0,
+        this.chassisBody.velocity.z + (Math.random() - 0.5) * 4,
+      ),
+      spin: new THREE.Vector3(
+        (Math.random() - 0.5) * 10,
+        (Math.random() - 0.5) * 18,
+        (Math.random() - 0.5) * 10,
+      ),
+      floorY,
+    };
+  }
+
   applyControl(throttle, steer, brake, dt = 1 / 60) {
     const throttleTarget = throttle;
     const throttleRiseRate = 2.4;
@@ -235,6 +268,13 @@ export class Car {
     const wheelMods   = this.damageSystem.getWheelModifiers(); // [FL, FR, RL, RR]
     const toeOffset   = this.damageSystem.getToeOffset();
     const brakeVal    = brake ? BRAKE_FORCE : 0;
+
+    for (let i = 0; i < 4; i++) {
+      if (!this._wheelDetached[i]) continue;
+      wheelMods[i].tractionMult = 0;
+      wheelMods[i].steerMult = 0;
+      wheelMods[i].brakeMult = 0;
+    }
 
     // Front-wheel drive — siła per koło × uszkodzenie danego koła × silnik
     const baseForce = effectiveThrottle * MAX_ENGINE_FORCE * this.stats.engine * engineMult;
@@ -267,6 +307,27 @@ export class Car {
     this.vehicle.wheelInfos.forEach((info, i) => {
       this.vehicle.updateWheelTransform(i);
       const t = info.worldTransform;
+
+      if (this._wheelDetached[i]) {
+        const state = this._detachedWheelState[i];
+        if (!state) return;
+        state.velocity.y -= 12 * dt;
+        this.wheelMeshes[i].position.addScaledVector(state.velocity, dt);
+        const minY = state.floorY + WHEEL_RADIUS * 0.55;
+        if (this.wheelMeshes[i].position.y < minY) {
+          this.wheelMeshes[i].position.y = minY;
+          state.velocity.y = Math.abs(state.velocity.y) > 0.8 ? -state.velocity.y * 0.22 : 0;
+          state.velocity.x *= 0.94;
+          state.velocity.z *= 0.94;
+        }
+        _detachedStep.set(state.spin.x * dt, state.spin.y * dt, state.spin.z * dt);
+        this.wheelMeshes[i].rotation.x += _detachedStep.x;
+        this.wheelMeshes[i].rotation.y += _detachedStep.y;
+        this.wheelMeshes[i].rotation.z += _detachedStep.z;
+        state.spin.multiplyScalar(0.985);
+        return;
+      }
+
       this.wheelMeshes[i].position.copy(t.position);
       this.wheelMeshes[i].quaternion.copy(t.quaternion);
 
@@ -304,9 +365,18 @@ export class Car {
     const rawDamage = impulse * DAMAGE_PER_IMPULSE;
     if (rawDamage < 0.01) return;
 
+    const wheelBefore = _WHEEL_PARTS.map(part => this.damageSystem.state[part]);
     this.damageSystem.applyDamage(rawDamage, threeNormal, this.stats);
+
+    for (let i = 0; i < 4; i++) {
+      if (this._wheelDetached[i]) continue;
+      const wheelDamage = this.damageSystem.state[_WHEEL_PARTS[i]];
+      if (wheelDamage < 1 || wheelBefore[i] >= 1) continue;
+      if (Math.random() < 0.5) this._detachWheel(i);
+    }
+
     const totalDmg = this.damageSystem.getTotalDamagePercent();
-    this.hp = Math.max(0, 100 - totalDmg * 100);
+    this.hp = Math.max(0, this.maxHp - totalDmg * this.maxHp);
 
     if (this.hp <= 0 && this.isAlive) {
       this.isAlive = false;

@@ -220,6 +220,16 @@ export const CAR_IMPACT_SCALE = 500;
 // Zakres: [0.0001 bardzo odporne … 0.0008 normalne … 0.003 bardzo kruche]
 export const DAMAGE_PER_IMPULSE = 0.0002;
 
+// ── Launch pad pulse (żółte platformy) ───────────────────────────
+// Po kontakcie platforma czeka LAUNCH_PAD_CONTACT_DELAY, podnosi się o
+// LAUNCH_PAD_STROKE w czasie LAUNCH_PAD_RISE_TIME, opada i ładuje się przez
+// LAUNCH_PAD_RELOAD_TIME. Impuls wynika z jej ruchu (I = m * v).
+export const LAUNCH_PAD_CONTACT_DELAY = 0.015;   // 15 ms
+export const LAUNCH_PAD_STROKE = 0.01;          // 0.01 m
+export const LAUNCH_PAD_RISE_TIME = 0.03;       // 30 ms
+export const LAUNCH_PAD_RELOAD_TIME = 1.0;      // 1 s
+export const LAUNCH_PAD_EFFECTIVE_MASS = 4;   // kg
+
 // ── Dopalaacz (Shift) ─────────────────────────────────────────────
 // Czas [s] pełnego zbiornika dopalacza. Po wyczerpaniu trzeba odczekać na naładowanie.
 // Zakres: [2 krótki … 4 normalne … 8 długi]
@@ -235,7 +245,7 @@ export const BOOST_RECHARGE_RATE = 0.20;
 
 // FOV kamery w stanie normalnym i podczas dopalacza.
 export const BOOST_FOV_NORMAL    = 80;
-export const BOOST_FOV_ACTIVE    = 100;
+export const BOOST_FOV_ACTIVE    = 120;
 
 // Szybkość lerpu FOV (wyższe = szybsza zmiana).
 // Zakres: [0.03 … 0.08 normalne … 0.20]
@@ -248,6 +258,10 @@ export const BOOST_RAMP_RATE     = 0.8;
 // O ile metrów kamera opada podczas boosta [m].
 export const BOOST_CAMERA_DIP    = 1.0;
 
+// O ile metrów kamera oddala się podczas boosta [m].
+// 0 = brak oddalenia, dodatnie wartości dają efekt "odjazdu" kamery przy przyspieszaniu.
+export const BOOST_CAMERA_PULLBACK = 2.2;
+
 // Opór powietrza — siła hamująca proporcjonalna do v².
 // F_drag = AIR_DRAG * v²  [N/(m/s)²]
 // Przy 30 m/s (~108 km/h): F = 15 * 900 = 13500 N (wyraźny efekt)
@@ -258,7 +272,7 @@ export const AIR_DRAG = 0.4;
 // ── Kamera ────────────────────────────────────────────────────────
 // Odleglosc kamery za autem [m].
 // Zakres: [5 bliskie … 10 normalne … 20 dalekie]
-export const CAMERA_OFFSET_BEHIND = 5;
+export const CAMERA_OFFSET_BEHIND = 6;
 
 // Wysokosc kamery nad autem [m].
 // Zakres: [2 nisko … 4 normalne … 8 z gory]
@@ -266,11 +280,16 @@ export const CAMERA_OFFSET_UP = 2;
 
 // Szybkosc lerpu obrotu kamery za autem (yaw). Nizsze = kamera bardziej "leniwa".
 // Zakres: [0.01 bardzo leniwa … 0.04 normalna … 0.15 natychmiastowa]
-export const CAMERA_YAW_LERP = 0.1;
+export const CAMERA_YAW_LERP = 0.07;
 
 // Szybkosc lerpu pozycji kamery za autem. Nizsze = camera lag (kinowy efekt).
 // Zakres: [0.02 duzy lag … 0.06 normalna … 0.2 natychmiastowa]
-export const CAMERA_POS_LERP = 0.1;
+export const CAMERA_POS_LERP = 0.07;
+
+// Szybkosc lerpu kierunku ruchu (horągiewka) — jak szybko kamera podąża za wektorem prędkości.
+// Nizsze = bardziej leniwa, wyższe = natychmiastowe śledzenie.
+// Zakres: [0.04 … 0.08 normalne … 0.18]
+export const CAMERA_DIR_LERP = 0.08;
 
 // Szybkosc lerpu kamery przy cofaniu (zwykle wolniejszy obrot niz do przodu).
 // Zakres: [0.01 … 0.03 normalne … 0.1]

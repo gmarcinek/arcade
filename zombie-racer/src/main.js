@@ -19,6 +19,7 @@ import { DamageOverlay } from './ui/DamageOverlay.js';
 import { ParticleSystem } from './effects/ParticleSystem.js';
 import { DebrisSystem } from './effects/DebrisSystem.js';
 import { MAP } from './world/mapData.js';
+import { WORLD_SIZE } from './constants.js';
 import suvModelUrl from './assets/suv.glb?url';
 import { BOOST_FOV_NORMAL, BOOST_FOV_ACTIVE, BOOST_FOV_LERP, CAMERA_OFFSET_BEHIND, CAMERA_OFFSET_UP } from './physicsConfig.js';
 import { AudioManager } from './audio/AudioManager.js';
@@ -42,7 +43,7 @@ renderer.toneMapping = THREE.ACESFilmicToneMapping;
 // ── Scene ─────────────────────────────────────────────────────────
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x87ceeb);
-scene.fog = new THREE.Fog(0x87ceeb, 200, 600);
+scene.fog = new THREE.Fog(0x87ceeb, 260, WORLD_SIZE * 0.9);
 
 // ── Lighting ──────────────────────────────────────────────────────
 scene.add(new THREE.AmbientLight(0xc8d8ff, 0.50));   // chłodny ambient (niebo)
@@ -52,9 +53,9 @@ const sun = new THREE.DirectionalLight(0xfff0d0, 1.4);
 sun.position.set(50, 80, 30);
 sun.castShadow = true;
 sun.shadow.mapSize.set(2048, 2048);
-sun.shadow.camera.near = 1; sun.shadow.camera.far = 400;
-sun.shadow.camera.left = sun.shadow.camera.bottom = -400;
-sun.shadow.camera.right = sun.shadow.camera.top = 400;
+sun.shadow.camera.near = 1; sun.shadow.camera.far = WORLD_SIZE;
+sun.shadow.camera.left = sun.shadow.camera.bottom = -WORLD_SIZE * 0.5;
+sun.shadow.camera.right = sun.shadow.camera.top = WORLD_SIZE * 0.5;
 scene.add(sun);
 
 // Fill light (miękki, z lewej) — wypełnia cień po prawej stronie auta
@@ -144,7 +145,8 @@ _controlsOverlay.innerHTML = `
         <tr><td style="text-align:right;padding:6px 14px 6px 0;"><kbd style="${KBD}">↑ ↓ ← →</kbd></td><td style="color:#aaa;">Jedź</td></tr>
         <tr><td style="text-align:right;padding:6px 14px 6px 0;"><kbd style="${KBD}">Shift</kbd></td><td style="color:#aaa;">TURBO</td></tr>
         <tr><td style="text-align:right;padding:6px 14px 6px 0;"><kbd style="${KBD}">Backspace</kbd></td><td style="color:#aaa;">Reperowanie <span style="color:#666;font-size:13px;">(-50 CR)</span></td></tr>
-        <tr><td style="text-align:right;padding:6px 14px 6px 0;"><kbd style="${KBD}">Home</kbd></td><td style="color:#aaa;">Respawn</td></tr>
+        <tr><td style="text-align:right;padding:6px 14px 6px 0;"><kbd style="${KBD}">Insert</kbd></td><td style="color:#aaa;">Respawn tu i teraz</td></tr>
+        <tr><td style="text-align:right;padding:6px 14px 6px 0;"><kbd style="${KBD}">Home</kbd></td><td style="color:#aaa;">Powrót na start</td></tr>
       </table>
       <div style="margin-top:28px;font-size:14px;color:#555;letter-spacing:1px;">NACIŚNIJ DOWOLNY KLAWISZ LUB KLIKNIJ</div>
     </div>
@@ -384,7 +386,7 @@ function onCarHit(damageDealt) {
 }
 
 // ── Collision handler ─────────────────────────────────────────────
-const collisions = new CollisionHandler(world, player, zombies, npcCars, timer, hud, audio, onZombieKill, onCarKill, onCarHit);
+const collisions = new CollisionHandler(world, player, zombies, npcCars, timer, hud, audio, city, onZombieKill, onCarKill, onCarHit);
 
 // ── Game Over ─────────────────────────────────────────────────────
 let gameOverVisible = false;
@@ -420,7 +422,7 @@ let _respawnCooldown = 0;
 
 function _checkRespawn() {
   const pos = player.chassisBody.position;
-  const BOUND = 405;
+  const BOUND = WORLD_SIZE * 0.5 + 5;
   const outOfBounds = Math.abs(pos.x) > BOUND || Math.abs(pos.z) > BOUND;
   const underground = pos.y < -3;
 
@@ -485,6 +487,7 @@ function gameLoop() {
       for (const key of Object.keys(player.damageSystem.state)) {
         player.damageSystem.state[key] *= (1 - ratio * 0.3);
       }
+      player.restoreDetachedWheels(true);
       hud.showMessage(`-${CREDITS_HEAL_COST} CR  ❤️ +${HEAL_AMOUNT} HP`, '#ff88aa', 1500);
     } else {
       hud.showMessage('Za mało creditów!', '#ff4444', 1000);
@@ -493,7 +496,20 @@ function gameLoop() {
   }
   _checkRespawn();
 
-  // Respawn manualny klawiszem Home
+  // Respawn manualny klawiszem Insert — reset w aktualnym miejscu
+  if (input.insertPressed && _respawnCooldown <= 0) {
+    const p = player.chassisBody.position;
+    const safeH = terrain.getHeightAt(p.x, p.z);
+    player.chassisBody.position.set(p.x, safeH + 2, p.z);
+    player.chassisBody.velocity.set(0, 0, 0);
+    player.chassisBody.angularVelocity.set(0, 0, 0);
+    player.chassisBody.quaternion.setFromEuler(0, 0, 0);
+    _respawnCooldown = 120;
+    hud.showMessage('RESPAWN LOKALNY!', '#ffaa00', 1500);
+    audio.playRespawn();
+  }
+
+  // Respawn manualny klawiszem Home — powrót na start
   if (input.homePressed && _respawnCooldown <= 0) {
     const safeH = terrain.getHeightAt(MAP.playerSpawn.x, MAP.playerSpawn.z);
     player.chassisBody.position.set(MAP.playerSpawn.x, safeH + 10, MAP.playerSpawn.z);
@@ -519,6 +535,7 @@ function gameLoop() {
 
   particles.update(dt);
   debris.update(dt);
+  city.tick(dt);
   timer.update(dt);
   collisions.tick(dt);
 
@@ -546,7 +563,7 @@ function gameLoop() {
     } else if (_killCam.phase === 'return') {
       // Oddaj kamerę graczowi — thirdPersonCam płynnie ją przyciągnie
       _killCam.returnTimer += dt;
-      thirdPersonCam.update(player.group, input.throttle, player._boostLevel, CAMERA_OFFSET_BEHIND, false);
+      thirdPersonCam.update(player.group, input.throttle, player._boostLevel, CAMERA_OFFSET_BEHIND, false, player.chassisBody?.velocity, dt);
       _killCam.fov += (BOOST_FOV_NORMAL - _killCam.fov) * 0.01;
       camera.fov = _killCam.fov;
       camera.updateProjectionMatrix();
@@ -558,7 +575,7 @@ function gameLoop() {
     }
   } else {
     const _isAirborne = player.vehicle ? !player.wheelsOnGround : false;
-    thirdPersonCam.update(player.group, input.throttle, player._boostLevel, CAMERA_OFFSET_BEHIND, _isAirborne);
+    thirdPersonCam.update(player.group, input.throttle, player._boostLevel, CAMERA_OFFSET_BEHIND, _isAirborne, player.chassisBody?.velocity, dt);
     // ── Boost FOV (tylko poza kill-cam) ──
     const targetFov = BOOST_FOV_NORMAL + (BOOST_FOV_ACTIVE - BOOST_FOV_NORMAL) * player._boostLevel;
     camera.fov += (targetFov - camera.fov) * BOOST_FOV_LERP;
@@ -609,7 +626,12 @@ function gameLoop() {
 
   hud.update(timer.getDisplay(), zombieKills, carKills, player.hp, credits, speedKmh, player._boostFuel, player.boostActive);
   damageOverlay.update(player.damageSystem.state);
-  minimap.update(player.chassisBody.position, npcCars);
+  const q = player.chassisBody.quaternion;
+  const playerYaw = Math.atan2(
+    2 * (q.w * q.y + q.x * q.z),
+    1 - 2 * (q.y * q.y + q.z * q.z)
+  );
+  minimap.update(player.chassisBody.position, playerYaw, npcCars);
 
   renderer.render(scene, camera);
 }

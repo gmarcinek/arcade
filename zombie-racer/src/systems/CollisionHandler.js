@@ -2,20 +2,20 @@ import * as CANNON from 'cannon-es';
 import { BUMPER_SPEED_THRESHOLD, BUILDING_IMPACT_SCALE, CAR_IMPACT_SCALE, DAMAGE_PER_IMPULSE } from '../physicsConfig.js';
 
 export class CollisionHandler {
-  constructor(world, player, zombies, npcCars, timer, hud, audio, onZombieKill, onCarKill, onCarHit) {
+  constructor(world, player, zombies, npcCars, timer, hud, audio, city, onZombieKill, onCarKill, onCarHit) {
     this.player      = player;
     this.zombies     = zombies;
     this.npcCars     = npcCars;
     this.timer       = timer;
     this.hud         = hud;
     this.audio       = audio;
+    this.city        = city;
     this.onZombieKill = onZombieKill;
     this.onCarKill   = onCarKill;
     this.onCarHit    = onCarHit || (() => {});
 
-    // Cooldown żeby speedup/launchpad nie aplikował się co klatkę
+    // Cooldown żeby speedup nie aplikował się co klatkę
     this._speedupCooldown = 0;
-    this._launchCooldown  = 0;
 
     world.addEventListener('beginContact', (event) => {
       this._handleContact(event.bodyA, event.bodyB);
@@ -25,7 +25,6 @@ export class CollisionHandler {
 
   tick(dt) {
     if (this._speedupCooldown > 0) this._speedupCooldown -= dt;
-    if (this._launchCooldown  > 0) this._launchCooldown  -= dt;
   }
 
   _playScrapeFromBodies(bodyA, bodyB, normalX, normalZ, multiplier = 1) {
@@ -42,31 +41,96 @@ export class CollisionHandler {
     }
   }
 
+  _findCarByBody(body) {
+    if (body === this.player.chassisBody) return this.player;
+    return this.npcCars.find(car => car.chassisBody === body) || null;
+  }
+
+  _handleTreeContact(car, carBody, treeBody) {
+    const treeVel = treeBody.velocity || CANNON.Vec3.ZERO;
+    const relVelX = carBody.velocity.x - treeVel.x;
+    const relVelZ = carBody.velocity.z - treeVel.z;
+    const relSpeed = Math.sqrt(relVelX * relVelX + relVelZ * relVelZ);
+    if (relSpeed <= 1.2) return;
+
+    const nx = treeBody.position.x - carBody.position.x;
+    const nz = treeBody.position.z - carBody.position.z;
+    const len = Math.sqrt(nx * nx + nz * nz) || 1;
+    const contactNormal = { x: nx / len, y: 0, z: nz / len };
+
+    const normalSpeed = Math.max(0, relVelX * contactNormal.x + relVelZ * contactNormal.z);
+    if (normalSpeed <= 0.35) return;
+
+    const impactDir = { x: contactNormal.x, z: contactNormal.z };
+    const treeMass = treeBody.userData?.treeMass || 3000;
+    const carMass = carBody.mass || 1500;
+    const reducedMass = (carMass * treeMass) / (carMass + treeMass);
+    const impactEnergy = 0.5 * reducedMass * normalSpeed * normalSpeed;
+    const treeDamage = impactEnergy / 450;
+    const carImpactImpulse = impactEnergy / 150;
+    const launchSpeed = normalSpeed * (carMass / (carMass + treeMass));
+    const treeHit = this.city?.applyTreeHit(treeBody, impactDir, normalSpeed, treeDamage, launchSpeed);
+
+    car.receiveImpact(carImpactImpulse, contactNormal);
+
+    if (this.audio) {
+      this.audio.playImpact(Math.min(1.0, normalSpeed / 12));
+      this._playScrapeFromBodies(carBody, treeBody, contactNormal.x, contactNormal.z, 0.8);
+    }
+
+    if (car === this.player) {
+      if (treeHit?.broke) {
+        this.hud.showMessage('🌲 DRZEWO WYRwane Z KORZENIAMI', '#88dd66', 900);
+      } else if (treeHit) {
+        this.hud.showMessage(`🌲 ${Math.ceil(treeHit.hp)}/${treeHit.maxHp} HP`, '#88dd66', 500);
+      }
+    }
+  }
+
   _handleContact(bodyA, bodyB) {
+    const car = this._findCarByBody(bodyA);
+
+    if (bodyB.userData?.tree && car) {
+      this._handleTreeContact(car, bodyA, bodyB);
+      return;
+    }
+
+    if (bodyB.userData?.launchPad && car) {
+      if (this.city?.requestLaunchPadPulse(bodyB, bodyA) && car === this.player) {
+        this.hud.showMessage('🚀 LAUNCH!', '#ffff00', 800);
+      }
+      return;
+    }
+
     if (bodyA !== this.player.chassisBody) return;
 
     // ── Speedup bank ──────────────────────────────────────────────
     if (bodyB.userData?.speedup && this._speedupCooldown <= 0) {
       const vel = bodyA.velocity;
       const spd = Math.sqrt(vel.x * vel.x + vel.z * vel.z);
-      if (spd > 1.0) {
-        const boost = bodyB.userData.speedupForce || 18;
-        const scale = (spd + boost) / (spd || 0.01);
-        bodyA.velocity.set(vel.x * scale, vel.y, vel.z * scale);
-        this._speedupCooldown = 1.5;
-        this.hud.showMessage('⚡ SPEED BOOST!', '#44aaff', 900);
-      }
-      return;
-    }
+      const boost = bodyB.userData.speedupForce || 18;
+      let dirX = 0;
+      let dirZ = 0;
 
-    // ── Launch pad ────────────────────────────────────────────────
-    if (bodyB.userData?.launchPad && this._launchCooldown <= 0) {
-      const force = bodyB.userData.launchForce || 22;
-      const vel = bodyA.velocity;
-      bodyA.velocity.set(vel.x * 0.7, force, vel.z * 0.7);
-      bodyA.angularVelocity.set(0, bodyA.angularVelocity.y, 0);
-      this._launchCooldown = 2.0;
-      this.hud.showMessage('🚀 LAUNCH!', '#ffff00', 1000);
+      if (spd > 0.75) {
+        dirX = vel.x / spd;
+        dirZ = vel.z / spd;
+      } else if (bodyB.userData.speedupDir) {
+        dirX = bodyB.userData.speedupDir.x;
+        dirZ = bodyB.userData.speedupDir.z;
+      } else {
+        const forward = bodyA.quaternion.vmult(new CANNON.Vec3(0, 0, -1));
+        const forwardLen = Math.sqrt(forward.x * forward.x + forward.z * forward.z) || 1;
+        dirX = forward.x / forwardLen;
+        dirZ = forward.z / forwardLen;
+      }
+
+      bodyA.applyImpulse(
+        new CANNON.Vec3(dirX * boost * bodyA.mass, 0, dirZ * boost * bodyA.mass),
+        bodyA.position
+      );
+      this._speedupCooldown = 1.5;
+      this.hud.showMessage('⚡ SPEED BOOST!', '#44aaff', 900);
       return;
     }
 

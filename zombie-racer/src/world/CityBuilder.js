@@ -3,12 +3,28 @@ import * as CANNON from 'cannon-es';
 import { MAP } from './mapData.js';
 import { groundMaterial, asphaltMaterial, slickMaterial, buildingWallMaterial } from '../physics/PhysicsWorld.js';
 import { makeAsphaltTexture, makeBuildingTextures } from '../utils/ProceduralTextures.js';
+import { LAUNCH_PAD_CONTACT_DELAY, LAUNCH_PAD_STROKE, LAUNCH_PAD_RISE_TIME, LAUNCH_PAD_RELOAD_TIME, LAUNCH_PAD_EFFECTIVE_MASS } from '../physicsConfig.js';
 
 const _asphaltBase = makeAsphaltTexture();
 const _buildingTextures = makeBuildingTextures();
+const TREE_MAX_HP = 1200;
+const TREE_FALL_MASS = 1000;
 
 export class CityBuilder {
+  constructor() {
+    this._scene = null;
+    this._world = null;
+    this._terrain = null;
+    this._trees = [];
+    this._launchPads = [];
+  }
+
   build(scene, world, terrain) {
+    this._scene = scene;
+    this._world = world;
+    this._terrain = terrain;
+    this._trees = [];
+    this._launchPads = [];
     this._buildRoads(scene, world, terrain);
     this._buildBuildings(scene, world, terrain);
     this._buildRamps(scene, world, terrain);
@@ -16,6 +32,152 @@ export class CityBuilder {
     this._buildLaunchPads(scene, world, terrain);
     this._buildTrees(scene, world, terrain);
     this._buildObstacles(scene, world, terrain);
+  }
+
+  tick(dt = 0) {
+    for (const pad of this._launchPads) {
+      if (pad.phase === 'delay') {
+        pad.timer += dt;
+        if (pad.timer >= LAUNCH_PAD_CONTACT_DELAY) {
+          pad.phase = 'rise';
+          pad.timer = 0;
+          pad.strikeDone = false;
+        }
+      } else if (pad.phase === 'rise') {
+        pad.timer += dt;
+        const t = Math.min(1, pad.timer / LAUNCH_PAD_RISE_TIME);
+        pad.lift = LAUNCH_PAD_STROKE * t;
+
+        if (!pad.strikeDone && pad.targetBody) {
+          const body = pad.targetBody;
+          if (body.mass > 0) {
+            const padVel = LAUNCH_PAD_STROKE / Math.max(LAUNCH_PAD_RISE_TIME, 0.001);
+            const impulse = Math.min(22000, body.mass * padVel + LAUNCH_PAD_EFFECTIVE_MASS * padVel);
+            body.applyImpulse(new CANNON.Vec3(0, impulse, 0), body.position);
+          }
+          pad.strikeDone = true;
+        }
+
+        if (t >= 1) {
+          pad.phase = 'fall';
+          pad.timer = 0;
+        }
+      } else if (pad.phase === 'fall') {
+        pad.timer += dt;
+        const t = Math.min(1, pad.timer / LAUNCH_PAD_RISE_TIME);
+        pad.lift = LAUNCH_PAD_STROKE * (1 - t);
+        if (t >= 1) {
+          pad.phase = 'reload';
+          pad.timer = LAUNCH_PAD_RELOAD_TIME;
+          pad.lift = 0;
+          pad.targetBody = null;
+        }
+      } else if (pad.phase === 'reload') {
+        pad.timer -= dt;
+        if (pad.timer <= 0) {
+          pad.phase = 'ready';
+          pad.timer = 0;
+        }
+      }
+
+      const y = pad.baseY + pad.lift;
+      pad.mesh.position.y = y;
+      pad.edge.position.y = y;
+      pad.body.position.y = y;
+      if (pad.arrow) pad.arrow.position.y = y + 0.19;
+    }
+
+    for (const tree of this._trees) {
+      if (!tree.brokenBody || !tree.fallenGroup) continue;
+      tree.fallenGroup.position.copy(tree.brokenBody.position);
+      tree.fallenGroup.quaternion.copy(tree.brokenBody.quaternion);
+    }
+  }
+
+  requestLaunchPadPulse(body, targetBody) {
+    const idx = body?.userData?.launchPadIndex;
+    if (idx == null) return false;
+    const pad = this._launchPads[idx];
+    if (!pad || pad.phase !== 'ready') return false;
+    pad.phase = 'delay';
+    pad.timer = 0;
+    pad.lift = 0;
+    pad.targetBody = targetBody;
+    pad.strikeDone = false;
+    return true;
+  }
+
+  applyTreeHit(body, impactDir, impactSpeed, damage, launchSpeed = 0) {
+    const treeIndex = body?.userData?.treeIndex;
+    if (treeIndex == null) return { broke: false, hp: 0, maxHp: TREE_MAX_HP };
+    const tree = this._trees[treeIndex];
+    if (!tree || tree.broken) return { broke: false, hp: 0, maxHp: TREE_MAX_HP };
+
+    tree.hp = Math.max(0, tree.hp - damage);
+    tree.body.userData.treeHp = tree.hp;
+
+    if (tree.hp > 0) {
+      return { broke: false, hp: tree.hp, maxHp: tree.maxHp };
+    }
+
+    this.breakTree(body, impactDir, impactSpeed, launchSpeed);
+    return { broke: true, hp: 0, maxHp: tree.maxHp };
+  }
+
+  breakTree(body, impactDir = { x: 1, z: 0 }, impactSpeed = 0, launchSpeed = 0) {
+    const treeIndex = body?.userData?.treeIndex;
+    if (treeIndex == null) return false;
+    const tree = this._trees[treeIndex];
+    if (!tree || tree.broken) return false;
+
+    tree.broken = true;
+    this._scene.remove(tree.trunk);
+    this._scene.remove(tree.canopy);
+    this._world.removeBody(tree.body);
+
+    const dirLen = Math.hypot(impactDir.x, impactDir.z) || 1;
+    const dirX = impactDir.x / dirLen;
+    const dirZ = impactDir.z / dirLen;
+
+    const fallenGroup = new THREE.Group();
+    fallenGroup.position.set(tree.x, tree.baseY + 1.35, tree.z);
+
+    const fallYaw = Math.atan2(dirZ, dirX);
+
+    const fallenTrunk = new THREE.Mesh(tree.trunk.geometry, tree.trunk.material);
+    fallenTrunk.position.set(0, 0, 0);
+    fallenTrunk.rotation.z = Math.PI / 2;
+    fallenTrunk.castShadow = true;
+    fallenGroup.add(fallenTrunk);
+
+    const fallenCanopy = new THREE.Mesh(tree.canopy.geometry, tree.canopy.material);
+    fallenCanopy.position.set(3.2, 0.7, 0);
+    fallenCanopy.scale.copy(tree.canopy.scale);
+    fallenCanopy.castShadow = true;
+    fallenGroup.add(fallenCanopy);
+
+    this._scene.add(fallenGroup);
+
+    const brokenBody = new CANNON.Body({
+      mass: TREE_FALL_MASS,
+      material: groundMaterial,
+      linearDamping: 0.38,
+      angularDamping: 0.5,
+    });
+    brokenBody.addShape(new CANNON.Box(new CANNON.Vec3(3.6, 1.3, 1.3)));
+    brokenBody.position.set(tree.x, tree.baseY + 1.35, tree.z);
+    brokenBody.quaternion.setFromEuler(0, fallYaw, 0);
+    brokenBody.userData = { brokenTree: true };
+    this._world.addBody(brokenBody);
+
+    brokenBody.velocity.set(dirX * launchSpeed, 0, dirZ * launchSpeed);
+    brokenBody.angularVelocity.set(0, impactSpeed * 0.08, 0);
+
+    tree.fallenTrunk = fallenTrunk;
+    tree.fallenCanopy = fallenCanopy;
+    tree.fallenGroup = fallenGroup;
+    tree.brokenBody = brokenBody;
+    return true;
   }
 
   _buildRoads(scene, world, terrain) {
@@ -188,7 +350,7 @@ export class CityBuilder {
     for (const b of MAP.banks) {
       const hy = terrain.getHeightAt(b.x, b.z);
       if (b.type === 'arc') {
-        this._buildArcBank(scene, world, b, hy);
+        this._buildArcBank(scene, world, terrain, b, hy);
       } else {
         this._buildFrustumBank(scene, world, b, hy);
       }
@@ -210,6 +372,7 @@ export class CityBuilder {
     const color = b.speedup ? 0x3388ff : 0x557799;
     const mat = new THREE.MeshLambertMaterial({ color });
     const geo = this._makeFrustumGeometry(bw, bd, tw, h);
+    const speedupDir = { x: Math.cos(rotY), z: -Math.sin(rotY) };
     const mesh = new THREE.Mesh(geo, mat);
     mesh.position.set(b.x, hy, b.z);
     if (rotY) mesh.rotation.y = rotY;
@@ -247,20 +410,35 @@ export class CityBuilder {
     body.addShape(shape);
     body.position.set(b.x, hy, b.z);
     if (rotY) body.quaternion.setFromEuler(0, rotY, 0);
-    body.userData = b.speedup ? { speedup: true, speedupForce: b.speedupForce || 18 } : {};
+    body.userData = b.speedup
+      ? { speedup: true, speedupForce: b.speedupForce || 18, speedupDir }
+      : {};
     world.addBody(body);
   }
 
   // ── Łukowy bank — profil Gaussa, płynny garb ────────────────────────────────
-  _buildArcBank(scene, world, b, hy) {
+  _buildArcBank(scene, world, terrain, b, hy) {
     const bw  = b.bw ?? b.w ?? 14;
     const bd  = b.bd ?? b.d ?? 80;
     const h   = b.h  ?? 3;
     const rotY = b.rotY ?? 0;
+    const speedupDir = { x: Math.cos(rotY), z: -Math.sin(rotY) };
     const color = b.speedup ? 0xff8800 : 0x445566;
     const mat = new THREE.MeshLambertMaterial({ color, side: THREE.DoubleSide });
 
     const geo = this._makeArcGeometry(bw, bd, h);
+    const pos = geo.attributes.position;
+    const cosR = Math.cos(rotY), sinR = Math.sin(rotY);
+    for (let i = 0; i < pos.count; i++) {
+      const lx = pos.getX(i);
+      const lz = pos.getZ(i);
+      const worldX = b.x + lx * cosR - lz * sinR;
+      const worldZ = b.z + lx * sinR + lz * cosR;
+      const terrainY = terrain.getHeightAt(worldX, worldZ);
+      pos.setY(i, pos.getY(i) + (terrainY - hy));
+    }
+    pos.needsUpdate = true;
+    geo.computeVertexNormals();
     const mesh = new THREE.Mesh(geo, mat);
     mesh.position.set(b.x, hy, b.z);
     if (rotY) mesh.rotation.y = rotY;
@@ -272,7 +450,6 @@ export class CityBuilder {
 
     // Fizyka: 9 pochylonych pudełek aproksymuje krzywą Gaussa
     const SEGS = 9;
-    const cosR = Math.cos(rotY), sinR = Math.sin(rotY);
     const segW = bw / SEGS;
     for (let i = 0; i < SEGS; i++) {
       const nx  = (i + 0.5) / SEGS * 2 - 1;
@@ -286,11 +463,14 @@ export class CityBuilder {
       const lx = nx * bw / 2;
       const cx = b.x + lx * cosR;
       const cz = b.z + lx * sinR;
+      const cy = terrain.getHeightAt(cx, cz);
       const body = new CANNON.Body({ mass: 0, material: asphaltMaterial });
       body.addShape(new CANNON.Box(new CANNON.Vec3(slopeLen / 2, 0.25, bd / 2)));
-      body.position.set(cx, hy + yC, cz);
+      body.position.set(cx, cy + yC, cz);
       body.quaternion.setFromEuler(0, rotY, -angle, 'YZX');
-      body.userData = b.speedup ? { speedup: true, speedupForce: b.speedupForce || 18 } : {};
+      body.userData = b.speedup
+        ? { speedup: true, speedupForce: b.speedupForce || 18, speedupDir }
+        : {};
       world.addBody(body);
     }
   }
@@ -387,7 +567,7 @@ export class CityBuilder {
       scene.add(mesh);
 
       // Chevron (podwójna strzałka w górę) na wierzchu
-      this._addLaunchArrow(scene, lp.x, hy + 0.37, lp.z);
+      const arrow = this._addLaunchArrow(scene, lp.x, hy + 0.37, lp.z);
 
       // Ramka świecąca
       const edgeMat = new THREE.MeshBasicMaterial({ color: 0xffffff, wireframe: false });
@@ -401,8 +581,22 @@ export class CityBuilder {
       const body  = new CANNON.Body({ mass: 0, material: asphaltMaterial });
       body.addShape(shape);
       body.position.set(lp.x, hy + 0.18, lp.z);
-      body.userData = { launchPad: true, launchForce: lp.launchForce || 22 };
+      const launchPadIndex = this._launchPads.length;
+      body.userData = { launchPad: true, launchPadIndex };
       world.addBody(body);
+
+      this._launchPads.push({
+        mesh,
+        edge,
+        arrow,
+        body,
+        baseY: hy + 0.18,
+        lift: 0,
+        phase: 'ready',
+        timer: 0,
+        targetBody: null,
+        strikeDone: false,
+      });
     }
   }
 
@@ -427,6 +621,7 @@ export class CityBuilder {
     mesh.rotation.x = -Math.PI / 2;
     mesh.position.set(x, y, z);
     scene.add(mesh);
+    return mesh;
   }
 
   _buildTrees(scene, world, terrain) {
@@ -445,6 +640,7 @@ export class CityBuilder {
 
       const canopy = new THREE.Mesh(canopyGeoBase, canopyMat);
       canopy.position.set(t.x, hy + 6.5, t.z);
+      canopy.scale.setScalar(0.85 + Math.random() * 0.35);
       canopy.castShadow = true;
       scene.add(canopy);
 
@@ -452,8 +648,30 @@ export class CityBuilder {
       const body = new CANNON.Body({ mass: 0, material: groundMaterial });
       body.addShape(shape);
       body.position.set(t.x, hy + 2, t.z);
-      body.userData = { building: true };
+      const treeIndex = this._trees.length;
+      body.userData = {
+        building: true,
+        tree: true,
+        treeIndex,
+        treeMass: TREE_FALL_MASS,
+        treeHp: TREE_MAX_HP,
+        treeMaxHp: TREE_MAX_HP,
+      };
       world.addBody(body);
+
+      this._trees.push({
+        x: t.x,
+        z: t.z,
+        baseY: hy,
+        trunk,
+        canopy,
+        body,
+        hp: TREE_MAX_HP,
+        maxHp: TREE_MAX_HP,
+        broken: false,
+        fallenGroup: null,
+        brokenBody: null,
+      });
     }
   }
 
