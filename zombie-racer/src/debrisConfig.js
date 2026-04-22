@@ -5,7 +5,7 @@
 // ── Liczba kawałków ───────────────────────────────────────────────
 // Minimalna liczba kawałków spawnionych przy wybuchu.
 // Zakres: [8 mało … 20 normalne … 40 dużo]
-export const DEBRIS_COUNT_MIN  = 55;
+export const DEBRIS_COUNT_MIN  = 45;
 
 // Losowy naddatek — finalna liczba = COUNT_MIN + rand(COUNT_SPREAD).
 // Zakres: [0 stała liczba … 6 normalne … 15]

@@ -69,6 +69,7 @@ export class CameraController {
     this._orbitAnchor = new THREE.Vector3();
     this._orbitOffset = new THREE.Vector3();
     this._orbitAngle  = 0;
+    this._phantom     = null;  // { pos: THREE.Vector3, vel: THREE.Vector3 }
   }
 
   _applyOrbitOpts(opts = {}) {
@@ -87,6 +88,16 @@ export class CameraController {
 
     if (opts.startAngle !== undefined) {
       this._orbitAngle = opts.startAngle;
+    }
+
+    // Widmo z pędem NPC (używane gdy target zniknął — np. po wybuchu)
+    if (opts.velocity) {
+      this._phantom = {
+        pos: this._orbitAnchor.clone(),
+        vel: new THREE.Vector3(opts.velocity.x, 0, opts.velocity.z),
+      };
+    } else {
+      this._phantom = null;
     }
   }
 
@@ -208,18 +219,28 @@ export class CameraController {
   _computeOrbit(dt, outPos, outLook) {
     this._orbitAngle += ORBIT_SPEED * dt;
 
-    const tp = this._orbitTarget ? this._orbitTarget.position : this._orbitAnchor;
-
-    if (!tp) {
-      // Brak celu — trzymaj ostatnią wirtualną pozycję
-      outPos.copy(this._vPos);
-      outLook.copy(this._vLook);
-      return ORBIT_FOV;
+    // Faza _isDying: target (npc.group) żyje → śledź go i aktualizuj kotwicę
+    // Po wybuchu: target=null → koastuj widmem z pędem NPC
+    let pivotX, pivotY, pivotZ;
+    if (this._orbitTarget) {
+      const tp = this._orbitTarget.position;
+      pivotX = tp.x + this._orbitOffset.x;
+      pivotY = tp.y + this._orbitOffset.y;
+      pivotZ = tp.z + this._orbitOffset.z;
+      this._orbitAnchor.set(tp.x, tp.y, tp.z);
+    } else if (this._phantom) {
+      // Prędkość maleje wykładniczo (~85%/klatkę przy 60fps)
+      this._phantom.vel.multiplyScalar(Math.pow(0.05, dt * 60));
+      this._phantom.pos.addScaledVector(this._phantom.vel, dt);
+      pivotX = this._phantom.pos.x + this._orbitOffset.x;
+      pivotY = this._orbitAnchor.y  + this._orbitOffset.y; // wysokość zamrożona
+      pivotZ = this._phantom.pos.z + this._orbitOffset.z;
+    } else {
+      pivotX = this._orbitAnchor.x + this._orbitOffset.x;
+      pivotY = this._orbitAnchor.y + this._orbitOffset.y;
+      pivotZ = this._orbitAnchor.z + this._orbitOffset.z;
     }
 
-    const pivotX = tp.x + this._orbitOffset.x;
-    const pivotY = tp.y + this._orbitOffset.y;
-    const pivotZ = tp.z + this._orbitOffset.z;
     outPos.set(
       pivotX - Math.sin(this._orbitAngle) * ORBIT_DIST,
       pivotY + ORBIT_HEIGHT,

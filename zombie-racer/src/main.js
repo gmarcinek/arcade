@@ -221,9 +221,11 @@ function _explodeNPC(npc, velX = 0, velY = 0, velZ = 0) {
     : (npc.group ? { x: npc.group.position.x, y: npc.group.position.y, z: npc.group.position.z } : null);
   if (!ep) return;
 
+  // Ghost mode: kamera śledzi fizyczne ciało NPC przez ~3s po wybuchu
+  // target: npc.group — _computeOrbit ślędzi jego pozycję jak żywy NPC
   camCtrl.setState(CamState.NPC_DESTROY, {
-    target: null,
-    anchor: ep,
+    target:      npc.group,
+    anchor:      ep,
     orbitOffset: _getDestroyCamOrbitOffset(velX, velZ),
   });
 
@@ -245,28 +247,70 @@ function _explodeNPC(npc, velX = 0, velY = 0, velZ = 0) {
     (x, y, z, type) => particles.spawnSmoke(x, y, z, type)
   );
 
-  // Zniszcz fizykę auta (model już nie będzie widoczny)
-  if (npc.vehicle) npc.destroy(world, scene);
+  // Ghost: usuń tylko koła z fizyki — chassis body pozostaje w świecie (leci)
+  if (npc.vehicle) {
+    try { npc.vehicle.removeFromWorld(world); } catch (_) {}
+    npc.vehicle = null;
+  }
+  // Wyrzuć chassis body w górę z zachowaniem pędu poziomego
+  if (npc.chassisBody) {
+    npc.chassisBody.velocity.set(velX * 0.4, 7 + Math.abs(velY) * 0.5, velZ * 0.4);
+    npc.chassisBody.angularVelocity.set(
+      (Math.random() - 0.5) * 6,
+      (Math.random() - 0.5) * 3,
+      (Math.random() - 0.5) * 6
+    );
+  }
+  // Ukryj mesh (niewidoczne lecące ciało)
+  if (npc.group) npc.group.visible = false;
+  for (const wm of npc.wheelMeshes) wm.visible = false;
+  // Timer do faktycznego unload (> czas powrotu kamery do gracza)
+  npc._ghostTimer = 3.0;
 
-  // ── Blast wave — odpycha wszystko w promieniu 5m, siła malejąca z dystansem ──
-  const BLAST_RADIUS  = 10;   // [m] — maksymalny zasięg
-  const BLAST_FORCE   = 2800; // [N·s] — impulse przy epicentrum (dist=0)
-  const BLAST_UP_BIAS = 0.25;  // udział siły skierowanej w górę
-  const _targets = [
-    player.chassisBody,
-    ...npcCars.filter(c => c !== npc && c.chassisBody).map(c => c.chassisBody),
+  // ── Blast wave — obrażenia i siła od wybuchu ──────────────────────
+  const BLAST_RADIUS     = 12;   // [m]
+  const BLAST_DMG_NPC    = 400;  // HP obrażeń NPC przy epicentrum (skala z dystansem)
+  const BLAST_DMG_PLAYER = 60;   // HP obrażeń gracza przy epicentrum
+  const BLAST_FORCE      = 2800; // [N·s] impulse
+  const BLAST_UP_BIAS    = 0.25;
+
+  // Zombie w zasięgu → zabij
+  for (const z of zombies) {
+    if (!z.isAlive || !z.mesh) continue;
+    const dx = z.mesh.position.x - ep.x;
+    const dz = z.mesh.position.z - ep.z;
+    const dist = Math.sqrt(dx * dx + dz * dz);
+    if (dist <= BLAST_RADIUS) onZombieKill(z);
+  }
+
+  // NPC i gracz — obrażenia + fizyczny impuls
+  const _carTargets = [
+    { body: player.chassisBody, isPlayer: true },
+    ...npcCars.filter(c => c !== npc && c.isAlive && c.chassisBody)
+              .map(c => ({ body: c.chassisBody, npcRef: c })),
   ];
-  for (const body of _targets) {
+  for (const t of _carTargets) {
+    const body = t.body;
     if (!body) continue;
     const dx = body.position.x - ep.x;
     const dy = body.position.y - ep.y;
     const dz = body.position.z - ep.z;
     const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
     if (dist > BLAST_RADIUS) continue;
-    // Siła = pełna przy 0m, zerowa przy BLAST_RADIUS (linear falloff)
-    const strength = BLAST_FORCE * Math.max(0, 1 - dist / BLAST_RADIUS);
+    const falloff = Math.max(0, 1 - dist / BLAST_RADIUS);
+
+    // Obrażenia
+    if (t.isPlayer) {
+      player.hp = Math.max(0, player.hp - Math.round(BLAST_DMG_PLAYER * falloff));
+      hud.showMessage('💥 Fala uderzeniowa!', '#ff4444', 1000);
+    } else if (t.npcRef) {
+      t.npcRef.hp = Math.max(0, t.npcRef.hp - Math.round(BLAST_DMG_NPC * falloff));
+      if (t.npcRef.hp <= 0 && t.npcRef.isAlive) onCarKill(t.npcRef);
+    }
+
+    // Impuls fizyczny
+    const strength = BLAST_FORCE * falloff;
     const len = dist || 0.01;
-    // Kierunek: od epicentrum + bias ku górze
     const nx = dx / len;
     const nz = dz / len;
     body.applyImpulse(
@@ -281,7 +325,6 @@ function _explodeNPC(npc, velX = 0, velY = 0, velZ = 0) {
         body.position.z + (Math.random() - 0.5) * 0.6
       )
     );
-    // Losowy spin — wywraca auto
     body.angularVelocity.x += (Math.random() - 0.5) * (strength / 4000);
     body.angularVelocity.z += (Math.random() - 0.5) * (strength / 4000);
   }
@@ -618,6 +661,23 @@ function gameLoop() {
       npc.update(terrain, player.chassisBody.position, player.chassisBody.velocity, npcCars);
     } else if (npc._isDying) {
       npc.updateDying(dt);
+    } else if (npc._ghostTimer > 0) {
+      // Ghost mode: chassis body wciąż w fizyce — synchronizuj grupę z lecącym ciałem
+      npc._ghostTimer -= dt;
+      if (npc.chassisBody) {
+        npc.group.position.copy(npc.chassisBody.position);
+        npc.group.quaternion.copy(npc.chassisBody.quaternion);
+      }
+      if (npc._ghostTimer <= 0) {
+        // Sprzątanie po ghost mode
+        if (npc.chassisBody) {
+          try { world.removeBody(npc.chassisBody); } catch (_) {}
+          npc.chassisBody = null;
+        }
+        if (npc.group) scene.remove(npc.group);
+        for (const wm of npc.wheelMeshes) scene.remove(wm);
+        npc.wheelMeshes = [];
+      }
     }
   }
 

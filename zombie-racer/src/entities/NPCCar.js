@@ -75,6 +75,7 @@ export class NPCCar extends Car {
     for (const k of Object.keys(this.damageSystem.state)) this.damageSystem.state[k] = 0;
     // Losowy punkt trasy jako spawn
     this.waypointIdx = Math.floor(Math.random() * this.waypointRoute.length);
+    this._ghostTimer   = 0;
 
     this.buildNPC(scene, world, terrain);
   }
