@@ -19,10 +19,11 @@ export class CityBuilder {
     this._launchPads = [];
   }
 
-  build(scene, world, terrain) {
+  build(scene, world, terrain, mapData = MAP) {
     this._scene = scene;
     this._world = world;
     this._terrain = terrain;
+    this._mapData = mapData;
     this._trees = [];
     this._launchPads = [];
     this._buildRoads(scene, world, terrain);
@@ -181,7 +182,7 @@ export class CityBuilder {
   }
 
   _buildRoads(scene, world, terrain) {
-    for (const r of MAP.roads) {
+    for (const r of (this._mapData.roads ?? [])) {
       const segsW = Math.max(1, Math.floor(r.w / 8));
       const segsD = Math.max(1, Math.floor(r.d / 8));
       const geo = new THREE.PlaneGeometry(r.w, r.d, segsW, segsD);
@@ -214,7 +215,7 @@ export class CityBuilder {
 
   _buildBuildings(scene, world, terrain) {
     let ci = 0;
-    for (const b of MAP.buildings) {
+    for (const b of (this._mapData.buildings ?? [])) {
       const hy = terrain.getHeightAt(b.x, b.z);
       const geo = new THREE.BoxGeometry(b.w, b.h, b.d);
       const tex = _buildingTextures[ci % _buildingTextures.length].clone();
@@ -252,7 +253,7 @@ export class CityBuilder {
     const THICK = 1.6;  // physics box thickness (buried below surface)
     const rampMat = new THREE.MeshLambertMaterial({ color: 0x998866, side: THREE.DoubleSide });
 
-    for (const r of MAP.ramps) {
+    for (const r of (this._mapData.ramps ?? [])) {
       const hy = terrain.getHeightAt(r.x, r.z);
       const segLen = r.length / 3;
       const sinY = Math.sin(r.rotY), cosY = Math.cos(r.rotY);
@@ -346,8 +347,8 @@ export class CityBuilder {
   }
 
   _buildBanks(scene, world, terrain) {
-    if (!MAP.banks) return;
-    for (const b of MAP.banks) {
+    if (!this._mapData.banks) return;
+    for (const b of this._mapData.banks) {
       const hy = terrain.getHeightAt(b.x, b.z);
       if (b.type === 'arc') {
         this._buildArcBank(scene, world, terrain, b, hy);
@@ -554,8 +555,8 @@ export class CityBuilder {
 
   // ── Wyrzutnie w górę (launch pads) ─────────────────────────────────────────
   _buildLaunchPads(scene, world, terrain) {
-    if (!MAP.launchPads) return;
-    for (const lp of MAP.launchPads) {
+    if (!this._mapData.launchPads) return;
+    for (const lp of this._mapData.launchPads) {
       const hy = terrain.getHeightAt(lp.x, lp.z);
 
       // Wizualnie: jasna platforma z kantami
@@ -630,7 +631,7 @@ export class CityBuilder {
     const trunkGeoBase = new THREE.CylinderGeometry(0.4, 0.55, 4, 8);
     const canopyGeoBase = new THREE.SphereGeometry(3, 8, 6);
 
-    for (const t of MAP.trees) {
+    for (const t of (this._mapData.trees ?? [])) {
       const hy = terrain.getHeightAt(t.x, t.z);
 
       const trunk = new THREE.Mesh(trunkGeoBase, trunkMat);
@@ -680,7 +681,7 @@ export class CityBuilder {
     const geo     = new THREE.BoxGeometry(0.8, 1.2, 3.5);
     const stripeG = new THREE.BoxGeometry(0.82, 0.2, 3.52);
 
-    for (const o of MAP.obstacles) {
+    for (const o of (this._mapData.obstacles ?? [])) {
       const hy = terrain.getHeightAt(o.x, o.z);
       const pivot = new THREE.Group();
       pivot.rotation.y = o.rotY || 0;

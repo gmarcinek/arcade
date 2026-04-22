@@ -280,16 +280,16 @@ export const CAMERA_OFFSET_UP = 2;
 
 // Szybkosc lerpu obrotu kamery za autem (yaw). Nizsze = kamera bardziej "leniwa".
 // Zakres: [0.01 bardzo leniwa … 0.04 normalna … 0.15 natychmiastowa]
-export const CAMERA_YAW_LERP = 0.07;
+export const CAMERA_YAW_LERP = 0.12;
 
 // Szybkosc lerpu pozycji kamery za autem. Nizsze = camera lag (kinowy efekt).
 // Zakres: [0.02 duzy lag … 0.06 normalna … 0.2 natychmiastowa]
-export const CAMERA_POS_LERP = 0.07;
+export const CAMERA_POS_LERP = 0.12;
 
 // Szybkosc lerpu kierunku ruchu (horągiewka) — jak szybko kamera podąża za wektorem prędkości.
 // Nizsze = bardziej leniwa, wyższe = natychmiastowe śledzenie.
 // Zakres: [0.04 … 0.08 normalne … 0.18]
-export const CAMERA_DIR_LERP = 0.08;
+export const CAMERA_DIR_LERP = 0.10;
 
 // Szybkosc lerpu kamery przy cofaniu (zwykle wolniejszy obrot niz do przodu).
 // Zakres: [0.01 … 0.03 normalne … 0.1]

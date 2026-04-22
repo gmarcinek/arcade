@@ -18,11 +18,15 @@ import { Minimap } from './ui/Minimap.js';
 import { DamageOverlay } from './ui/DamageOverlay.js';
 import { ParticleSystem } from './effects/ParticleSystem.js';
 import { DebrisSystem } from './effects/DebrisSystem.js';
-import { MAP } from './world/mapData.js';
+import { MAP as defaultMap } from './world/mapData.js';
+import { MapEditor } from './world/MapEditor.js';
 import { WORLD_SIZE } from './constants.js';
 import suvModelUrl from './assets/suv.glb?url';
 import { CAMERA_OFFSET_BEHIND } from './physicsConfig.js';
 import { AudioManager } from './audio/AudioManager.js';
+
+// ── Map ───────────────────────────────────────────────────────────
+let MAP = defaultMap;
 
 // ── Wczytaj model auta (async, przed inicjalizacją) ───────────────
 try {
@@ -80,44 +84,13 @@ const world = createPhysicsWorld();
 const terrain = new Terrain();
 terrain.build(scene, world);
 
-const city = new CityBuilder();
-city.build(scene, world, terrain);
+// ── Game objects — lazy-init in initWorld() after map selection ───
+let city, player, npcCars = [], zombies = [], collisions;
 
 // ── Input ─────────────────────────────────────────────────────────
 // pointer: coarse = palec/rysik (prawdziwy dotyk); fine = myszka/touchpad
 const isTouchDevice = window.matchMedia('(pointer: coarse)').matches;
 const input = isTouchDevice ? new TouchInput() : new KeyboardInput();
-
-// ── Player ────────────────────────────────────────────────────────
-const player = new PlayerCar();
-const spawnH = terrain.getHeightAt(MAP.playerSpawn.x, MAP.playerSpawn.z);
-player.build(scene, world, MAP.playerSpawn.x, spawnH + 0.9, MAP.playerSpawn.z, 0x00dd66);
-
-// ── NPC Cars ──────────────────────────────────────────────────────
-const npcCars = [];
-const npcColors = [0xcc2200, 0x2200cc, 0xcc8800, 0xaa00cc, 0x00aacc, 0xddcc00, 0x00cc44, 0xff6600, 0x8800cc, 0xcc0066];
-for (let i = 0; i < Math.min(MAP.npcWaypoints.length, 10); i++) {
-  const npc = new NPCCar(MAP.npcWaypoints[i], npcColors[i % npcColors.length]);
-  npc.buildNPC(scene, world, terrain);
-  npc.onSmoke      = (x, y, z, type) => particles.spawnSmoke(x, y, z, type);
-  npc.onFireExplode = () => onCarKill(npc);
-  npc.onDestroy    = () => onCarKill(npc);         // hp=0 przez receiveImpact
-  npc.onBoundsExit = () => setTimeout(() => _respawnNPC(npc), 500); // cichy respawn
-  npcCars.push(npc);
-}
-
-// ── Zombies ───────────────────────────────────────────────────────
-const zombies = [];
-for (const sp of MAP.zombieSpawns) {
-  for (let j = 0; j < 3; j++) {
-    const ox = (Math.random() - 0.5) * 10;
-    const oz = (Math.random() - 0.5) * 10;
-    const z = new Zombie();
-    const zh = terrain.getHeightAt(sp.x + ox, sp.z + oz) + 1.2;
-    z.spawn(scene, world, sp.x + ox, zh, sp.z + oz);
-    zombies.push(z);
-  }
-}
 
 // ── Systems ───────────────────────────────────────────────────────
 const particles = new ParticleSystem(scene);
@@ -231,10 +204,14 @@ function showWin(reason) {
 
 function checkWinConditions() {
   if (gameOverVisible) return;
-  const aliveNpcs = npcCars.filter(c => c.isAlive).length;
-  if (aliveNpcs === 0) { showWin('Wszystkich oponentów zniszczono! 🚗💥'); return; }
-  const aliveZombies = zombies.filter(z => z.isAlive).length;
-  if (aliveZombies === 0) { showWin('Wszystkie zombie rozjechane! 🧟💀'); }
+  if (npcCars.length > 0) {
+    const aliveNpcs = npcCars.filter(c => c.isAlive).length;
+    if (aliveNpcs === 0) { showWin('Wszystkich oponentów zniszczono! 🚗💥'); return; }
+  }
+  if (zombies.length > 0) {
+    const aliveZombies = zombies.filter(z => z.isAlive).length;
+    if (aliveZombies === 0) { showWin('Wszystkie zombie rozjechane! 🧟💀'); }
+  }
 }
 
 function _explodeNPC(npc, velX = 0, velY = 0, velZ = 0) {
@@ -377,8 +354,7 @@ function onCarHit(damageDealt) {
   audio.playOpponentHitStrong(Math.min(1.0, damageDealt / 20));
 }
 
-// ── Collision handler ─────────────────────────────────────────────
-const collisions = new CollisionHandler(world, player, zombies, npcCars, timer, hud, audio, city, onZombieKill, onCarKill, onCarHit);
+// ── Collision handler — created in initWorld() ───────────────────
 
 // ── Game Over ─────────────────────────────────────────────────────
 let gameOverVisible = false;
@@ -410,7 +386,7 @@ window.addEventListener('resize', () => {
 });
 
 // ── Respawn logic ───────────────────────────────────────────────
-let _lastValidPos = { x: MAP.playerSpawn.x, z: MAP.playerSpawn.z };
+let _lastValidPos = null;
 let _respawnCooldown = 0;
 
 function _checkRespawn() {
@@ -465,6 +441,111 @@ const LONG_FLY_HEIGHT_THRESHOLD = 5.0;
 const AIRBORNE_HEIGHT_THRESHOLD = 1.15;
 const AIRBORNE_LOOSE_HEIGHT_THRESHOLD = 0.45;
 const AIRBORNE_VEL_Y_THRESHOLD = 1.75;
+
+// ── Map Menu ──────────────────────────────────────────────────────
+function showMapMenu() {
+  const maps = JSON.parse(localStorage.getItem('zombieRacerMaps') || '{}');
+  const mapNames = Object.keys(maps);
+  if (mapNames.length === 0) {
+    startGame();
+    return;
+  }
+
+  const menu = document.createElement('div');
+  menu.style.position = 'fixed';
+  menu.style.top = '0';
+  menu.style.left = '0';
+  menu.style.width = '100%';
+  menu.style.height = '100%';
+  menu.style.background = 'rgba(0,0,0,0.8)';
+  menu.style.color = 'white';
+  menu.style.zIndex = '2000';
+  menu.style.display = 'flex';
+  menu.style.flexDirection = 'column';
+  menu.style.alignItems = 'center';
+  menu.style.justifyContent = 'center';
+  menu.innerHTML = '<h1>Wybierz Planszę</h1>';
+
+  for (const name of mapNames) {
+    const btn = document.createElement('button');
+    btn.textContent = name;
+    btn.style.margin = '10px';
+    btn.style.padding = '10px 20px';
+    btn.onclick = () => {
+      MAP = maps[name];
+      document.body.removeChild(menu);
+      startGame();
+    };
+    menu.appendChild(btn);
+  }
+
+  const defaultBtn = document.createElement('button');
+  defaultBtn.textContent = 'Domyślna Plansza';
+  defaultBtn.style.margin = '10px';
+  defaultBtn.style.padding = '10px 20px';
+  defaultBtn.onclick = () => {
+    MAP = defaultMap;
+    document.body.removeChild(menu);
+    startGame();
+  };
+  menu.appendChild(defaultBtn);
+
+  document.body.appendChild(menu);
+}
+
+function initWorld(mapData) {
+  const playerSpawn  = mapData.playerSpawn  ?? { x: 0, z: 0 };
+  const npcWaypoints = mapData.npcWaypoints ?? [];
+  const zombieSpawns = mapData.zombieSpawns ?? [];
+
+  city = new CityBuilder();
+  city.build(scene, world, terrain, mapData);
+
+  player = new PlayerCar();
+  const spawnH = terrain.getHeightAt(playerSpawn.x, playerSpawn.z);
+  player.build(scene, world, playerSpawn.x, spawnH + 0.9, playerSpawn.z, 0x00dd66);
+
+  const npcColors = [0xcc2200, 0x2200cc, 0xcc8800, 0xaa00cc, 0x00aacc, 0xddcc00, 0x00cc44, 0xff6600, 0x8800cc, 0xcc0066];
+  npcCars = [];
+  for (let i = 0; i < Math.min(npcWaypoints.length, 10); i++) {
+    const npc = new NPCCar(npcWaypoints[i], npcColors[i % npcColors.length]);
+    npc.buildNPC(scene, world, terrain);
+    npc.onSmoke       = (x, y, z, type) => particles.spawnSmoke(x, y, z, type);
+    npc.onFireExplode = () => onCarKill(npc);
+    npc.onDestroy     = () => onCarKill(npc);
+    npc.onBoundsExit  = () => setTimeout(() => _respawnNPC(npc), 500);
+    npcCars.push(npc);
+  }
+
+  zombies = [];
+  for (const sp of zombieSpawns) {
+    for (let j = 0; j < 3; j++) {
+      const ox = (Math.random() - 0.5) * 10;
+      const oz = (Math.random() - 0.5) * 10;
+      const z = new Zombie();
+      const zh = terrain.getHeightAt(sp.x + ox, sp.z + oz) + 1.2;
+      z.spawn(scene, world, sp.x + ox, zh, sp.z + oz);
+      zombies.push(z);
+    }
+  }
+
+  collisions = new CollisionHandler(world, player, zombies, npcCars, timer, hud, audio, city, onZombieKill, onCarKill, onCarHit);
+  _lastValidPos = { x: playerSpawn.x, z: playerSpawn.z };
+}
+
+function startGame() {
+  initWorld(MAP);
+  requestAnimationFrame(gameLoop);
+}
+
+// ── Event Listeners ────────────────────────────────────────────────
+window.addEventListener('keydown', (e) => {
+  if (e.ctrlKey && e.key === 'p') {
+    e.preventDefault();
+    const editor = new MapEditor();
+    editor.show();
+  }
+});
 
 function gameLoop() {
   requestAnimationFrame(gameLoop);
@@ -666,4 +747,4 @@ function gameLoop() {
   renderer.render(scene, camera);
 }
 
-gameLoop();
+showMapMenu();
