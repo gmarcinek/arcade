@@ -79,6 +79,8 @@ const world = createPhysicsWorld();
 // ── World building ────────────────────────────────────────────────
 const terrain = new Terrain();
 terrain.build(scene, world);
+const EXPLOSION_LINE_HOLD_MS = 2000; // Explicit hold for explosion-line camera
+const PLAYER_RETURN_DELAY_MS = EXPLOSION_LINE_HOLD_MS;
 
 const city = new CityBuilder();
 city.build(scene, world, terrain);
@@ -233,6 +235,14 @@ function _explodeNPC(npc, velX = 0, velY = 0, velZ = 0) {
     : (npc.group ? { x: npc.group.position.x, y: npc.group.position.y, z: npc.group.position.z } : null);
   if (!ep) return;
 
+  if (player.group) {
+    camCtrl.setState(CamState.NPC_EXPLOSION_LINE, {
+      playerTarget: player.group,
+      explosionPos: new THREE.Vector3(ep.x, ep.y + 1.0, ep.z),
+      instant: true,
+    });
+  }
+
   // Eksplozja particle (natychmiastowa)
   particles.spawnExplosion(ep.x, ep.y + 1, ep.z);
   audio.playCarExplosion();
@@ -292,8 +302,11 @@ function _explodeNPC(npc, velX = 0, velY = 0, velZ = 0) {
     body.angularVelocity.z += (Math.random() - 0.5) * (strength / 4000);
   }
 
-  // Po wybuchu: przełącz kamerę z powrotem na gracza (blending 500ms)
-  setTimeout(() => camCtrl.setState(CamState.PLAYER), 1500);
+  // Sekwencja kamer:
+  // 1. NPC_DESTROY — lekka rotacja wokół NPC przed wybuchem
+  // 2. NPC_EXPLOSION_LINE — nowe ujęcie po wybuchu przez 2 sekundy
+  // 3. PLAYER — powrót do domyślnej kamery po dodatkowym takim samym delaya
+  setTimeout(() => camCtrl.setState(CamState.PLAYER), EXPLOSION_LINE_HOLD_MS + PLAYER_RETURN_DELAY_MS);
 
   timer.addTime(80);
   carKills++;

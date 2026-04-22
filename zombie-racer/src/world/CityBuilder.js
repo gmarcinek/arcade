@@ -650,7 +650,6 @@ export class CityBuilder {
       body.position.set(t.x, hy + 2, t.z);
       const treeIndex = this._trees.length;
       body.userData = {
-        building: true,
         tree: true,
         treeIndex,
         treeMass: TREE_FALL_MASS,

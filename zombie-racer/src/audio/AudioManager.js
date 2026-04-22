@@ -4,11 +4,14 @@ import opponentExplosion02Url from './oponent_killed_explossion_02.wav';
 import opponentKilledUrl from './oponent_killed.wav';
 import longFlyUrl from './long_fly.wav';
 import longFly2Url from './long_fly_2.wav';
+import hitWallUrl from './hit_wall.wav';
 import humanCollision01Url from './human_collision_01.wav';
 import humanCollision02Url from './human_collision_02.wav';
 import humanCollision03Url from './human_collision_03.wav';
 import humanCollision04Url from './human_collision_04.wav';
 import repair02Url from './repair_02.wav';
+import treeBreakUrl from './treebreak.wav';
+import winUrl from './win.wav';
 import zombieKill01Url from './zombie_kill.wav';
 import zombieKill02Url from './zombie_kill_2.wav';
 import bumperUrl from './bumper.wav';
@@ -24,9 +27,12 @@ export class AudioManager {
       carExplosion:      [opponentExplosion01Url, opponentExplosion02Url],
       debrisHitGround:   [debrisHitGroundUrl],
       heal:              [repair02Url],
+      hitWall:           [hitWallUrl],
       humanCollision:    [humanCollision01Url, humanCollision02Url, humanCollision03Url, humanCollision04Url],
       longFly:           [longFlyUrl, longFly2Url],
       opponentKilled:    [opponentKilledUrl],
+      treeBreak:         [treeBreakUrl],
+      win:               [winUrl],
       zombieKill:        [zombieKill01Url, zombieKill02Url],
       bumper:            [bumperUrl],
     };
@@ -279,6 +285,14 @@ export class AudioManager {
     this._playSample(this._samples.bumper, { volume: 0.78, playbackRate: 0.98 + Math.random() * 0.06 });
   }
 
+  playHitWall(intensity = 1.0) {
+    if (!this._ctx) return;
+    this._playSample(this._samples.hitWall, {
+      volume: 0.52 + Math.min(1.0, intensity) * 0.30,
+      playbackRate: 0.95 + Math.random() * 0.06,
+    });
+  }
+
   playDebrisHitGround(intensity = 1.0) {
     if (!this._ctx) return;
     this._playSample(this._samples.debrisHitGround, {
@@ -398,10 +412,18 @@ export class AudioManager {
 
   playTreeBreak() {
     if (!this._ctx) return;
+    this._playSample(this._samples.treeBreak, {
+      volume: 0.78,
+      playbackRate: 0.96 + Math.random() * 0.08,
+    });
   }
 
   playWin() {
     if (!this._ctx) return;
+    this._playSample(this._samples.win, {
+      volume: 0.9,
+      playbackRate: 1.0,
+    });
   }
 
   playGameOver() {

@@ -74,6 +74,9 @@ export class CollisionHandler {
     car.receiveImpact(carImpactImpulse, contactNormal);
 
     if (this.audio) {
+      if (car === this.player) {
+        this.audio.playHitWall(Math.min(1.0, normalSpeed / 12));
+      }
       this.audio.playTreeBreak();
       this.audio.playImpact(Math.min(1.0, normalSpeed / 12));
       this._playScrapeFromBodies(carBody, treeBody, contactNormal.x, contactNormal.z, 0.8);
@@ -148,6 +151,7 @@ export class CollisionHandler {
       const contactNormal = { x: nx / len, y: 0, z: nz / len };
       this.player.receiveImpact(effectiveSpeed * BUILDING_IMPACT_SCALE, contactNormal);
       if (this.audio) {
+        this.audio.playHitWall(Math.min(1.0, effectiveSpeed / 14));
         this.audio.playImpact(Math.min(1.0, effectiveSpeed / 14));
         this._playScrapeFromBodies(bodyA, bodyB, contactNormal.x, contactNormal.z, 1.0);
       }
@@ -192,6 +196,7 @@ export class CollisionHandler {
 
         const impactForce = relSpeed * 0.5;
         this.player.receiveImpact(impactForce * CAR_IMPACT_SCALE, contactNormal);
+        this.audio?.playHitWall(Math.min(1.0, relSpeed / 12));
         this._playScrapeFromBodies(bodyA, bodyB, contactNormal.x, contactNormal.z, 0.9);
 
         // Wymiana pędu: siła proporcjonalna do pędu gracza (jego masa × relSpeed)
