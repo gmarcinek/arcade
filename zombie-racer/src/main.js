@@ -121,13 +121,13 @@ for (const sp of MAP.zombieSpawns) {
 
 // ── Systems ───────────────────────────────────────────────────────
 const particles = new ParticleSystem(scene);
-const debris    = new DebrisSystem(scene, world);
+const audio = new AudioManager();
+const debris    = new DebrisSystem(scene, world, audio);
 const camCtrl = new CameraController(camera);
 const timer = new GameTimer();
 const hud     = new HUD();
 const minimap = new Minimap();
 const damageOverlay = new DamageOverlay();
-const audio = new AudioManager();
 
 // AudioContext wymaga gestu użytkownika — startujemy przy pierwszym naciśnięciu klawisza / dotyku
 const KBD = 'display:inline-block;background:#222;border:1px solid #555;border-radius:4px;padding:2px 9px;font-size:14px;color:#fff;font-family:monospace;';
@@ -200,6 +200,7 @@ function onZombieKill(zombie) {
 function showWin(reason) {
   if (gameOverVisible) return;
   gameOverVisible = true;
+  audio.playWin();
   const el = document.createElement('div');
   el.style.cssText = `position:fixed;inset:0;background:rgba(0,0,0,0.88);
     display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:200;`;
@@ -316,6 +317,7 @@ function onCarKill(npc) {
   npc._isDying = true;
   npc._dyingTimer     = 0;
   npc._dyingExplodeAt = 2.0 + Math.random() * 1.0; // 2-3s losowo
+  audio.playOpponentKillStart();
 
   // Odetnij sterowanie natychmiast — zeruj silnik i hamulce
   if (npc.vehicle) {
@@ -351,7 +353,7 @@ function onCarKill(npc) {
 function onCarHit(damageDealt) {
   const earned = Math.max(1, Math.round(damageDealt));
   addCredits(earned, '💥 hit', '#ffaa44');
-  audio.playImpact(Math.min(1.0, damageDealt / 20));
+  audio.playOpponentHitStrong(Math.min(1.0, damageDealt / 20));
 }
 
 // ── Collision handler ─────────────────────────────────────────────
@@ -362,6 +364,7 @@ let gameOverVisible = false;
 
 timer.onGameOver = () => {
   gameOverVisible = true;
+  audio.playGameOver();
   const el = document.createElement('div');
   el.style.cssText = `position:fixed;inset:0;background:rgba(0,0,0,0.88);
     display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:200;`;
@@ -424,6 +427,23 @@ setTimeout(() => {
 const clock = new THREE.Clock();
 const FIXED_DT = 1 / 60;
 let accumulator = 0;
+let _landingArmed = false;
+let _landingMinVelY = 0;
+let _landingCooldown = 0;
+let _airborneTime = 0;
+let _longFlyPlayedThisAir = false;
+
+const LANDING_ARM_HEIGHT = 1.4;
+const LANDING_TRIGGER_HEIGHT = 0.9;
+const LANDING_SOUND_VEL_THRESHOLD = 6.0;
+const LANDING_SOUND_VEL_MAX = 18.0;
+const LANDING_SOUND_COOLDOWN = 0.22;
+const LONG_FLY_FORCE_TIME = 4.0;
+const LONG_FLY_SPEED_THRESHOLD = 150;
+const LONG_FLY_HEIGHT_THRESHOLD = 5.0;
+const AIRBORNE_HEIGHT_THRESHOLD = 1.15;
+const AIRBORNE_LOOSE_HEIGHT_THRESHOLD = 0.45;
+const AIRBORNE_VEL_Y_THRESHOLD = 1.75;
 
 function gameLoop() {
   requestAnimationFrame(gameLoop);
@@ -452,6 +472,7 @@ function gameLoop() {
     if (credits >= CREDITS_HEAL_COST) {
       credits -= CREDITS_HEAL_COST;
       player.hp = Math.min(player.maxHp, player.hp + HEAL_AMOUNT);
+      audio.playHeal();
       const ratio = player.hp / player.maxHp;
       for (const key of Object.keys(player.damageSystem.state)) {
         player.damageSystem.state[key] *= (1 - ratio * 0.3);
@@ -507,18 +528,71 @@ function gameLoop() {
   city.tick(dt);
   timer.update(dt);
   collisions.tick(dt);
+  if (_landingCooldown > 0) _landingCooldown -= dt;
 
   // ── Kamera — CameraController obsługuje oba stany ────────────────
+  const speedKmh = player.chassisBody ? player.chassisBody.velocity.length() * 3.6 : 0;
+  const engineDmgPct = player.damageSystem.getTotalDamagePercent();
+  const velY = player.chassisBody ? player.chassisBody.velocity.y : 0;
+  const angularSpeed = player.chassisBody ? player.chassisBody.angularVelocity.length() : 0;
+  const groundY = player.chassisBody ? terrain.getHeightAt(player.chassisBody.position.x, player.chassisBody.position.z) : 0;
+  const heightAboveGround = player.chassisBody ? player.chassisBody.position.y - groundY : 0;
+  const hasWheelContact = player.vehicle ? player.wheelsOnGround : true;
+  const isAirborne = Boolean(player.chassisBody) && (
+    heightAboveGround >= AIRBORNE_HEIGHT_THRESHOLD ||
+    (!hasWheelContact && heightAboveGround >= AIRBORNE_LOOSE_HEIGHT_THRESHOLD) ||
+    (heightAboveGround >= AIRBORNE_LOOSE_HEIGHT_THRESHOLD && Math.abs(velY) >= AIRBORNE_VEL_Y_THRESHOLD)
+  );
+
   camCtrl.update(dt, {
     group:      player.group,
     throttle:   input.throttle,
     boostLevel: player._boostLevel,
     velocity:   player.chassisBody?.velocity,
-    isAirborne: player.vehicle ? !player.wheelsOnGround : false,
+    isAirborne,
   });
 
-  const speedKmh = player.chassisBody ? player.chassisBody.velocity.length() * 3.6 : 0;
-  const engineDmgPct = player.damageSystem.getTotalDamagePercent();
+  if (isAirborne) {
+    _airborneTime += dt;
+
+    const hasLongFlyFlag = _airborneTime >= LONG_FLY_FORCE_TIME
+      && heightAboveGround >= LONG_FLY_HEIGHT_THRESHOLD
+      && speedKmh >= LONG_FLY_SPEED_THRESHOLD;
+
+    if (!_longFlyPlayedThisAir && hasLongFlyFlag) {
+      _longFlyPlayedThisAir = true;
+      audio.playLongFly();
+    }
+  } else {
+    _airborneTime = 0;
+    _longFlyPlayedThisAir = false;
+  }
+
+  if (player.chassisBody) {
+    if (isAirborne || heightAboveGround > LANDING_ARM_HEIGHT) {
+      _landingArmed = true;
+      _landingMinVelY = Math.min(_landingMinVelY, velY);
+    }
+
+    const touchedGround = heightAboveGround <= LANDING_TRIGGER_HEIGHT && velY > -1.0;
+    if (_landingArmed && touchedGround && _landingCooldown <= 0) {
+      const landingSpeed = Math.abs(_landingMinVelY);
+      if (landingSpeed >= LANDING_SOUND_VEL_THRESHOLD) {
+        const landingIntensity = Math.min(
+          1,
+          (landingSpeed - LANDING_SOUND_VEL_THRESHOLD) / (LANDING_SOUND_VEL_MAX - LANDING_SOUND_VEL_THRESHOLD)
+        );
+        audio.playImpact(landingIntensity);
+        _landingCooldown = LANDING_SOUND_COOLDOWN;
+      }
+      _landingArmed = false;
+      _landingMinVelY = 0;
+    }
+
+    if (!_landingArmed) {
+      _landingMinVelY = Math.min(0, velY);
+    }
+  }
 
   // ── Etapowy dym: biały (45%+) → czarny (62%+) → ogień+czarny (78%+) + plamy oleju ──
   const smokeLevel = player.damageSystem.getSmokeLevel();
@@ -554,7 +628,7 @@ function gameLoop() {
   }
 
   // ── Audio ──
-  audio.updateEngine(speedKmh, input.throttle, player._boostLevel, engineDmgPct);
+  audio.updateEngine(speedKmh, input.throttle, player._boostLevel, engineDmgPct, player.hp / player.maxHp);
   if (player.boostActive && !_prevBoostActive) audio.playBoostStart();
   if (!player.boostActive && _prevBoostActive && player._boostFuel <= 0.01) audio.playBoostEmpty();
   _prevBoostActive = player.boostActive;

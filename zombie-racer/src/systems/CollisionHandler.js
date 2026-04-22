@@ -74,6 +74,7 @@ export class CollisionHandler {
     car.receiveImpact(carImpactImpulse, contactNormal);
 
     if (this.audio) {
+      this.audio.playTreeBreak();
       this.audio.playImpact(Math.min(1.0, normalSpeed / 12));
       this._playScrapeFromBodies(carBody, treeBody, contactNormal.x, contactNormal.z, 0.8);
     }
@@ -97,6 +98,7 @@ export class CollisionHandler {
 
     if (bodyB.userData?.launchPad && car) {
       if (this.city?.requestLaunchPadPulse(bodyB, bodyA) && car === this.player) {
+        this.audio?.playBumper();
         this.hud.showMessage('🚀 LAUNCH!', '#ffff00', 800);
       }
       return;

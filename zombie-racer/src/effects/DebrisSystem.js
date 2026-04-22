@@ -17,12 +17,14 @@ import {
   DEBRIS_EMISSIVE_LIFE_BASE, DEBRIS_EMISSIVE_LIFE_PER_METER,
   DEBRIS_SMOKE_TIMER_JITTER, DEBRIS_SMOKE_INTERVAL_MIN, DEBRIS_SMOKE_INTERVAL_SPREAD,
   DEBRIS_SMOKE_FIRE_THRESHOLD, DEBRIS_SMOKE_FIRE_CHANCE, DEBRIS_FADE_TIME,
+  DEBRIS_HIT_SOUND_SIZE_MIN, DEBRIS_HIT_SOUND_SPEED_MIN, DEBRIS_HIT_SOUND_COOLDOWN,
 } from '../debrisConfig.js';
 
 export class DebrisSystem {
-  constructor(scene, world) {
+  constructor(scene, world, audio = null) {
     this.scene   = scene;
     this.world   = world;
+    this.audio   = audio;
     this._pieces = [];
   }
 
@@ -77,6 +79,20 @@ export class DebrisSystem {
         (Math.random() - 0.5) * DEBRIS_ANGULAR_VEL,
         (Math.random() - 0.5) * DEBRIS_ANGULAR_VEL
       );
+      let lastHitAt = -Infinity;
+      body.addEventListener('collide', (event) => {
+        if (!this.audio || sz < DEBRIS_HIT_SOUND_SIZE_MIN) return;
+        const nowSec = performance.now() * 0.001;
+        if (nowSec - lastHitAt < DEBRIS_HIT_SOUND_COOLDOWN) return;
+
+        const impactSpeed = event.contact && typeof event.contact.getImpactVelocityAlongNormal === 'function'
+          ? Math.abs(event.contact.getImpactVelocityAlongNormal())
+          : body.velocity.length();
+
+        if (impactSpeed < DEBRIS_HIT_SOUND_SPEED_MIN) return;
+        lastHitAt = nowSec;
+        this.audio.playDebrisHitGround(Math.min(1, impactSpeed / 12));
+      });
       this.world.addBody(body);
 
       // ── Visual ────────────────────────────────────────────────────

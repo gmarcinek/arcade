@@ -1,11 +1,36 @@
+import debrisHitGroundUrl from './oponent_killed_explossion_particle_hit_ground.wav';
+import opponentExplosion01Url from './oponent_killed_explossion_01.wav';
+import opponentExplosion02Url from './oponent_killed_explossion_02.wav';
+import opponentKilledUrl from './oponent_killed.wav';
+import longFlyUrl from './long_fly.wav';
+import longFly2Url from './long_fly_2.wav';
+import humanCollision01Url from './human_collision_01.wav';
+import humanCollision02Url from './human_collision_02.wav';
+import humanCollision03Url from './human_collision_03.wav';
+import humanCollision04Url from './human_collision_04.wav';
+import repair02Url from './repair_02.wav';
+import zombieKill01Url from './zombie_kill.wav';
+import zombieKill02Url from './zombie_kill_2.wav';
+import bumperUrl from './bumper.wav';
+
 /**
- * AudioManager — wszystkie dźwięki generowane proceduralnie przez Web Audio API.
- * Brak zewnętrznych plików audio → działa w single-file bundlu.
+ * AudioManager — miks proceduralnego audio silnika z lokalnymi sample'ami WAV.
  */
 export class AudioManager {
   constructor() {
     this._ctx       = null;
     this._masterGain = null;
+    this._samples = {
+      carExplosion:      [opponentExplosion01Url, opponentExplosion02Url],
+      debrisHitGround:   [debrisHitGroundUrl],
+      heal:              [repair02Url],
+      humanCollision:    [humanCollision01Url, humanCollision02Url, humanCollision03Url, humanCollision04Url],
+      longFly:           [longFlyUrl, longFly2Url],
+      opponentKilled:    [opponentKilledUrl],
+      zombieKill:        [zombieKill01Url, zombieKill02Url],
+      bumper:            [bumperUrl],
+    };
+    this._sampleVolume = 0.8;
 
     // Silnik
     this._engOsc1   = null;
@@ -25,8 +50,26 @@ export class AudioManager {
     this._dmgGain        = null;
 
     this._started   = false;
-    this._impactCooldown = 0;
+    this._impactCooldownUntil = 0;
     this._scrapeCooldown = 0;
+  }
+
+  _pickSample(pool) {
+    if (!pool || pool.length === 0) return null;
+    return pool[(Math.random() * pool.length) | 0];
+  }
+
+  _playSample(pool, { volume = 1, playbackRate = 1 } = {}) {
+    if (!this._started) return;
+    const url = this._pickSample(pool);
+    if (!url) return;
+
+    const audio = new Audio(url);
+    audio.preload = 'auto';
+    audio.volume = Math.max(0, Math.min(1, volume * this._sampleVolume));
+    audio.playbackRate = playbackRate;
+    audio.preservesPitch = false;
+    audio.play().catch(() => {});
   }
 
   // ── Inicjalizacja (musi być po geście użytkownika) ────────────────
@@ -118,10 +161,18 @@ export class AudioManager {
     this._dmgNoiseFilter.connect(this._dmgGain);
     this._dmgGain.connect(this._masterGain);
     this._dmgNoiseSrc.start();
+
+    for (const pool of Object.values(this._samples)) {
+      for (const url of pool) {
+        const preload = new Audio(url);
+        preload.preload = 'auto';
+        preload.load();
+      }
+    }
   }
 
   // ── Aktualizacja silnika (co klatkę) ──────────────────────────────
-  updateEngine(speedKmh, throttle, boostLevel, damagePct = 0) {
+  updateEngine(speedKmh, throttle, boostLevel, damagePct = 0, hpRatio = 1) {
     if (!this._ctx || !this._started) return;
     const t = this._ctx.currentTime;
 
@@ -153,7 +204,6 @@ export class AudioManager {
     this._dmgGain.gain.setTargetAtTime(dmgNoise, t, 0.3);
     this._dmgNoiseFilter.frequency.setTargetAtTime(70 + freq1 * 0.5, t, 0.2);
 
-    if (this._impactCooldown > 0) this._impactCooldown--;
     if (this._scrapeCooldown > 0) this._scrapeCooldown--;
   }
 
@@ -205,10 +255,15 @@ export class AudioManager {
 
   // ── Uderzenie / kolizja ────────────────────────────────────────────
   playImpact(intensity = 1.0) {
-    if (!this._ctx || this._impactCooldown > 0) return;
-    this._impactCooldown = 8; // max ~8 klatek między dźwiękami
+    if (!this._ctx) return;
+    if (this._ctx.currentTime < this._impactCooldownUntil) return;
+    this._impactCooldownUntil = this._ctx.currentTime + 2.0;
 
     const vol = Math.min(1.0, intensity);
+    this._playSample(this._samples.humanCollision, {
+      volume: 0.40 + vol * 0.45,
+      playbackRate: 0.94 + Math.random() * 0.10,
+    });
     // Niski "thud" + noise
     this._playNoise(0.28, vol * 0.95, 110, 'lowpass');
     this._playTone(78 - intensity * 18, 'sine', 0.22, vol * 0.52, 0.18);
@@ -217,6 +272,27 @@ export class AudioManager {
       this._playTone(420, 'triangle', 0.34, vol * 0.34, 0.30);
       this._playNoise(0.14, vol * 0.28, 1400, 'bandpass');
     }
+  }
+
+  playBumper() {
+    if (!this._ctx) return;
+    this._playSample(this._samples.bumper, { volume: 0.78, playbackRate: 0.98 + Math.random() * 0.06 });
+  }
+
+  playDebrisHitGround(intensity = 1.0) {
+    if (!this._ctx) return;
+    this._playSample(this._samples.debrisHitGround, {
+      volume: 0.20,
+      playbackRate: 0.92 + Math.random() * 0.12,
+    });
+  }
+
+  playLongFly() {
+    if (!this._ctx) return;
+    this._playSample(this._samples.longFly, {
+      volume: 0.46,
+      playbackRate: 0.97 + Math.random() * 0.08,
+    });
   }
 
   // ── Tarcie / szorowanie ──────────────────────────────────────────
@@ -232,13 +308,33 @@ export class AudioManager {
   // ── Rozjechanie zombie ────────────────────────────────────────────
   playZombieHit() {
     if (!this._ctx) return;
+    this._playSample(this._samples.zombieKill, {
+      volume: 0.72,
+      playbackRate: 0.95 + Math.random() * 0.10,
+    });
     this._playNoise(0.18, 0.58, 260, 'bandpass');
     this._playTone(52, 'sine', 0.14, 0.34, 0.11);
+  }
+
+  playOpponentKillStart() {
+    if (!this._ctx) return;
+    this._playSample(this._samples.opponentKilled, {
+      volume: 0.88,
+      playbackRate: 0.96 + Math.random() * 0.08,
+    });
+  }
+
+  playOpponentHitStrong(intensity = 1.0) {
+    if (!this._ctx) return;
   }
 
   // ── Eksplozja NPC auta ────────────────────────────────────────────
   playCarExplosion() {
     if (!this._ctx) return;
+    this._playSample(this._samples.carExplosion, {
+      volume: 0.84,
+      playbackRate: 0.96 + Math.random() * 0.08,
+    });
     // Gruba eksplozja — niski noise + krótki "boom"
     this._playNoise(1.1, 1.25, 75, 'lowpass');
     this._playNoise(0.55, 0.92, 540, 'bandpass');
@@ -249,6 +345,10 @@ export class AudioManager {
   // ── Leczenie ─────────────────────────────────────────────────────
   playHeal() {
     if (!this._ctx) return;
+    this._playSample(this._samples.heal, {
+      volume: 0.78,
+      playbackRate: 1.0,
+    });
     const ctx = this._ctx;
     const t = ctx.currentTime;
     // Dwa wznoszące tony
@@ -294,6 +394,18 @@ export class AudioManager {
     if (!this._ctx) return;
     this._playTone(200, 'sawtooth', 0.2, 0.15, 0.18);
     this._playTone(140, 'sawtooth', 0.25, 0.12, 0.22);
+  }
+
+  playTreeBreak() {
+    if (!this._ctx) return;
+  }
+
+  playWin() {
+    if (!this._ctx) return;
+  }
+
+  playGameOver() {
+    if (!this._ctx) return;
   }
 
   // ── Start boosta ─────────────────────────────────────────────────

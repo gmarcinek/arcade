@@ -142,3 +142,16 @@ export const DEBRIS_SMOKE_FIRE_CHANCE = 0.55;
 // Czas fade-out przed usunięciem [s] (opacity → 0).
 // Zakres: [0.5 … 2.0 normalne … 5.0]
 export const DEBRIS_FADE_TIME      = 2.0;
+
+// ── Audio uderzeń gruzu ───────────────────────────────────────────
+// Tylko kawałki co najmniej tej wielkości mogą grać sample przy kolizji.
+// Zakres: [0.2 małe też grają … 0.45 normalne … 0.8 tylko największe]
+export const DEBRIS_HIT_SOUND_SIZE_MIN = 0.42;
+
+// Minimalna prędkość impaktu [m/s], od której gruz może zagrać sample.
+// Zakres: [1.5 czułe … 4.5 normalne … 10 tylko brutalne hity]
+export const DEBRIS_HIT_SOUND_SPEED_MIN = 4.5;
+
+// Cooldown między kolejnymi dźwiękami tego samego kawałka [s].
+// Zakres: [0.1 często … 0.35 normalne … 1.0 rzadko]
+export const DEBRIS_HIT_SOUND_COOLDOWN = 0.35;
