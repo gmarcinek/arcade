@@ -1,23 +1,23 @@
-import debrisHitGroundUrl from './oponent_killed_explossion_particle_hit_ground.wav';
-import opponentExplosion01Url from './oponent_killed_explossion_01.wav';
-import opponentExplosion02Url from './oponent_killed_explossion_02.wav';
-import opponentKilledUrl from './oponent_killed.wav';
-import longFlyUrl from './long_fly.wav';
-import longFly2Url from './long_fly_2.wav';
-import hitWallUrl from './hit_wall.wav';
-import humanCollision01Url from './human_collision_01.wav';
-import humanCollision02Url from './human_collision_02.wav';
-import humanCollision03Url from './human_collision_03.wav';
-import humanCollision04Url from './human_collision_04.wav';
-import repair02Url from './repair_02.wav';
-import treeBreakUrl from './treebreak.wav';
-import winUrl from './win.wav';
-import zombieKill01Url from './zombie_kill.wav';
-import zombieKill02Url from './zombie_kill_2.wav';
-import bumperUrl from './bumper.wav';
+import debrisHitGroundUrl from './oponent_killed_explossion_particle_hit_ground.mp3';
+import opponentExplosion01Url from './oponent_killed_explossion_01.mp3';
+import opponentExplosion02Url from './oponent_killed_explossion_02.mp3';
+import opponentKilledUrl from './oponent_killed.mp3';
+import longFlyUrl from './long_fly.mp3';
+import longFly2Url from './long_fly_2.mp3';
+import hitWallUrl from './hit_wall.mp3';
+import humanCollision01Url from './human_collision_01.mp3';
+import humanCollision02Url from './human_collision_02.mp3';
+import humanCollision03Url from './human_collision_03.mp3';
+import humanCollision04Url from './human_collision_04.mp3';
+import repair02Url from './repair_02.mp3';
+import treeBreakUrl from './treebreak.mp3';
+import winUrl from './win.mp3';
+import zombieKill01Url from './zombie_kill.mp3';
+import zombieKill02Url from './zombie_kill_2.mp3';
+import bumperUrl from './bumper.mp3';
 
 /**
- * AudioManager — miks proceduralnego audio silnika z lokalnymi sample'ami WAV.
+ * AudioManager — miks proceduralnego audio silnika z lokalnymi sample'ami audio.
  */
 export class AudioManager {
   constructor() {
