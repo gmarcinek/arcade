@@ -79,8 +79,6 @@ const world = createPhysicsWorld();
 // ── World building ────────────────────────────────────────────────
 const terrain = new Terrain();
 terrain.build(scene, world);
-const EXPLOSION_LINE_HOLD_MS = 2000; // Explicit hold for explosion-line camera
-const PLAYER_RETURN_DELAY_MS = EXPLOSION_LINE_HOLD_MS;
 
 const city = new CityBuilder();
 city.build(scene, world, terrain);
@@ -182,6 +180,17 @@ const CREDITS_CAR_HIT   =  30;   // za uderzenie w NPC (per collision)
 const CREDITS_CAR_KILL  = 200;   // za zniszczenie NPC auta
 const CREDITS_HEAL_COST =  50;   // koszt leczenia
 const HEAL_AMOUNT       =  30;   // ile HP odzyskujemy
+const DESTROY_CAM_ORBIT_SHIFT = 5.5;
+
+function _getDestroyCamOrbitOffset(velX = 0, velZ = 0) {
+  const speed = Math.hypot(velX, velZ);
+  if (speed < 0.001) return { x: 0, y: 0, z: 0 };
+  return {
+    x: (velX / speed) * DESTROY_CAM_ORBIT_SHIFT,
+    y: 0,
+    z: (velZ / speed) * DESTROY_CAM_ORBIT_SHIFT,
+  };
+}
 
 function addCredits(amount, label, color) {
   credits += amount;
@@ -235,13 +244,11 @@ function _explodeNPC(npc, velX = 0, velY = 0, velZ = 0) {
     : (npc.group ? { x: npc.group.position.x, y: npc.group.position.y, z: npc.group.position.z } : null);
   if (!ep) return;
 
-  if (player.group) {
-    camCtrl.setState(CamState.NPC_EXPLOSION_LINE, {
-      playerTarget: player.group,
-      explosionPos: new THREE.Vector3(ep.x, ep.y + 1.0, ep.z),
-      instant: true,
-    });
-  }
+  camCtrl.setState(CamState.NPC_DESTROY, {
+    target: null,
+    anchor: ep,
+    orbitOffset: _getDestroyCamOrbitOffset(velX, velZ),
+  });
 
   // Eksplozja particle (natychmiastowa)
   particles.spawnExplosion(ep.x, ep.y + 1, ep.z);
@@ -302,11 +309,8 @@ function _explodeNPC(npc, velX = 0, velY = 0, velZ = 0) {
     body.angularVelocity.z += (Math.random() - 0.5) * (strength / 4000);
   }
 
-  // Sekwencja kamer:
-  // 1. NPC_DESTROY — lekka rotacja wokół NPC przed wybuchem
-  // 2. NPC_EXPLOSION_LINE — nowe ujęcie po wybuchu przez 2 sekundy
-  // 3. PLAYER — powrót do domyślnej kamery po dodatkowym takim samym delaya
-  setTimeout(() => camCtrl.setState(CamState.PLAYER), EXPLOSION_LINE_HOLD_MS + PLAYER_RETURN_DELAY_MS);
+  // Po wybuchu: popatrz o 1s dłużej przed powrotem do gracza.
+  setTimeout(() => camCtrl.setState(CamState.PLAYER), 2500);
 
   timer.addTime(80);
   carKills++;
@@ -356,9 +360,13 @@ function onCarKill(npc) {
   if (npc.group) {
     const dx = player.chassisBody ? player.chassisBody.position.x - npc.group.position.x : 0;
     const dz = player.chassisBody ? player.chassisBody.position.z - npc.group.position.z : 1;
+    const orbitOffset = npc.chassisBody
+      ? _getDestroyCamOrbitOffset(npc.chassisBody.velocity.x, npc.chassisBody.velocity.z)
+      : { x: 0, y: 0, z: 0 };
     camCtrl.setState(CamState.NPC_DESTROY, {
       target:     npc.group,
       startAngle: Math.atan2(dx, dz),
+      orbitOffset,
     });
   }
 }

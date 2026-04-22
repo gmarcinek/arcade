@@ -66,7 +66,28 @@ export class CameraController {
 
     // ── Stan NPC_DESTROY — orbit ─────────────────────────────────
     this._orbitTarget = null;  // THREE.Group
+    this._orbitAnchor = new THREE.Vector3();
+    this._orbitOffset = new THREE.Vector3();
     this._orbitAngle  = 0;
+  }
+
+  _applyOrbitOpts(opts = {}) {
+    this._orbitTarget = opts.target || null;
+    if (opts.anchor) {
+      this._orbitAnchor.set(opts.anchor.x, opts.anchor.y, opts.anchor.z);
+    } else if (this._orbitTarget) {
+      this._orbitAnchor.copy(this._orbitTarget.position);
+    }
+
+    if (opts.orbitOffset) {
+      this._orbitOffset.set(opts.orbitOffset.x, opts.orbitOffset.y || 0, opts.orbitOffset.z);
+    } else {
+      this._orbitOffset.set(0, 0, 0);
+    }
+
+    if (opts.startAngle !== undefined) {
+      this._orbitAngle = opts.startAngle;
+    }
   }
 
   /**
@@ -75,7 +96,10 @@ export class CameraController {
    * @param {object} opts   NPC_DESTROY: { target: THREE.Group, startAngle?: number }
    */
   setState(state, opts = {}) {
-    if (this._state === state) return;
+    if (this._state === state) {
+      if (state === CamState.NPC_DESTROY) this._applyOrbitOpts(opts);
+      return;
+    }
 
     // Zamroź obecne wyjście wirtualnej kamery jako "skąd"
     this._fromPos.copy(this._vPos);
@@ -84,10 +108,7 @@ export class CameraController {
     this._blendT   = 0.0;
     this._state    = state;
 
-    if (state === CamState.NPC_DESTROY) {
-      this._orbitTarget = opts.target || null;
-      this._orbitAngle  = opts.startAngle || 0;
-    }
+    if (state === CamState.NPC_DESTROY) this._applyOrbitOpts(opts);
   }
 
   /**
@@ -187,20 +208,24 @@ export class CameraController {
   _computeOrbit(dt, outPos, outLook) {
     this._orbitAngle += ORBIT_SPEED * dt;
 
-    if (!this._orbitTarget) {
+    const tp = this._orbitTarget ? this._orbitTarget.position : this._orbitAnchor;
+
+    if (!tp) {
       // Brak celu — trzymaj ostatnią wirtualną pozycję
       outPos.copy(this._vPos);
       outLook.copy(this._vLook);
       return ORBIT_FOV;
     }
 
-    const tp = this._orbitTarget.position;
+    const pivotX = tp.x + this._orbitOffset.x;
+    const pivotY = tp.y + this._orbitOffset.y;
+    const pivotZ = tp.z + this._orbitOffset.z;
     outPos.set(
-      tp.x - Math.sin(this._orbitAngle) * ORBIT_DIST,
-      tp.y + ORBIT_HEIGHT,
-      tp.z - Math.cos(this._orbitAngle) * ORBIT_DIST,
+      pivotX - Math.sin(this._orbitAngle) * ORBIT_DIST,
+      pivotY + ORBIT_HEIGHT,
+      pivotZ - Math.cos(this._orbitAngle) * ORBIT_DIST,
     );
-    outLook.set(tp.x, tp.y + 1.2, tp.z);
+    outLook.set(pivotX, pivotY + 1.2, pivotZ);
     return ORBIT_FOV;
   }
 }
