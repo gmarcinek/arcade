@@ -972,6 +972,8 @@ function initWorld(mapData) {
   player = new PlayerCar();
   const spawnH = terrain.getHeightAt(playerSpawn.x, playerSpawn.z);
   player.build(scene, world, playerSpawn.x, spawnH + 0.9, playerSpawn.z, 0x00dd66);
+  // group 2 = kolizje z remote players (group 8, mask 2)
+  player.chassisBody.collisionFilterGroup = 2;
 
   const npcColors = [0xcc2200, 0x2200cc, 0xcc8800, 0xaa00cc, 0x00aacc, 0xddcc00, 0x00cc44, 0xff6600, 0x8800cc, 0xcc0066];
   npcCars = [];

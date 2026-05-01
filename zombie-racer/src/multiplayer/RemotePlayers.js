@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import * as CANNON from 'cannon-es';
 import { Car } from '../car/Car.js';
 import { carBodyMaterial } from '../physics/PhysicsWorld.js';
+import { CHASSIS_COM_OFFSET_X, CHASSIS_COM_OFFSET_Y, CHASSIS_COM_OFFSET_Z, CAR_MASS } from '../physicsConfig.js';
 
 // Stałe geometrii kół (zgodne z physicsConfig.js)
 const W_R  = 0.35;  // WHEEL_RADIUS
@@ -189,17 +190,23 @@ export class RemotePlayers {
 
     this._scene.add(group);
 
-    // ── Ciało fizyczne (KINEMATIC) — uczestniczy w zderzeniach z lokalnym graczem
+    // ── Ciało fizyczne (DYNAMIC, ta sama masa co gracz) — cannon-es oblicza 2-ciałowy impuls
+    // Collision filter: tylko z gracza (group 2). Nie koliduje z NPC, budynkami, innymi remote.
     const phyBody = new CANNON.Body({
-      type:     CANNON.Body.KINEMATIC,
+      mass:     CAR_MASS,
       material: carBodyMaterial,
+      collisionFilterGroup: 8, // remote players group
+      collisionFilterMask:  2, // only collide with player (group 2)
     });
-    phyBody.addShape(
-      new CANNON.Box(new CANNON.Vec3(1.15, 0.55, 2.35)),
-      new CANNON.Vec3(0, 0.22, 0)
-    );
-    phyBody.collisionResponse = false; // brak efektu ściany — ręczny impuls w CollisionHandler
-    // CCD na zdalnych graczach — lokalny gracz nie przeleci przez nich przy dużej prędkości
+    // Bryła kolizji identyczna jak chassisBody gracza (Car.js) — 3 warstwy
+    const _com = new CANNON.Vec3(CHASSIS_COM_OFFSET_X, CHASSIS_COM_OFFSET_Y, CHASSIS_COM_OFFSET_Z);
+    phyBody.addShape(new CANNON.Box(new CANNON.Vec3(1.15, 0.22, 2.35)), new CANNON.Vec3(_com.x, _com.y - 0.18, _com.z));
+    phyBody.addShape(new CANNON.Box(new CANNON.Vec3(0.85, 0.40, 1.15)), new CANNON.Vec3(_com.x, _com.y + 0.42, _com.z + 0.12));
+    phyBody.addShape(new CANNON.Box(new CANNON.Vec3(0.75, 0.12, 1.0)),  new CANNON.Vec3(_com.x, _com.y + 0.90, _com.z + 0.08));
+    phyBody.linearDamping  = 0; // reset w każdej klatce — tłumienie zbędne
+    phyBody.angularDamping = 0;
+    phyBody.allowSleep = false; // musi reagować na kolizje każdą klatkę
+    // CCD — lokalny gracz nie przeleci przez remote przy dużej prędkości
     phyBody.ccdSpeedThreshold = 0.1;
     phyBody.ccdIterations     = 10;
     this._world.addBody(phyBody);
@@ -302,11 +309,12 @@ export class RemotePlayers {
       e.group.position.copy(e.curPos);
       e.group.quaternion.copy(e.curQuat);
 
-      // Synchronizuj ciało kinematyczne
+      // Synchronizuj ciało fizyczne — pozycja/prędkość z serwera (nadpisuje wynik kroku fizyki)
       if (e.phyBody) {
         e.phyBody.position.set(e.curPos.x, e.curPos.y, e.curPos.z);
         e.phyBody.quaternion.set(e.curQuat.x, e.curQuat.y, e.curQuat.z, e.curQuat.w);
         e.phyBody.velocity.set(e.tgtVel.x, e.tgtVel.y, e.tgtVel.z);
+        e.phyBody.angularVelocity.set(0, 0, 0); // zeruj obrót — sterujemy z serwera
       }
 
       // ── Koła: toczenie + skręt ────────────────────────────────

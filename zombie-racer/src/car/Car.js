@@ -369,6 +369,7 @@ export class Car {
     const rawDamage = impulse * DAMAGE_PER_IMPULSE;
     if (rawDamage < 0.01) return;
 
+    const prevTotalDmg = this.damageSystem.getTotalDamagePercent();
     const wheelBefore = _WHEEL_PARTS.map(part => this.damageSystem.state[part]);
     this.damageSystem.applyDamage(rawDamage, threeNormal, this.stats);
 
@@ -379,8 +380,11 @@ export class Car {
       if (Math.random() < 0.5) this._detachWheel(i);
     }
 
+    // Odejmujemy tylko DELTA uszkodzeń z tego uderzenia — nie przeliczamy HP od zera.
+    // Dzięki temu samoczynne palenie (i inne źródła utraty HP) nie są nadpisywane.
     const totalDmg = this.damageSystem.getTotalDamagePercent();
-    this.hp = Math.max(0, this.maxHp - totalDmg * this.maxHp);
+    const hpLost = Math.max(0, (totalDmg - prevTotalDmg) * this.maxHp);
+    this.hp = Math.max(0, this.hp - hpLost);
 
     if (this.hp <= 0 && this.isAlive) {
       this.isAlive = false;

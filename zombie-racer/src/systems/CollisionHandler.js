@@ -3,6 +3,7 @@ import { BUMPER_SPEED_THRESHOLD, BUILDING_IMPACT_SCALE, CAR_IMPACT_SCALE, DAMAGE
 
 export class CollisionHandler {
   constructor(world, player, zombies, npcCars, timer, hud, audio, city, onZombieKill, onCarKill, onCarHit, options = {}) {
+    this._world      = world;
     this.player      = player;
     this.zombies     = zombies;
     this.npcCars     = npcCars;
@@ -72,6 +73,24 @@ export class CollisionHandler {
   _findCarByBody(body) {
     if (body === this.player.chassisBody) return this.player;
     return this.npcCars.find(car => car.chassisBody === body) || null;
+  }
+
+  /** Zwraca ContactEquation dla pary ciał (null jeśli brak kontaktu w aktualnym kroku). */
+  _findContact(bodyA, bodyB) {
+    for (const c of this._world.contacts) {
+      if ((c.bi === bodyA && c.bj === bodyB) ||
+          (c.bi === bodyB && c.bj === bodyA)) {
+        return c;
+      }
+    }
+    return null;
+  }
+
+  /** Zwraca wektor od środka masy body do punktu kontaktu (w układzie world). */
+  _contactRelPoint(contact, body) {
+    if (contact.bi === body) return contact.ri;
+    if (contact.bj === body) return contact.rj;
+    return new CANNON.Vec3();
   }
 
   _handleTreeContact(car, carBody, treeBody) {
@@ -234,12 +253,13 @@ export class CollisionHandler {
         const mN = npc.chassisBody.mass;
         const kickMag = Math.min(relSpeed * (mP / mN) * mN * 0.04, 1800);
         // upraszcza się do: min(mP * relSpeed * 0.04, 1800)
+        // Impuls w punkcie styku → naturalny moment obrotowy bez sztucznego kąta
+        const _npcContact = this._findContact(bodyA, npc.chassisBody);
+        const _npcR = _npcContact ? this._contactRelPoint(_npcContact, npc.chassisBody) : new CANNON.Vec3();
         npc.chassisBody.applyImpulse(
           new CANNON.Vec3(contactNormal.x * kickMag, 0, contactNormal.z * kickMag),
-          npc.chassisBody.position
+          _npcR
         );
-        // 1/9 rotacji, 9/9 kierunek
-        npc.chassisBody.angularVelocity.y += (Math.random() - 0.5) * relSpeed * 0.005;
 
         const npcHpBefore = npc.hp;
         const npcDamageHP = (relSpeed * relSpeed * this.player.stats.offence) / (npc.stats.defence * 3);
@@ -271,43 +291,21 @@ export class CollisionHandler {
         const relVelZ = bodyA.velocity.z - bodyB.velocity.z;
         const relSpeed = Math.sqrt(relVelX * relVelX + relVelZ * relVelZ);
         if (relSpeed > 1.5) {
-          const nx = bodyB.position.x - bodyA.position.x;
-          const nz = bodyB.position.z - bodyA.position.z;
+          // Impuls fizyczny obsługiwany przez cannon-es (oba DYNAMIC, równa masa, materiał carCar).
+          // Tutaj liczymy tylko obrażenia i efekty audio/HUD.
+          const nx = bodyA.position.x - bodyB.position.x;
+          const nz = bodyA.position.z - bodyB.position.z;
           const len = Math.sqrt(nx * nx + nz * nz) || 1;
           const cn = { x: nx / len, y: 0, z: nz / len };
 
-          // Pęd obu graczy (bodyB.velocity = prędkość kinematyczna z serwera)
           const momA = bodyA.mass * bodyA.velocity.length();
-          const momB = bodyA.mass * bodyB.velocity.length();
-          // momRatio > 1: atakujący ma przewagę; < 1: obrońca ma przewagę
+          const momB = bodyB.mass * bodyB.velocity.length();
           const momRatio = momA / Math.max(1, momB);
-
-          // Komponent prędkości względnej w kierunku normalnej zderzenia
-          const velDotN = relVelX * cn.x + relVelZ * cn.z;
-          if (velDotN > 0) {
-            // Restitucja odwrotnie proporcjonalna do przewagi pędu:
-            //   momRatio=2 → restitution=0.12 (mało odrzutu, idziesz przez)
-            //   momRatio=1 → restitution=0.25
-            //   momRatio=0.5 → restitution=0.45 (duży odrzut gdy ktoś wali w ciebie)
-            const restitution = Math.max(0.08, Math.min(0.55, 0.25 / Math.max(0.1, momRatio)));
-            const bounceImpulse = bodyA.mass * velDotN * restitution;
-            bodyA.applyImpulse(
-              new CANNON.Vec3(-cn.x * bounceImpulse, 0, -cn.z * bounceImpulse),
-              bodyA.position
-            );
-            // 1/9 rotacji, 9/9 kierunek
-            const rotScale = Math.max(0.002, Math.min(0.012, momRatio * 0.005));
-            bodyA.angularVelocity.y += (Math.random() - 0.5) * relSpeed * rotScale;
-          }
-
-          // Obrażenia dla obrońcy: +2% za każdą jednostkę przewagi pędu (cap ×3)
           const outScale = Math.max(0.1, Math.min(3, 1 + (momRatio - 1) * 0.02));
-          // Własne obrażenia atakującego: −50% za każdą jednostkę przewagi (min 0, max 2)
           const selfScale = Math.max(0, Math.min(2, 1 - (momRatio - 1) * 0.5));
 
           const impact = relSpeed * 0.5 * CAR_IMPACT_SCALE;
           this._onRemoteHit?.(remoteId, impact * outScale);
-          // Atakujący bierze własne obrażenia proporcjonalne do NIEKORZYŚCI pędu
           if (selfScale > 0.05) this.player.receiveImpact(impact * selfScale, cn);
           this.audio?.playHitWall(Math.min(1, relSpeed / 12));
           this._playScrapeFromBodies(bodyA, bodyB, cn.x, cn.z, 0.9);
