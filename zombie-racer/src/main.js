@@ -136,14 +136,13 @@ _controlsOverlay.innerHTML = `
       <div style="font-size:28px;font-weight:900;color:#fff;letter-spacing:3px;margin-bottom:24px;">ZOMBIE RACER</div>
       ${isTouchDevice ? `
       <table style="margin:0 auto;border-collapse:collapse;font-size:17px;color:#ddd;">
-        <tr><td style="text-align:right;padding:6px 14px 6px 0;"><kbd style="${KBD}">Przechyl</kbd></td><td style="color:#aaa;">Skręt</td></tr>
-        <tr><td style="text-align:right;padding:6px 14px 6px 0;"><kbd style="${KBD}">Prawa góra</kbd></td><td style="color:#aaa;">THROTTLE</td></tr>
-        <tr><td style="text-align:right;padding:6px 14px 6px 0;"><kbd style="${KBD}">Prawa dół</kbd></td><td style="color:#aaa;">BACK</td></tr>
+        <tr><td style="text-align:right;padding:6px 14px 6px 0;"><kbd style="${KBD}">Prawe koło</kbd></td><td style="color:#aaa;">Gaz, cofanie i skręt</td></tr>
         <tr><td style="text-align:right;padding:6px 14px 6px 0;"><kbd style="${KBD}">Lewa</kbd></td><td style="color:#aaa;">BRAKE</td></tr>
-        <tr><td style="text-align:right;padding:6px 14px 6px 0;"><kbd style="${KBD}">NA KOŁA</kbd></td><td style="color:#aaa;">Respawn lokalny</td></tr>
+        <tr><td style="text-align:right;padding:6px 14px 6px 0;"><kbd style="${KBD}">LECZ</kbd></td><td style="color:#aaa;">Naprawa <span style="color:#666;font-size:13px;">(-50 CR)</span></td></tr>
+        <tr><td style="text-align:right;padding:6px 14px 6px 0;"><kbd style="${KBD}">NA KOŁA</kbd></td><td style="color:#aaa;">Stawianie auta</td></tr>
         <tr><td style="text-align:right;padding:6px 14px 6px 0;"><kbd style="${KBD}">START</kbd></td><td style="color:#aaa;">Powrót na start</td></tr>
       </table>
-      <div style="margin-top:28px;font-size:14px;color:#777;letter-spacing:1px;">GRAJ W POZIOMIE I DOTKNIJ EKRANU</div>
+      <div style="margin-top:28px;font-size:14px;color:#777;letter-spacing:1px;">DOTKNIJ EKRANU: FULLSCREEN, POTEM GRAJ W POZIOMIE</div>
       ` : `
       <table style="margin:0 auto;border-collapse:collapse;font-size:17px;color:#ddd;">
         <tr><td style="text-align:right;padding:6px 14px 6px 0;"><kbd style="${KBD}">↑ ↓ ← →</kbd></td><td style="color:#aaa;">Jedź</td></tr>
@@ -160,10 +159,29 @@ _controlsOverlay.innerHTML = `
 document.body.appendChild(_controlsOverlay);
 const _dismissOverlay = () => { _controlsOverlay.remove(); };
 
+const _enterFullscreen = async () => {
+  if (!isTouchDevice) return;
+  const el = document.documentElement;
+  const request = el.requestFullscreen?.bind(el)
+    || el.webkitRequestFullscreen?.bind(el)
+    || el.msRequestFullscreen?.bind(el);
+  if (!document.fullscreenElement && !document.webkitFullscreenElement && request) {
+    try { await request(); } catch {}
+  }
+  try { await screen.orientation?.lock?.('landscape'); } catch {}
+};
+
 const _startAudio = () => { audio.start(); window.removeEventListener('keydown', _startAudio); window.removeEventListener('touchstart', _startAudio); window.removeEventListener('click', _startAudio); };
+const _startMobilePresentation = () => {
+  _enterFullscreen();
+  window.removeEventListener('touchstart', _startMobilePresentation);
+  window.removeEventListener('click', _startMobilePresentation);
+};
 window.addEventListener('keydown',   _startAudio);
 window.addEventListener('touchstart', _startAudio);
 window.addEventListener('click',      _startAudio);
+window.addEventListener('touchstart', _startMobilePresentation);
+window.addEventListener('click',      _startMobilePresentation);
 window.addEventListener('keydown',    _dismissOverlay, { once: true });
 window.addEventListener('click',      _dismissOverlay, { once: true });
 window.addEventListener('touchstart', _dismissOverlay, { once: true });

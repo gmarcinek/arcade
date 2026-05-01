@@ -4,215 +4,245 @@ export class TouchInput {
     this.steer = 0;
     this.brake = false;
 
-    this._forwardTouchId = null;
-    this._reverseTouchId = null;
+    this._driveTouchId = null;
     this._brakeTouchId = null;
+    this._boostTouchId = null;
+    this._healQueue = 0;
     this._insertQueue = 0;
     this._homeQueue = 0;
-    this._tiltBaseline = null;
-    this._tiltEnabled = false;
-    this._tiltPermissionRequired = typeof DeviceOrientationEvent !== 'undefined'
-      && typeof DeviceOrientationEvent.requestPermission === 'function';
-    this._tiltHandler = this._onDeviceOrientation.bind(this);
+    this._joystickCenter = { x: 0, y: 0 };
+    this._joystickRadius = 54;
+    this._steerDeadzone = 0.14;
+    this._throttleDeadzone = 0.18;
+    this._steerExponent = 1.9;
+    this._throttleExponent = 2.2;
 
     this._buildUI();
-    this._setupTilt();
   }
 
   _buildUI() {
     const container = document.getElementById('mobileControls');
     container.style.pointerEvents = 'none';
     container.innerHTML = `
-      <div id="tiltStatus" style="position:absolute;top:18px;left:50%;transform:translateX(-50%);
-        min-width:132px;padding:10px 14px;border-radius:999px;border:1px solid rgba(255,255,255,0.2);
-        background:rgba(0,0,0,0.55);color:#d9fef5;font:700 12px/1 system-ui,sans-serif;letter-spacing:1px;
-        text-align:center;pointer-events:auto;touch-action:manipulation;">
-        ${this._tiltPermissionRequired ? 'WLACZ PRZECHYL' : 'PRZECHYL = SKRET'}
+      <div id="topActions" style="position:absolute;top:12px;left:50%;transform:translateX(-50%);display:flex;gap:8px;pointer-events:none;">
+        <div id="healBtn" style="min-width:68px;height:34px;padding:0 12px;border-radius:12px;border:1px solid rgba(255,140,170,0.44);
+          background:rgba(140,20,60,0.24);display:flex;align-items:center;justify-content:center;color:#fff;
+          font:800 11px/1 system-ui,sans-serif;letter-spacing:1px;pointer-events:auto;touch-action:manipulation;user-select:none;">
+          LECZ
+        </div>
+        <div id="insertBtn" style="min-width:76px;height:34px;padding:0 12px;border-radius:12px;border:1px solid rgba(255,210,120,0.45);
+          background:rgba(255,170,0,0.22);display:flex;align-items:center;justify-content:center;color:#fff;
+          font:800 11px/1 system-ui,sans-serif;letter-spacing:1px;pointer-events:auto;touch-action:manipulation;user-select:none;">
+          NA KOLA
+        </div>
       </div>
       <div id="orientationHint" style="position:absolute;top:62px;left:50%;transform:translateX(-50%);
         padding:6px 12px;border-radius:999px;background:rgba(255,180,0,0.16);border:1px solid rgba(255,180,0,0.35);
         color:#ffd88a;font:700 11px/1 system-ui,sans-serif;letter-spacing:1px;pointer-events:none;">
-        GRAJ W POZIOMIE
+        FULLSCREEN + POZIOM
       </div>
-      <div id="brakeZone" style="position:absolute;left:14px;top:22%;bottom:14px;width:30%;
-        border-radius:24px;border:2px solid rgba(255,120,120,0.28);background:linear-gradient(180deg, rgba(255,90,90,0.12), rgba(255,40,40,0.28));
-        display:flex;align-items:center;justify-content:center;color:#fff;font:900 20px/1 system-ui,sans-serif;letter-spacing:2px;
+      <div id="boostBtn" style="position:absolute;left:10%;bottom:calc(10% + 78px);width:114px;height:68px;
+        border-radius:16px;border:2px solid rgba(120,220,255,0.32);background:rgba(30,120,220,0.22);
+        display:flex;align-items:center;justify-content:center;color:#fff;font:900 14px/1 system-ui,sans-serif;letter-spacing:2px;
         pointer-events:auto;touch-action:none;user-select:none;">
-        BRAKE
+        BOOST
       </div>
-      <div id="throttleZone" style="position:absolute;right:14px;top:22%;bottom:14px;width:30%;
-        border-radius:24px;border:2px solid rgba(120,255,200,0.24);background:linear-gradient(180deg, rgba(50,255,180,0.2) 0%, rgba(0,120,80,0.12) 48%, rgba(255,150,70,0.12) 52%, rgba(255,110,0,0.24) 100%);
-        pointer-events:auto;touch-action:none;user-select:none;overflow:hidden;">
-        <div style="position:absolute;inset:0 0 50% 0;display:flex;align-items:center;justify-content:center;color:#e7fff9;font:900 18px/1 system-ui,sans-serif;letter-spacing:2px;">
-          THROTTLE
+      <div id="brakeBtn" style="position:absolute;left:10%;bottom:10%;width:114px;height:68px;
+        border-radius:16px;border:2px solid rgba(255,120,120,0.32);background:rgba(255,40,40,0.24);
+        display:flex;align-items:center;justify-content:center;color:#fff;font:900 14px/1 system-ui,sans-serif;letter-spacing:2px;
+        pointer-events:auto;touch-action:none;user-select:none;">
+        BREAK
+      </div>
+      <div id="joystickZone" style="position:absolute;right:10%;bottom:10%;width:152px;height:152px;
+        border-radius:50%;border:2px solid rgba(120,255,200,0.28);background:radial-gradient(circle at 50% 50%, rgba(60,220,180,0.28), rgba(6,38,34,0.2) 62%, rgba(0,0,0,0.1) 100%);
+        box-shadow:0 0 0 12px rgba(255,255,255,0.03) inset;pointer-events:auto;touch-action:none;user-select:none;">
+        <div style="position:absolute;left:50%;top:12px;transform:translateX(-50%);color:#e7fff9;font:900 14px/1 system-ui,sans-serif;letter-spacing:2px;">
+          FRONT
         </div>
-        <div style="position:absolute;left:14px;right:14px;top:50%;height:1px;background:rgba(255,255,255,0.2);"></div>
-        <div style="position:absolute;inset:50% 0 0 0;display:flex;align-items:center;justify-content:center;color:#ffe0cc;font:900 18px/1 system-ui,sans-serif;letter-spacing:2px;">
+        <div style="position:absolute;left:12px;top:50%;transform:translateY(-50%);color:#dffaf5;font:900 13px/1 system-ui,sans-serif;letter-spacing:1px;">
+          LEFT
+        </div>
+        <div style="position:absolute;right:10px;top:50%;transform:translateY(-50%);color:#dffaf5;font:900 13px/1 system-ui,sans-serif;letter-spacing:1px;">
+          RIGHT
+        </div>
+        <div style="position:absolute;left:50%;bottom:12px;transform:translateX(-50%);color:#ffe0cc;font:900 14px/1 system-ui,sans-serif;letter-spacing:2px;">
           BACK
         </div>
+        <div id="joystickKnob" style="position:absolute;left:50%;top:50%;width:62px;height:62px;transform:translate(-50%,-50%);
+          border-radius:50%;border:2px solid rgba(255,255,255,0.4);background:radial-gradient(circle at 35% 30%, rgba(255,255,255,0.8), rgba(120,255,210,0.35));
+          box-shadow:0 10px 24px rgba(0,0,0,0.28);"></div>
       </div>
-      <div id="insertBtn" style="position:absolute;right:calc(30% + 28px);bottom:18px;width:88px;height:52px;
-        border-radius:16px;border:1px solid rgba(255,210,120,0.45);background:rgba(255,170,0,0.22);
-        display:flex;align-items:center;justify-content:center;color:#fff;font:800 12px/1 system-ui,sans-serif;letter-spacing:1px;
-        pointer-events:auto;touch-action:manipulation;user-select:none;">
-        NA KOLA
-      </div>
-      <div id="homeBtn" style="position:absolute;right:calc(30% + 28px);bottom:78px;width:88px;height:52px;
-        border-radius:16px;border:1px solid rgba(150,220,255,0.45);background:rgba(30,120,220,0.22);
-        display:flex;align-items:center;justify-content:center;color:#fff;font:800 12px/1 system-ui,sans-serif;letter-spacing:1px;
+      <div id="homeBtn" style="position:absolute;left:50%;bottom:18px;transform:translateX(-50%);width:80px;height:34px;
+        border-radius:12px;border:1px solid rgba(150,220,255,0.45);background:rgba(30,120,220,0.22);
+        display:flex;align-items:center;justify-content:center;color:#fff;font:800 11px/1 system-ui,sans-serif;letter-spacing:1px;
         pointer-events:auto;touch-action:manipulation;user-select:none;">
         START
       </div>
     `;
     container.style.display = 'block';
 
-    const tiltStatus = document.getElementById('tiltStatus');
-    const brakeZone = document.getElementById('brakeZone');
-    const throttleZone = document.getElementById('throttleZone');
+    const healBtn = document.getElementById('healBtn');
+    const boostBtn = document.getElementById('boostBtn');
+    const brakeBtn = document.getElementById('brakeBtn');
+    const joystickZone = document.getElementById('joystickZone');
+    const joystickKnob = document.getElementById('joystickKnob');
     const insertBtn = document.getElementById('insertBtn');
     const homeBtn = document.getElementById('homeBtn');
 
-    const updateDriveState = () => {
-      if (this._forwardTouchId !== null && this._reverseTouchId === null) {
-        this.throttle = 1;
-      } else if (this._reverseTouchId !== null && this._forwardTouchId === null) {
-        this.throttle = -1;
-      } else {
-        this.throttle = 0;
-      }
+    const updatePedalState = () => {
       this.brake = this._brakeTouchId !== null;
     };
 
-    const setTouchSlot = (touchId, slot) => {
-      if (slot === 'forward') this._forwardTouchId = touchId;
-      if (slot === 'reverse') this._reverseTouchId = touchId;
-      if (slot === 'brake') this._brakeTouchId = touchId;
-      updateDriveState();
+    const resetJoystick = () => {
+      this._driveTouchId = null;
+      this.throttle = 0;
+      this.steer = 0;
+      joystickKnob.style.left = '50%';
+      joystickKnob.style.top = '50%';
     };
 
-    const clearTouchSlot = touchId => {
-      if (this._forwardTouchId === touchId) this._forwardTouchId = null;
-      if (this._reverseTouchId === touchId) this._reverseTouchId = null;
-      if (this._brakeTouchId === touchId) this._brakeTouchId = null;
-      updateDriveState();
+    const updateJoystickCenter = () => {
+      const rect = joystickZone.getBoundingClientRect();
+      this._joystickCenter = {
+        x: rect.left + rect.width * 0.5,
+        y: rect.top + rect.height * 0.5
+      };
+      this._joystickRadius = rect.width * 0.36;
     };
 
-    const updateThrottleTouch = touch => {
-      const rect = throttleZone.getBoundingClientRect();
-      const zone = touch.clientY < rect.top + rect.height * 0.5 ? 'forward' : 'reverse';
-      if (zone === 'forward') {
-        if (this._reverseTouchId === touch.identifier) this._reverseTouchId = null;
-        this._forwardTouchId = touch.identifier;
-      } else {
-        if (this._forwardTouchId === touch.identifier) this._forwardTouchId = null;
-        this._reverseTouchId = touch.identifier;
-      }
-      updateDriveState();
+    const updateJoystick = touch => {
+      const dx = touch.clientX - this._joystickCenter.x;
+      const dy = touch.clientY - this._joystickCenter.y;
+      const distance = Math.hypot(dx, dy);
+      const clampedDistance = Math.min(distance, this._joystickRadius);
+      const angle = Math.atan2(dy, dx);
+      const clampedX = Math.cos(angle) * clampedDistance;
+      const clampedY = Math.sin(angle) * clampedDistance;
+      const normalizedX = this._joystickRadius > 0 ? clampedX / this._joystickRadius : 0;
+      const normalizedY = this._joystickRadius > 0 ? clampedY / this._joystickRadius : 0;
+
+      joystickKnob.style.left = `${50 + normalizedX * 32}%`;
+      joystickKnob.style.top = `${50 + normalizedY * 32}%`;
+      this.steer = this._applyResponseCurve(normalizedX, this._steerDeadzone, this._steerExponent);
+      this.throttle = this._applyResponseCurve(-normalizedY, this._throttleDeadzone, this._throttleExponent);
     };
 
-    throttleZone.addEventListener('touchstart', event => {
+    joystickZone.addEventListener('touchstart', event => {
       event.preventDefault();
-      for (const touch of event.changedTouches) updateThrottleTouch(touch);
+      const touch = event.changedTouches[0];
+      if (!touch) return;
+      updateJoystickCenter();
+      this._driveTouchId = touch.identifier;
+      updateJoystick(touch);
     }, { passive: false });
 
-    throttleZone.addEventListener('touchmove', event => {
+    joystickZone.addEventListener('touchmove', event => {
       event.preventDefault();
       for (const touch of event.changedTouches) {
-        if (touch.identifier === this._forwardTouchId || touch.identifier === this._reverseTouchId) {
-          updateThrottleTouch(touch);
+        if (touch.identifier === this._driveTouchId) updateJoystick(touch);
+      }
+    }, { passive: false });
+
+    joystickZone.addEventListener('touchend', event => {
+      event.preventDefault();
+      for (const touch of event.changedTouches) {
+        if (touch.identifier === this._driveTouchId) resetJoystick();
+      }
+    }, { passive: false });
+
+    joystickZone.addEventListener('touchcancel', event => {
+      event.preventDefault();
+      for (const touch of event.changedTouches) {
+        if (touch.identifier === this._driveTouchId) resetJoystick();
+      }
+    }, { passive: false });
+
+    boostBtn.addEventListener('touchstart', event => {
+      event.preventDefault();
+      const touch = event.changedTouches[0];
+      if (touch) {
+        this._boostTouchId = touch.identifier;
+      }
+    }, { passive: false });
+
+    boostBtn.addEventListener('touchend', event => {
+      event.preventDefault();
+      for (const touch of event.changedTouches) {
+        if (touch.identifier === this._boostTouchId) {
+          this._boostTouchId = null;
         }
       }
     }, { passive: false });
 
-    throttleZone.addEventListener('touchend', event => {
+    boostBtn.addEventListener('touchcancel', event => {
       event.preventDefault();
-      for (const touch of event.changedTouches) clearTouchSlot(touch.identifier);
+      for (const touch of event.changedTouches) {
+        if (touch.identifier === this._boostTouchId) {
+          this._boostTouchId = null;
+        }
+      }
     }, { passive: false });
 
-    throttleZone.addEventListener('touchcancel', event => {
-      event.preventDefault();
-      for (const touch of event.changedTouches) clearTouchSlot(touch.identifier);
-    }, { passive: false });
-
-    brakeZone.addEventListener('touchstart', event => {
+    brakeBtn.addEventListener('touchstart', event => {
       event.preventDefault();
       const touch = event.changedTouches[0];
-      if (touch) setTouchSlot(touch.identifier, 'brake');
+      if (touch) {
+        this._brakeTouchId = touch.identifier;
+        updatePedalState();
+      }
     }, { passive: false });
 
-    brakeZone.addEventListener('touchend', event => {
+    brakeBtn.addEventListener('touchend', event => {
       event.preventDefault();
-      for (const touch of event.changedTouches) clearTouchSlot(touch.identifier);
+      for (const touch of event.changedTouches) {
+        if (touch.identifier === this._brakeTouchId) {
+          this._brakeTouchId = null;
+          updatePedalState();
+        }
+      }
     }, { passive: false });
 
-    brakeZone.addEventListener('touchcancel', event => {
+    brakeBtn.addEventListener('touchcancel', event => {
       event.preventDefault();
-      for (const touch of event.changedTouches) clearTouchSlot(touch.identifier);
+      for (const touch of event.changedTouches) {
+        if (touch.identifier === this._brakeTouchId) {
+          this._brakeTouchId = null;
+          updatePedalState();
+        }
+      }
     }, { passive: false });
 
     const queueAction = key => event => {
       event.preventDefault();
+      if (key === 'heal') this._healQueue += 1;
       if (key === 'insert') this._insertQueue += 1;
       if (key === 'home') this._homeQueue += 1;
     };
 
+    healBtn.addEventListener('touchstart', queueAction('heal'), { passive: false });
     insertBtn.addEventListener('touchstart', queueAction('insert'), { passive: false });
     homeBtn.addEventListener('touchstart', queueAction('home'), { passive: false });
+  }
 
-    if (this._tiltPermissionRequired) {
-      tiltStatus.addEventListener('click', async event => {
-        event.preventDefault();
-        try {
-          const result = await DeviceOrientationEvent.requestPermission();
-          if (result === 'granted') {
-            this._enableTilt();
-          } else {
-            tiltStatus.textContent = 'PRZECHYL ZABLOKOWANY';
-          }
-        } catch {
-          tiltStatus.textContent = 'BRAK DOSTEPU';
-        }
-      });
+  _applyResponseCurve(value, deadzone, exponent) {
+    const clamped = Math.max(-1, Math.min(1, value));
+    const magnitude = Math.abs(clamped);
+    if (magnitude <= deadzone) return 0;
+
+    const normalized = (magnitude - deadzone) / (1 - deadzone);
+    const curved = Math.pow(normalized, exponent);
+    return Math.sign(clamped) * curved;
+  }
+
+  get boost() { return this._boostTouchId !== null; }
+
+  consumeHeal() {
+    if (this._healQueue > 0) {
+      this._healQueue -= 1;
+      return true;
     }
-
-    this._tiltStatus = tiltStatus;
+    return false;
   }
-
-  _setupTilt() {
-    if (typeof window === 'undefined' || typeof DeviceOrientationEvent === 'undefined') return;
-    if (!this._tiltPermissionRequired) this._enableTilt();
-  }
-
-  _enableTilt() {
-    if (this._tiltEnabled) return;
-    this._tiltEnabled = true;
-    this._tiltBaseline = null;
-    window.addEventListener('deviceorientation', this._tiltHandler);
-    if (this._tiltStatus) this._tiltStatus.textContent = 'PRZECHYL = SKRET';
-  }
-
-  _getSteeringTilt(event) {
-    const angle = screen.orientation?.angle ?? window.orientation ?? 0;
-    if (Math.abs(angle) === 90 && typeof event.beta === 'number') {
-      return angle > 0 ? -event.beta : event.beta;
-    }
-    if (typeof event.gamma === 'number') return event.gamma;
-    return null;
-  }
-
-  _onDeviceOrientation(event) {
-    const rawTilt = this._getSteeringTilt(event);
-    if (rawTilt === null) return;
-    if (this._tiltBaseline === null) this._tiltBaseline = rawTilt;
-    const delta = rawTilt - this._tiltBaseline;
-    const maxTilt = 22;
-    const normalized = Math.max(-1, Math.min(1, delta / maxTilt));
-    this.steer = normalized;
-  }
-
-  get boost() { return false; }
-
-  consumeHeal() { return false; }
 
   get homePressed() {
     if (this._homeQueue > 0) {
