@@ -375,7 +375,7 @@ export class CollisionHandler {
         // Skalujemy przewagą pędu: gracz z większym pędem odbija się jeszcze
         // mniej (zachowuje więcej pędu), słabszy odbija się trochę bardziej.
         // Bazowa korekta odpowiada równym masom; momRatio = 1 daje czyste 1.0.
-        const RESTITUTION = 0.20; // musi pasować do material carCar
+        const RESTITUTION = 0.15; // musi pasować do material carCar
         const advantageBoost = Math.max(0.7, Math.min(1.4, 0.85 + 0.15 * momRatio));
         const correctionMag = bodyA.mass * approachSpeed * (1 + RESTITUTION) / 2 * advantageBoost;
 

@@ -22,7 +22,15 @@ import { MAP as defaultMap } from './world/mapData.js';
 import { MapEditor } from './world/MapEditor.js';
 import { WORLD_SIZE } from './constants.js';
 import suvModelUrl from './assets/suv.glb?url';
-import { CAMERA_OFFSET_BEHIND, HP_TO_CREDIT, HP_TO_TIME } from './physicsConfig.js';
+import {
+  CAMERA_OFFSET_BEHIND,
+  CREDITS_CAR_KILL,
+  CREDITS_HEAL_COST,
+  CREDITS_ZOMBIE,
+  HEAL_AMOUNT,
+  HP_TO_CREDIT,
+  HP_TO_TIME,
+} from './physicsConfig.js';
 import { AudioManager }      from './audio/AudioManager.js';
 import { MultiplayerClient } from './multiplayer/MultiplayerClient.js';
 import { RemotePlayers }     from './multiplayer/RemotePlayers.js';
@@ -42,6 +50,9 @@ let _mpInitPlayers = null;       // gracze z serwera przy wejściu (dodawani po 
 let _mpInitZombies     = null;       // zombie z serwera przy wejściu
 let _mpInitBrokenTrees = null;       // drzewa złamane przed dołączeniem
 let _mpZombies         = null;       // Map<serverId, Zombie> — zombie zarządzane przez serwer
+let _mpStartScheduled  = false;
+let _mpScoreIntervalId = null;
+let _gameLoopStarted   = false;
 const MATCH_MS     = 5 * 60 * 1000;
 /** Map<remoteId, timestamp> — timestamp mojego ostatniego trafienia tego gracza (last-hitter tracking) */
 const _remoteLastHitMs = new Map();
@@ -196,10 +207,6 @@ const _smokeOffset = new THREE.Vector3();
 
 
 
-const CREDITS_ZOMBIE    = 200;   // za rozjechanie zombie
-const CREDITS_CAR_KILL  = 2000;  // za zniszczenie NPC/remote auta
-const CREDITS_HEAL_COST =  50;   // koszt leczenia
-const HEAL_AMOUNT       =  30;   // ile HP odzyskujemy
 const DESTROY_CAM_ORBIT_SHIFT = 5.5;
 
 function _getDestroyCamOrbitOffset(velX = 0, velZ = 0) {
@@ -548,12 +555,26 @@ function _onPlayerDeath() {
   _playerDeathTimer = PLAYER_RESPAWN_DELAY;
 
   const ep = player.chassisBody.position;
+  const ev = player.chassisBody.velocity;
+
+  camCtrl.setState(CamState.NPC_DESTROY, {
+    target: player.group,
+    anchor: ep,
+    velocity: ev,
+    orbitOffset: _getDestroyCamOrbitOffset(ev.x, ev.z),
+  });
 
   // Eksplozja jak NPC
   particles.spawnExplosion(ep.x, ep.y + 1, ep.z);
   particles.spawnExplosion(ep.x + (Math.random() - 0.5) * 1.5, ep.y + 2.5, ep.z + (Math.random() - 0.5) * 1.5);
   particles.spawnExplosion(ep.x + (Math.random() - 0.5) * 1.0, ep.y + 0.5, ep.z + (Math.random() - 0.5) * 1.0);
   audio.playCarExplosion();
+
+  debris.spawn(
+    ep.x, ep.y + 0.5, ep.z,
+    ev.x, ev.y, ev.z,
+    (x, y, z, type) => particles.spawnSmoke(x, y, z, type)
+  );
 
   // Ukryj auto gracza
   player.group.visible = false;
@@ -728,6 +749,7 @@ function showModeMenu() {
     mpClient.connect();
 
     mpClient.onInit = (data) => {
+      if (_mpStartScheduled) return;
       status.textContent = `✓ Połączono jako ${data.ip}`;
       status.style.color = '#00ff88';
       // Wczytaj dotychczasowe wyniki
@@ -744,8 +766,9 @@ function showModeMenu() {
         status.textContent = 'Czekaj na start kolejnego meczu…';
         return;
       }
+      _mpStartScheduled = true;
       setTimeout(() => {
-        document.body.removeChild(overlay);
+        if (overlay.parentNode) document.body.removeChild(overlay);
         // W MP zawsze domyślna plansza
         MAP = defaultMap;
         startGame();
@@ -1140,12 +1163,16 @@ function initWorld(mapData) {
     document.body.appendChild(_mpScoreEl);
     _updateScoreBoard();
     // Aktualizuj licznik co sekundę
-    setInterval(() => { if (_mpScoreEl) _updateScoreBoard(); }, 1000);
+    if (_mpScoreIntervalId === null) {
+      _mpScoreIntervalId = setInterval(() => { if (_mpScoreEl) _updateScoreBoard(); }, 1000);
+    }
   }
 }
 
 function startGame() {
+  if (_gameLoopStarted) return;
   initWorld(MAP);
+  _gameLoopStarted = true;
   requestAnimationFrame(gameLoop);
 }
 
@@ -1166,8 +1193,10 @@ function gameLoop() {
   accumulator += dt;
 
   // Podczas sekwencji game over: gracz nie steruje, ale scena się renderuje
-  if (!_gameOverSequence) {
+  if (!_gameOverSequence && !_playerDead) {
     player.update(input, dt);
+  } else if (_playerDead) {
+    player.sync(dt);
   }
 
   while (accumulator >= FIXED_DT) {

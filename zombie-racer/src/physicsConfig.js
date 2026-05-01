@@ -235,8 +235,15 @@ export const DAMAGE_PER_IMPULSE = 0.0002;
 // ── Nagrody za damage HP ─────────────────────────────────────────
 // Ile kredítów i sekund gracz dostaje za zadanie 1 HP damage
 // Zakres: [1 … 20 credits/HP], [1 … 20 sekund/HP]
-export const HP_TO_CREDIT = 5;   // creditów za 1 HP
+export const HP_TO_CREDIT = 2;   // creditów za 1 HP
 export const HP_TO_TIME   = 5;   // sekund za 1 HP
+
+// ── Economy / leczenie ───────────────────────────────────────────
+// Nagrody za zabójstwa i koszt leczenia.
+export const CREDITS_ZOMBIE = 180;      // za rozjechanie zombie
+export const CREDITS_CAR_KILL = 800;   // za zniszczenie NPC/remote auta
+export const CREDITS_HEAL_COST = 50;    // koszt leczenia
+export const HEAL_AMOUNT = 17;          // ile HP odzyskujemy
 
 // ── Launch pad pulse (żółte platformy) ───────────────────────────
 // Po kontakcie platforma czeka LAUNCH_PAD_CONTACT_DELAY, podnosi się o
