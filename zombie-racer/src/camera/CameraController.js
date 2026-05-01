@@ -32,6 +32,9 @@ const _toLook = new THREE.Vector3();
 
 function smoothStep(t) { return t * t * (3 - 2 * t); }
 
+/** Konwertuje per-klatkowy lerp (zakładający 60 FPS) na delta-time based. */
+const dta = (a, dt) => 1 - Math.pow(1 - a, dt * 240);
+
 // ─────────────────────────────────────────────────────────────────
 export const CamState = Object.freeze({
   PLAYER:      'PLAYER',
@@ -146,9 +149,10 @@ export class CameraController {
     this._vFov = this._fromFov + (toFov - this._fromFov) * t;
 
     // 4. Realna kamera płynnie dąży do wirtualnej
-    const posLerp = this._state === CamState.NPC_DESTROY
+    const posAlpha = this._state === CamState.NPC_DESTROY
       ? CAMERA_POS_LERP_AIR   // celowo wolniejszy ruch przy orbicie
       : CAMERA_POS_LERP;
+    const posLerp = dta(posAlpha, dt);
 
     this._cam.position.lerp(this._vPos, posLerp);
 
@@ -156,7 +160,7 @@ export class CameraController {
     this._rLook.lerp(this._vLook, posLerp);
     this._cam.lookAt(this._rLook);
 
-    this._cam.fov += (this._vFov - this._cam.fov) * 0.1;
+    this._cam.fov += (this._vFov - this._cam.fov) * dta(0.15, dt);
     this._cam.updateProjectionMatrix();
   }
 
@@ -183,7 +187,7 @@ export class CameraController {
       const yaw = throttle < 0 ? carYaw + Math.PI : carYaw;
       this._desDir.set(Math.sin(yaw), 0, Math.cos(yaw));
     }
-    this._motionDir.lerp(this._desDir, CAMERA_DIR_LERP).normalize();
+    this._motionDir.lerp(this._desDir, dta(CAMERA_DIR_LERP, dt)).normalize();
 
     // Yaw kamery dąży za kierunkiem ruchu
     const targetYaw = Math.atan2(this._motionDir.x, this._motionDir.z);
@@ -191,8 +195,8 @@ export class CameraController {
     while (diff >  Math.PI) diff -= 2 * Math.PI;
     while (diff < -Math.PI) diff += 2 * Math.PI;
     const yawLerp = throttle < 0 && speed < 0.75
-      ? CAMERA_REVERSE_LERP
-      : (isAirborne ? CAMERA_YAW_LERP_AIR : CAMERA_YAW_LERP);
+      ? dta(CAMERA_REVERSE_LERP, dt)
+      : (isAirborne ? dta(CAMERA_YAW_LERP_AIR, dt) : dta(CAMERA_YAW_LERP, dt));
     this._camYaw += diff * yawLerp;
 
     // Pozycja — dystans zmienia TYLKO boost, nie klawisze
@@ -229,7 +233,7 @@ export class CameraController {
       pivotZ = tp.z + this._orbitOffset.z;
       this._orbitAnchor.set(tp.x, tp.y, tp.z);
     } else if (this._phantom) {
-      // Prędkość maleje wykładniczo (~85%/klatkę przy 60fps)
+      // Prędkość maleje wykładniczo (~5%/klatkę przy 60fps)
       this._phantom.vel.multiplyScalar(Math.pow(0.05, dt * 60));
       this._phantom.pos.addScaledVector(this._phantom.vel, dt);
       pivotX = this._phantom.pos.x + this._orbitOffset.x;

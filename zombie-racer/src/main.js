@@ -597,6 +597,9 @@ function gameLoop() {
   const dt = Math.min(clock.getDelta(), 0.1);
   accumulator += dt;
 
+  // Siły gracza przed fizyką — eliminuje 1 klatkę input lagu
+  player.update(input, dt);
+
   while (accumulator >= FIXED_DT) {
     // ── Dynamiczne tłumienie obrotu — silniejsze przy szybkim kręceniu ──────
     const HIGH_SPIN = 3 * 2 * Math.PI; // 3 RPS w rad/s
@@ -610,7 +613,8 @@ function gameLoop() {
     accumulator -= FIXED_DT;
   }
 
-  player.update(input, dt);
+  // Zsynchronizuj mesh gracza z pozycją po fizyce (dt=0 by nie dublować efektów czasowych)
+  player.sync(0);
 
   // ── Healing — każde wciśnięcie Backspace = 1 leczenie instant ──
   while (input.consumeHeal()) {

@@ -284,7 +284,7 @@ export const CAMERA_YAW_LERP = 0.12;
 
 // Szybkosc lerpu pozycji kamery za autem. Nizsze = camera lag (kinowy efekt).
 // Zakres: [0.02 duzy lag … 0.06 normalna … 0.2 natychmiastowa]
-export const CAMERA_POS_LERP = 0.12;
+export const CAMERA_POS_LERP = 0.25;
 
 // Szybkosc lerpu kierunku ruchu (horągiewka) — jak szybko kamera podąża za wektorem prędkości.
 // Nizsze = bardziej leniwa, wyższe = natychmiastowe śledzenie.
@@ -297,5 +297,5 @@ export const CAMERA_REVERSE_LERP = 0.015;
 
 // Szybkość lerpu kamery gdy auto jest w powietrzu — znacznie wolniejszy,
 // żeby kamera nie szalała przy obrocie bryły podczas lotu.
-export const CAMERA_YAW_LERP_AIR  = 0.012;
-export const CAMERA_POS_LERP_AIR  = 0.04;
+export const CAMERA_YAW_LERP_AIR  = 0.048;
+export const CAMERA_POS_LERP_AIR  = 0.20;
