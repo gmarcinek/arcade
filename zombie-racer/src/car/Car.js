@@ -42,7 +42,6 @@ export class Car {
     this._throttleFiltered = 0.0;
     this._wheelDetached = [false, false, false, false];
     this._detachedWheelState = [null, null, null, null];
-    this._zombieSlipDist = 0; // [m] pozostała odległość z tracją zombie
   }
 
   build(scene, world, spawnX, spawnY, spawnZ, color = 0xff2200) {
@@ -174,6 +173,10 @@ export class Car {
     this.chassisBody.angularDamping = ANGULAR_DAMPING;
     this.chassisBody.linearDamping  = LINEAR_DAMPING;
     this.chassisBody.userData = { car: this };
+    // CCD — gdy prędkość > 0.1 m/s, silnik sprawdza pośrednie pozycje między krokami fizyki
+    // Eliminuje tunelowanie (przelatywanie przez przeciwników przy dużej prędkości)
+    this.chassisBody.ccdSpeedThreshold = 0.1;
+    this.chassisBody.ccdIterations     = 10;
 
 
     this.vehicle = new CANNON.RaycastVehicle({
@@ -253,10 +256,6 @@ export class Car {
     };
   }
 
-  applyZombieSlip(distMeters) {
-    this._zombieSlipDist = distMeters;
-  }
-
   applyControl(throttle, steer, brake, dt = 1 / 60) {
     const throttleTarget = throttle;
     const throttleRiseRate = 2.4;
@@ -301,23 +300,6 @@ export class Car {
     this.vehicle.setBrake(brakeVal * wheelMods[1].brakeMult, 1);
     this.vehicle.setBrake(brakeVal * wheelMods[2].brakeMult, 2);
     this.vehicle.setBrake(brakeVal * wheelMods[3].brakeMult, 3);
-
-    // ── Zombie slip: zmniejsz przyczepność kół na kilka metrów po rozjechaniu zombie ──
-    if (this.vehicle) {
-      const speed = this.chassisBody ? this.chassisBody.velocity.length() : 0;
-      if (this._zombieSlipDist > 0) {
-        this._zombieSlipDist = Math.max(0, this._zombieSlipDist - speed * dt);
-        const slipF = FRICTION_SLIP_FRONT_STATIC * 0.1;
-        const slipR = FRICTION_SLIP_REAR_STATIC * 0.1;
-        for (let i = 0; i < 4; i++) {
-          this.vehicle.wheelInfos[i].frictionSlip = i < 2 ? slipF : slipR;
-        }
-      } else {
-        for (let i = 0; i < 4; i++) {
-          this.vehicle.wheelInfos[i].frictionSlip = i < 2 ? FRICTION_SLIP_FRONT_STATIC : FRICTION_SLIP_REAR_STATIC;
-        }
-      }
-    }
   }
 
   sync(dt = 0) {

@@ -2,7 +2,7 @@ import * as CANNON from 'cannon-es';
 import { BUMPER_SPEED_THRESHOLD, BUILDING_IMPACT_SCALE, CAR_IMPACT_SCALE, DAMAGE_PER_IMPULSE } from '../physicsConfig.js';
 
 export class CollisionHandler {
-  constructor(world, player, zombies, npcCars, timer, hud, audio, city, onZombieKill, onCarKill, onCarHit) {
+  constructor(world, player, zombies, npcCars, timer, hud, audio, city, onZombieKill, onCarKill, onCarHit, options = {}) {
     this.player      = player;
     this.zombies     = zombies;
     this.npcCars     = npcCars;
@@ -13,9 +13,16 @@ export class CollisionHandler {
     this.onZombieKill = onZombieKill;
     this.onCarKill   = onCarKill;
     this.onCarHit    = onCarHit || (() => {});
+    this._remoteBodyMap = options.remoteBodyMap || null; // Map<CANNON.Body, socketId>
+    this._onTreeBreak   = options.onTreeBreak   || null; // (treeIndex, impactDir, speed, launch)
+    this._onRemoteHit   = options.onRemoteHit   || null; // (remoteId, damage)
 
     // Cooldown żeby speedup nie aplikował się co klatkę
     this._speedupCooldown = 0;
+
+    world.addEventListener('postStep', () => {
+      this._limitNpcSpin();
+    });
 
     world.addEventListener('beginContact', (event) => {
       this._handleContact(event.bodyA, event.bodyB);
@@ -25,6 +32,27 @@ export class CollisionHandler {
 
   tick(dt) {
     if (this._speedupCooldown > 0) this._speedupCooldown -= dt;
+  }
+
+  _limitNpcSpin() {
+    for (const npc of this.npcCars) {
+      const body = npc?.chassisBody;
+      if (!body || !npc.isAlive) continue;
+
+      const planarSpeed = Math.sqrt(body.velocity.x * body.velocity.x + body.velocity.z * body.velocity.z);
+      const maxYawSpin = Math.max(0.35, planarSpeed * 0.10);
+      const maxRollPitch = Math.max(0.2, planarSpeed * 0.05);
+
+      if (Math.abs(body.angularVelocity.y) > maxYawSpin) {
+        body.angularVelocity.y = Math.sign(body.angularVelocity.y) * maxYawSpin;
+      }
+      if (Math.abs(body.angularVelocity.x) > maxRollPitch) {
+        body.angularVelocity.x = Math.sign(body.angularVelocity.x) * maxRollPitch;
+      }
+      if (Math.abs(body.angularVelocity.z) > maxRollPitch) {
+        body.angularVelocity.z = Math.sign(body.angularVelocity.z) * maxRollPitch;
+      }
+    }
   }
 
   _playScrapeFromBodies(bodyA, bodyB, normalX, normalZ, multiplier = 1) {
@@ -85,6 +113,7 @@ export class CollisionHandler {
     if (car === this.player) {
       if (treeHit?.broke) {
         this.hud.showMessage('🌲 DRZEWO WYRwane Z KORZENIAMI', '#88dd66', 900);
+        if (this._onTreeBreak) this._onTreeBreak(treeHit.treeIndex, impactDir, impactSpeed, launchSpeed);
       } else if (treeHit) {
         this.hud.showMessage(`🌲 ${Math.ceil(treeHit.hp)}/${treeHit.maxHp} HP`, '#88dd66', 500);
       }
@@ -209,7 +238,8 @@ export class CollisionHandler {
           new CANNON.Vec3(contactNormal.x * kickMag, 0, contactNormal.z * kickMag),
           npc.chassisBody.position
         );
-        npc.chassisBody.angularVelocity.y += (Math.random() - 0.5) * relSpeed * 0.05;
+        // 1/9 rotacji, 9/9 kierunek
+        npc.chassisBody.angularVelocity.y += (Math.random() - 0.5) * relSpeed * 0.005;
 
         const npcHpBefore = npc.hp;
         const npcDamageHP = (relSpeed * relSpeed * this.player.stats.offence) / (npc.stats.defence * 3);
@@ -229,6 +259,62 @@ export class CollisionHandler {
         }
 
         this.hud.showMessage(`🚗 -${actualDamage} HP`, '#ffcc44', 800);
+      }
+      return;
+    }
+
+    // Player hits remote multiplayer car
+    if (this._remoteBodyMap) {
+      const remoteId = this._remoteBodyMap.get(bodyB);
+      if (remoteId) {
+        const relVelX = bodyA.velocity.x - bodyB.velocity.x;
+        const relVelZ = bodyA.velocity.z - bodyB.velocity.z;
+        const relSpeed = Math.sqrt(relVelX * relVelX + relVelZ * relVelZ);
+        if (relSpeed > 1.5) {
+          const nx = bodyB.position.x - bodyA.position.x;
+          const nz = bodyB.position.z - bodyA.position.z;
+          const len = Math.sqrt(nx * nx + nz * nz) || 1;
+          const cn = { x: nx / len, y: 0, z: nz / len };
+
+          // Pęd obu graczy (bodyB.velocity = prędkość kinematyczna z serwera)
+          const momA = bodyA.mass * bodyA.velocity.length();
+          const momB = bodyA.mass * bodyB.velocity.length();
+          // momRatio > 1: atakujący ma przewagę; < 1: obrońca ma przewagę
+          const momRatio = momA / Math.max(1, momB);
+
+          // Komponent prędkości względnej w kierunku normalnej zderzenia
+          const velDotN = relVelX * cn.x + relVelZ * cn.z;
+          if (velDotN > 0) {
+            // Restitucja odwrotnie proporcjonalna do przewagi pędu:
+            //   momRatio=2 → restitution=0.12 (mało odrzutu, idziesz przez)
+            //   momRatio=1 → restitution=0.25
+            //   momRatio=0.5 → restitution=0.45 (duży odrzut gdy ktoś wali w ciebie)
+            const restitution = Math.max(0.08, Math.min(0.55, 0.25 / Math.max(0.1, momRatio)));
+            const bounceImpulse = bodyA.mass * velDotN * restitution;
+            bodyA.applyImpulse(
+              new CANNON.Vec3(-cn.x * bounceImpulse, 0, -cn.z * bounceImpulse),
+              bodyA.position
+            );
+            // 1/9 rotacji, 9/9 kierunek
+            const rotScale = Math.max(0.002, Math.min(0.012, momRatio * 0.005));
+            bodyA.angularVelocity.y += (Math.random() - 0.5) * relSpeed * rotScale;
+          }
+
+          // Obrażenia dla obrońcy: +2% za każdą jednostkę przewagi pędu (cap ×3)
+          const outScale = Math.max(0.1, Math.min(3, 1 + (momRatio - 1) * 0.02));
+          // Własne obrażenia atakującego: −50% za każdą jednostkę przewagi (min 0, max 2)
+          const selfScale = Math.max(0, Math.min(2, 1 - (momRatio - 1) * 0.5));
+
+          const impact = relSpeed * 0.5 * CAR_IMPACT_SCALE;
+          this._onRemoteHit?.(remoteId, impact * outScale);
+          // Atakujący bierze własne obrażenia proporcjonalne do NIEKORZYŚCI pędu
+          if (selfScale > 0.05) this.player.receiveImpact(impact * selfScale, cn);
+          this.audio?.playHitWall(Math.min(1, relSpeed / 12));
+          this._playScrapeFromBodies(bodyA, bodyB, cn.x, cn.z, 0.9);
+          const advantage = momRatio >= 1 ? `+${((outScale - 1) * 100).toFixed(0)}%` : `−${((1 - outScale) * 100).toFixed(0)}%`;
+          this.hud.showMessage(`🚗 UDERZENIE ${advantage}`, momRatio >= 1 ? '#44ff88' : '#ff6644', 700);
+        }
+        return;
       }
     }
   }

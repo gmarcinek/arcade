@@ -118,11 +118,18 @@ export class CityBuilder {
     tree.body.userData.treeHp = tree.hp;
 
     if (tree.hp > 0) {
-      return { broke: false, hp: tree.hp, maxHp: tree.maxHp };
+      return { broke: false, hp: tree.hp, maxHp: tree.maxHp, treeIndex };
     }
 
     this.breakTree(body, impactDir, impactSpeed, launchSpeed);
-    return { broke: true, hp: 0, maxHp: tree.maxHp };
+    return { broke: true, hp: 0, maxHp: tree.maxHp, treeIndex };
+  }
+
+  /** Przełami drzewo na podstawie zdarzenia z serwera (inny klient). */
+  applyRemoteTreeBreak(treeIndex, dirX = 1, dirZ = 0, speed = 5, launch = 3) {
+    const tree = this._trees[treeIndex];
+    if (!tree || tree.broken) return;
+    this.breakTree(tree.body, { x: dirX, z: dirZ }, speed, launch);
   }
 
   breakTree(body, impactDir = { x: 1, z: 0 }, impactSpeed = 0, launchSpeed = 0) {

@@ -14,6 +14,8 @@ export function createPhysicsWorld() {
   world.broadphase = new CANNON.SAPBroadphase(world);
   world.allowSleep = true;
   world.defaultContactMaterial.friction = DEFAULT_CONTACT_FRICTION;
+  // Więcej iteracji solvera = lepsza rozdzielczość kolizji, mniej przenikania przy dużych prędkościach
+  world.solver.iterations = 20;
 
   // Kolo vs nawierzchnie — wartosci z physicsConfig.js
   const wheelGrass = new CANNON.ContactMaterial(groundMaterial, wheelMaterial, {

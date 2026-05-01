@@ -40,6 +40,7 @@ export class Zombie {
     this.body.position.set(x, y, z);
     this.body.linearDamping = 0.9;
     this.body.angularDamping = 1.0;
+    this.body.collisionResponse = false; // gracz przejedzie przez zombie bez zatrzymania
     this.body.userData = { zombie: this };
     world.addBody(this.body);
   }
