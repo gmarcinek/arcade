@@ -117,7 +117,7 @@ const debris    = new DebrisSystem(scene, world, audio);
 const camCtrl = new CameraController(camera);
 const timer = new GameTimer();
 const hud     = new HUD();
-const minimap = new Minimap();
+const minimap = isTouchDevice ? null : new Minimap();
 const damageOverlay = new DamageOverlay();
 
 // AudioContext wymaga gestu użytkownika — startujemy przy pierwszym naciśnięciu klawisza / dotyku
@@ -134,6 +134,17 @@ _controlsOverlay.innerHTML = `
       border-radius:12px;padding:36px 52px;text-align:center;min-width:320px;
     ">
       <div style="font-size:28px;font-weight:900;color:#fff;letter-spacing:3px;margin-bottom:24px;">ZOMBIE RACER</div>
+      ${isTouchDevice ? `
+      <table style="margin:0 auto;border-collapse:collapse;font-size:17px;color:#ddd;">
+        <tr><td style="text-align:right;padding:6px 14px 6px 0;"><kbd style="${KBD}">Przechyl</kbd></td><td style="color:#aaa;">Skręt</td></tr>
+        <tr><td style="text-align:right;padding:6px 14px 6px 0;"><kbd style="${KBD}">Prawa góra</kbd></td><td style="color:#aaa;">THROTTLE</td></tr>
+        <tr><td style="text-align:right;padding:6px 14px 6px 0;"><kbd style="${KBD}">Prawa dół</kbd></td><td style="color:#aaa;">BACK</td></tr>
+        <tr><td style="text-align:right;padding:6px 14px 6px 0;"><kbd style="${KBD}">Lewa</kbd></td><td style="color:#aaa;">BRAKE</td></tr>
+        <tr><td style="text-align:right;padding:6px 14px 6px 0;"><kbd style="${KBD}">NA KOŁA</kbd></td><td style="color:#aaa;">Respawn lokalny</td></tr>
+        <tr><td style="text-align:right;padding:6px 14px 6px 0;"><kbd style="${KBD}">START</kbd></td><td style="color:#aaa;">Powrót na start</td></tr>
+      </table>
+      <div style="margin-top:28px;font-size:14px;color:#777;letter-spacing:1px;">GRAJ W POZIOMIE I DOTKNIJ EKRANU</div>
+      ` : `
       <table style="margin:0 auto;border-collapse:collapse;font-size:17px;color:#ddd;">
         <tr><td style="text-align:right;padding:6px 14px 6px 0;"><kbd style="${KBD}">↑ ↓ ← →</kbd></td><td style="color:#aaa;">Jedź</td></tr>
         <tr><td style="text-align:right;padding:6px 14px 6px 0;"><kbd style="${KBD}">Shift</kbd></td><td style="color:#aaa;">TURBO</td></tr>
@@ -142,6 +153,7 @@ _controlsOverlay.innerHTML = `
         <tr><td style="text-align:right;padding:6px 14px 6px 0;"><kbd style="${KBD}">Home</kbd></td><td style="color:#aaa;">Powrót na start</td></tr>
       </table>
       <div style="margin-top:28px;font-size:14px;color:#555;letter-spacing:1px;">NACIŚNIJ DOWOLNY KLAWISZ LUB KLIKNIJ</div>
+      `}
     </div>
   </div>
 `;
@@ -1381,7 +1393,7 @@ function gameLoop() {
     2 * (q.w * q.y + q.x * q.z),
     1 - 2 * (q.y * q.y + q.z * q.z)
   );
-  minimap.update(player.chassisBody.position, playerYaw, npcCars);
+  minimap?.update(player.chassisBody.position, playerYaw, npcCars);
 
   renderer.render(scene, camera);
 }
