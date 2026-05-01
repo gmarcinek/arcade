@@ -133,6 +133,10 @@ export class RemotePlayers {
 
     /** @type {(id:string, ip:string, pos:THREE.Vector3) => void} */
     this.onPlayerDied = null;
+    /** @type {(x:number, y:number, z:number, type:string) => void} */
+    this.onSmoke = null;
+    /** @type {(id:string, prevHp:number, newHp:number) => void} — wykrywa nieautomatyczny damage */
+    this.onHpDrop = null;
   }
 
   /** Zwraca Map<CANNON.Body, socketId> dla CollisionHandler. */
@@ -227,6 +231,7 @@ export class RemotePlayers {
       wheelRoll:  0,  // kumulowany kąt toczenia [rad]
       ready:      false,
       hp: 100, maxHp: 100,
+      smokeTimer: 0,
     });
   }
 
@@ -300,6 +305,11 @@ export class RemotePlayers {
       _drawHpBar(e.hpCtx, e.hpCanvas, e.hp, e.maxHp);
       e.hpTex.needsUpdate = true;
 
+      // Powiadom o spadku HP (do śledzenia last-hitter)
+      if (prevHp > e.hp && this.onHpDrop) {
+        this.onHpDrop(id, prevHp, e.hp);
+      }
+
       // Wykryj śmierć zdalnego gracza
       if (prevHp > 0 && e.hp <= 0 && this.onPlayerDied) {
         this.onPlayerDied(id, e.ip, e.curPos.clone());
@@ -335,6 +345,35 @@ export class RemotePlayers {
         }
         // Orientacja zawsze z serwera
         e.phyBody.quaternion.set(e.curQuat.x, e.curQuat.y, e.curQuat.z, e.curQuat.w);
+      }
+
+      // ── Dym uszkodzenia — proporcjonalny do utraty HP (jak u gracza lokalnego) ──────
+      // smokeLevel: 0 = brak dymu, 0.45 = biały, 0.62 = czarny, 0.78 = ogień
+      if (this.onSmoke && e.maxHp > 0) {
+        const smokeLevel = 1 - Math.max(0, e.hp) / e.maxHp;
+        if (smokeLevel > 0.45) {
+          e.smokeTimer += dt;
+          let smokeType, interval;
+          if (smokeLevel >= 0.78) {
+            smokeType = Math.random() > 0.45 ? 'fire' : 'black';
+            interval  = 0.04;
+          } else if (smokeLevel >= 0.62) {
+            smokeType = 'black';
+            interval  = 0.10;
+          } else {
+            smokeType = 'white';
+            interval  = 0.20;
+          }
+          if (e.smokeTimer >= interval) {
+            e.smokeTimer = 0;
+            const p = e.group.position;
+            // Dym z maski — przód auta w world space (offset Z=1.55 w układzie lokalnym)
+            const fwd = new THREE.Vector3(0, 0.5, 1.55).applyQuaternion(e.curQuat);
+            this.onSmoke(p.x + fwd.x, p.y + fwd.y, p.z + fwd.z, smokeType);
+          }
+        } else {
+          e.smokeTimer = 0;
+        }
       }
 
       // Wizualizacja śledzi ciało fizyczne — widać efekt pchnięcia podczas zderzenia

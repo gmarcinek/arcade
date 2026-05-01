@@ -384,7 +384,15 @@ export class Car {
     // Dzięki temu samoczynne palenie (i inne źródła utraty HP) nie są nadpisywane.
     const totalDmg = this.damageSystem.getTotalDamagePercent();
     const hpLost = Math.max(0, (totalDmg - prevTotalDmg) * this.maxHp);
-    this.hp = Math.max(0, this.hp - hpLost);
+
+    // Fallback: gdy damageSystem jest w pełni nasycony (wszystkie części = 1.0),
+    // delta zawsze = 0 i uderzenie nie zadawałoby obrażeń — auto byłoby niezniszczalne
+    // podczas fazy palenia. Stosujemy bezpośrednie odliczenie HP proporcjonalne do impulsu.
+    // rawDamage ~0.5–1.0 dla typowego trafienia → hpLost_fallback ~7–15 HP (skala 0.15)
+    const effectiveHpLost = (totalDmg >= 1.0 && hpLost === 0)
+      ? Math.min(rawDamage, 1.5) * this.maxHp * 0.15
+      : hpLost;
+    this.hp = Math.max(0, this.hp - effectiveHpLost);
 
     if (this.hp <= 0 && this.isAlive) {
       this.isAlive = false;

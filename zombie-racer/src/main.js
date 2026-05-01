@@ -22,7 +22,7 @@ import { MAP as defaultMap } from './world/mapData.js';
 import { MapEditor } from './world/MapEditor.js';
 import { WORLD_SIZE } from './constants.js';
 import suvModelUrl from './assets/suv.glb?url';
-import { CAMERA_OFFSET_BEHIND } from './physicsConfig.js';
+import { CAMERA_OFFSET_BEHIND, HP_TO_CREDIT, HP_TO_TIME } from './physicsConfig.js';
 import { AudioManager }      from './audio/AudioManager.js';
 import { MultiplayerClient } from './multiplayer/MultiplayerClient.js';
 import { RemotePlayers }     from './multiplayer/RemotePlayers.js';
@@ -43,6 +43,8 @@ let _mpInitZombies     = null;       // zombie z serwera przy wejściu
 let _mpInitBrokenTrees = null;       // drzewa złamane przed dołączeniem
 let _mpZombies         = null;       // Map<serverId, Zombie> — zombie zarządzane przez serwer
 const MATCH_MS     = 5 * 60 * 1000;
+/** Map<remoteId, timestamp> — timestamp mojego ostatniego trafienia tego gracza (last-hitter tracking) */
+const _remoteLastHitMs = new Map();
 
 // ── Wczytaj model auta (async, przed inicjalizacją) ───────────────
 try {
@@ -164,9 +166,8 @@ const _smokeOffset = new THREE.Vector3();
 
 
 
-const CREDITS_ZOMBIE    = 200;   // za rozjechanie zombie (było 50)
-const CREDITS_CAR_HIT   =  30;   // za uderzenie w NPC (per collision)
-const CREDITS_CAR_KILL  = 200;   // za zniszczenie NPC auta
+const CREDITS_ZOMBIE    = 200;   // za rozjechanie zombie
+const CREDITS_CAR_KILL  = 2000;  // za zniszczenie NPC/remote auta
 const CREDITS_HEAL_COST =  50;   // koszt leczenia
 const HEAL_AMOUNT       =  30;   // ile HP odzyskujemy
 const DESTROY_CAM_ORBIT_SHIFT = 5.5;
@@ -351,10 +352,10 @@ function _explodeNPC(npc, velX = 0, velY = 0, velZ = 0) {
   // Po wybuchu: popatrz o 1s dłużej przed powrotem do gracza.
   setTimeout(() => camCtrl.setState(CamState.PLAYER), 2500);
 
-  timer.addTime(80);
+  timer.addTime(60);
   carKills++;
   mpClient?.sendKill();
-  addCredits(CREDITS_CAR_KILL, '🚗💥 +80s', '#ffcc00');
+  addCredits(CREDITS_CAR_KILL, '🚗💥 +1:00', '#ffcc00');
   checkWinConditions();
   // brak respawnu po zabiciu — NPC odradzają się TYLKO po wyleceniu za planszę
 }
@@ -411,9 +412,12 @@ function onCarKill(npc) {
   }
 }
 
-function onCarHit(damageDealt) {
-  const earned = Math.max(1, Math.round(damageDealt));
-  addCredits(earned, '💥 hit', '#ffaa44');
+function onCarHit(damageDealt, npcMaxHp = 600) {
+  const earnedCr  = Math.max(1, Math.round(damageDealt * HP_TO_CREDIT));
+  const earnedSec = Math.round(damageDealt * HP_TO_TIME);
+  if (earnedSec > 0) timer.addTime(earnedSec);
+  const timeLabel = earnedSec > 0 ? ` +${earnedSec}s` : '';
+  addCredits(earnedCr, `💥 hit${timeLabel}`, '#ffaa44');
   audio.playOpponentHitStrong(Math.min(1.0, damageDealt / 20));
 }
 
@@ -1010,6 +1014,8 @@ function initWorld(mapData) {
   // MP: utwórz RemotePlayers PRZED CollisionHandler, żeby remoteBodyMap był prawidłowy
   if (mpClient) {
     remotePlayers = new RemotePlayers(scene, world, terrain);
+    // Dym uszkodzenia zdalnych aut — taki sam system jak u gracza lokalnego
+    remotePlayers.onSmoke = (x, y, z, type) => particles.spawnSmoke(x, y, z, type);
 
     // Dodaj graczy którzy byli już na serwerze w momencie wejścia
     if (_mpInitPlayers) {
@@ -1025,13 +1031,29 @@ function initWorld(mapData) {
     onTreeBreak: (treeIndex, impactDir, impactSpeed, launchSpeed) => {
       mpClient?.sendTreeBreak(treeIndex, impactDir.x, impactDir.z, impactSpeed, launchSpeed);
     },
-    onRemoteHit: (remoteId, damage) => {
+    onRemoteHit: (remoteId, damage, won) => {
       mpClient?.sendHitPlayer(remoteId, damage);
+      if (won) _remoteLastHitMs.set(remoteId, Date.now()); // nagroda tylko dla zwycięzcy
     },
   });
   _lastValidPos = { x: playerSpawn.x, z: playerSpawn.z };
 
   if (mpClient) {
+
+    // Last-hitter tracking: kto ostatni zadał nieautomatyczny damage zdalnemu graczowi
+    // Wpis 'me' ustawiany gdy lokalny gracz trafia; kasowany gdy inny gracz trafia jako nowszy
+    remotePlayers.onHpDrop = (id, prevHp, newHp) => {
+      const drop = prevHp - newHp;
+      const myHitAge = Date.now() - (_remoteLastHitMs.get(id) ?? 0);
+      if (myHitAge <= 1500 && drop > 0) {
+        // Mój damage dotarł do serwera i wrócił jako HP drop — nagradzaj
+        const e = remotePlayers._entries.get(id);
+        onCarHit(drop, e?.maxHp ?? 100);
+      } else if (drop > 3 && myHitAge > 1500) {
+        // Znaczny spadek spoza mojego okna → ktoś inny trafił → kasuj kill credit
+        _remoteLastHitMs.delete(id);
+      }
+    };
 
     // Callback: zdalny gracz zginął — pełna sekwencja eksplozji jak NPC
     remotePlayers.onPlayerDied = (id, ip, pos) => {
@@ -1054,6 +1076,13 @@ function initWorld(mapData) {
         0, 0, 0,
         (dx, dy, dz, type) => particles.spawnSmoke(dx, dy, dz, type)
       );
+
+      // Kill credit — jeśli ja zadałem ostatni nieautomatyczny damage
+      if (_remoteLastHitMs.has(id)) {
+        _remoteLastHitMs.delete(id);
+        timer.addTime(60);
+        addCredits(CREDITS_CAR_KILL, `💀 ${ip} +1:00`, '#ffcc00');
+      }
 
       hud.showMessage(`💥 ZABITY: ${ip}`, '#ff4400', 2500);
     };

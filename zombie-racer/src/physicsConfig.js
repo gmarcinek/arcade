@@ -206,29 +206,47 @@ export const DEFAULT_CONTACT_FRICTION = 0.3;
 // Zakres: [2 bardzo czule … 5 normalne … 12 bardzo odporne]
 export const BUMPER_SPEED_THRESHOLD = 15;
 
+// Minimalna energia zderzenia auto-auto [J = kg·m²/s²] ponizej ktorej kolizja
+// nie zadaje obrazen. Obliczana jako E = 0.5 * mu * relSpeed^2,
+// gdzie mu = masa zredukowana = (mA * mB) / (mA + mB).
+// Przy CAR_MASS=1750 kg i relSpeed=1.5 m/s: mu=875, E~984 J
+// Przy CAR_MASS=1750 kg i relSpeed=3.0 m/s: mu=875, E~3937 J
+// Zakres: [500 czule … 2000 normalne … 8000 bardzo odporne]
+export const CAR_ENERGY_THRESHOLD = 88000;
+
 // Mnoznik sily przy uderzeniu w budynek/drzewo/bariere.
 // damage_hp = (speed - threshold) * SCALE * DAMAGE_PER_IMPULSE * 100
 // Przy SCALE=400, predkosci 10 m/s: (10-5)*400*0.0008*100 = 16 HP
 // Zakres: [100 … 400 normalne … 1000 brutalne]
 export const BUILDING_IMPACT_SCALE = 400;
 
-// Mnoznik sily przy zderzeniu auto-auto.
+// Mnoznik sily przy zderzeniu auto-auto (NPC).
 // Zakres: [100 … 400 normalne … 1000 brutalne]
 export const CAR_IMPACT_SCALE = 500;
+
+// Mnoznik sily przy zderzeniu z graczem w multiplayerze.
+// +30% vs NPC — gracze ludzcy uderzają mocniej
+export const CAR_IMPACT_SCALE_REMOTE = 600;
 
 // Przelicznik impulsu na HP obrazen.
 // Zakres: [0.0001 bardzo odporne … 0.0008 normalne … 0.003 bardzo kruche]
 export const DAMAGE_PER_IMPULSE = 0.0002;
 
+// ── Nagrody za damage HP ─────────────────────────────────────────
+// Ile kredítów i sekund gracz dostaje za zadanie 1 HP damage
+// Zakres: [1 … 20 credits/HP], [1 … 20 sekund/HP]
+export const HP_TO_CREDIT = 5;   // creditów za 1 HP
+export const HP_TO_TIME   = 5;   // sekund za 1 HP
+
 // ── Launch pad pulse (żółte platformy) ───────────────────────────
 // Po kontakcie platforma czeka LAUNCH_PAD_CONTACT_DELAY, podnosi się o
 // LAUNCH_PAD_STROKE w czasie LAUNCH_PAD_RISE_TIME, opada i ładuje się przez
 // LAUNCH_PAD_RELOAD_TIME. Impuls wynika z jej ruchu (I = m * v).
-export const LAUNCH_PAD_CONTACT_DELAY = 0.015;   // 15 ms
+export const LAUNCH_PAD_CONTACT_DELAY = 0.017;   // 17 ms
 export const LAUNCH_PAD_STROKE = 0.01;          // 0.01 m
-export const LAUNCH_PAD_RISE_TIME = 0.03;       // 30 ms
+export const LAUNCH_PAD_RISE_TIME = 0.025;       // 25 ms
 export const LAUNCH_PAD_RELOAD_TIME = 1.0;      // 1 s
-export const LAUNCH_PAD_EFFECTIVE_MASS = 4;   // kg
+export const LAUNCH_PAD_EFFECTIVE_MASS = 4.5;   // kg
 
 // ── Dopalaacz (Shift) ─────────────────────────────────────────────
 // Czas [s] pełnego zbiornika dopalacza. Po wyczerpaniu trzeba odczekać na naładowanie.

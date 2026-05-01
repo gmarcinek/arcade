@@ -1,5 +1,5 @@
 import * as CANNON from 'cannon-es';
-import { BUMPER_SPEED_THRESHOLD, BUILDING_IMPACT_SCALE, CAR_IMPACT_SCALE, DAMAGE_PER_IMPULSE } from '../physicsConfig.js';
+import { BUMPER_SPEED_THRESHOLD, BUILDING_IMPACT_SCALE, CAR_IMPACT_SCALE, CAR_IMPACT_SCALE_REMOTE, DAMAGE_PER_IMPULSE, CAR_ENERGY_THRESHOLD } from '../physicsConfig.js';
 
 export class CollisionHandler {
   constructor(world, player, zombies, npcCars, timer, hud, audio, city, onZombieKill, onCarKill, onCarHit, options = {}) {
@@ -20,9 +20,20 @@ export class CollisionHandler {
 
     // Cooldown żeby speedup nie aplikował się co klatkę
     this._speedupCooldown = 0;
+    this._postStepImpulses = []; // korekty aplikowane PO solverze
 
     world.addEventListener('postStep', () => {
       this._limitNpcSpin();
+
+      // ── Korekty zderzeń aplikowane po solverze ──────────────────
+      // beginContact jest przed solverem → impulsy tam dodane są
+      // zjadane przez bouncing constraint. Tu już mamy końcowe v po
+      // bounce'ie i możemy je nadpisać/skorygować bez interferencji.
+      for (let i = 0; i < this._postStepImpulses.length; i++) {
+        const c = this._postStepImpulses[i];
+        c.body.applyImpulse(c.impulse, c.point);
+      }
+      this._postStepImpulses.length = 0;
     });
 
     world.addEventListener('beginContact', (event) => {
@@ -234,8 +245,8 @@ export class CollisionHandler {
       const relVelX = bodyA.velocity.x - bodyB.velocity.x;
       const relVelZ = bodyA.velocity.z - bodyB.velocity.z;
       const relSpeed = Math.sqrt(relVelX * relVelX + relVelZ * relVelZ);
-
-      if (relSpeed > 1.5) {
+      const _muNPC = (bodyA.mass * bodyB.mass) / (bodyA.mass + bodyB.mass);
+      if (0.5 * _muNPC * relSpeed * relSpeed > CAR_ENERGY_THRESHOLD) {
         // Normal: from player toward NPC = direction of impact on player's car
         const nx = bodyB.position.x - bodyA.position.x;
         const nz = bodyB.position.z - bodyA.position.z;
@@ -243,7 +254,17 @@ export class CollisionHandler {
         const contactNormal = { x: nx / len, y: 0, z: nz / len };
 
         const impactForce = relSpeed * 0.5;
-        this.player.receiveImpact(impactForce * CAR_IMPACT_SCALE, contactNormal);
+
+        // Skalowanie obrażeń gracza wg przewagi pędu:
+        // momP = pęd gracza [kg·m/s], momN = pęd NPC
+        // ratio > 1 → gracz szybszy → bierze mniej; ratio < 1 → NPC mocniejszy → gracz bierze więcej
+        // Wzór: selfScale = 1.5 - 0.5 * ratio  →  ratio=1: ×1.0 | ratio=2: ×0.5 | ratio=0.5: ×1.25
+        const momP = bodyA.mass * bodyA.velocity.length();
+        const momN = npc.chassisBody.mass * npc.chassisBody.velocity.length();
+        const momRatioPN = momP / Math.max(1, momN);
+        const selfScaleNPC = Math.max(0.2, Math.min(2.0, 1.5 - 0.5 * momRatioPN));
+
+        this.player.receiveImpact(impactForce * CAR_IMPACT_SCALE * selfScaleNPC, contactNormal);
         this.audio?.playHitWall(Math.min(1.0, relSpeed / 12));
         this._playScrapeFromBodies(bodyA, bodyB, contactNormal.x, contactNormal.z, 0.9);
 
@@ -274,8 +295,9 @@ export class CollisionHandler {
 
         if (npc.hp <= 0 && npc.isAlive) {
           this.onCarKill(npc);
-        } else {
-          this.onCarHit(actualDamage);
+        } else if (momRatioPN >= 1) {
+          // Nagroda tylko gdy gracz wygrał zderzenie (większy pęd)
+          this.onCarHit(actualDamage, npc.maxHp);
         }
 
         this.hud.showMessage(`🚗 -${actualDamage} HP`, '#ffcc44', 800);
@@ -286,76 +308,100 @@ export class CollisionHandler {
     // Player hits remote multiplayer car
     if (this._remoteBodyMap) {
       const remoteId = this._remoteBodyMap.get(bodyB);
-      if (remoteId) {
-        // ── Prędkość względna (różnica wektorów prędkości obu ciał) [m/s] ──
-        // relVel = v_A - v_B  →  jeśli jadę 20, on stoi: relVelX = 20
-        const relVelX = bodyA.velocity.x - bodyB.velocity.x;
-        const relVelZ = bodyA.velocity.z - bodyB.velocity.z;
-        // Skalar prędkości względnej — moduł wektora różnicy [m/s]
-        const relSpeed = Math.sqrt(relVelX * relVelX + relVelZ * relVelZ);
-        if (relSpeed > 1.5) {
-          // ── Impuls fizyczny (zmiana pędu) obsługiwany przez cannon-es ──────
-          // Oba ciała są DYNAMIC z tą samą masą → cannon-es stosuje materiał
-          // carCar (restitution=0.25) i liczy j = -(1+e)*v_rel_n / (1/mA + 1/mB)
-          // w punkcie styku. My TYLKO liczymy obrażenia i efekty audio/HUD.
+      if (!remoteId) return;
 
-          // Normalna zderzenia: jednostkowy wektor od B ku A (kierunek odrzutu A)
-          const nx = bodyA.position.x - bodyB.position.x;
-          const nz = bodyA.position.z - bodyB.position.z;
-          const len = Math.sqrt(nx * nx + nz * nz) || 1;
-          const cn = { x: nx / len, y: 0, z: nz / len }; // cn = contact normal
+      // ── Prędkość względna [m/s] ───────────────────────────────────────
+      const relVelX = bodyA.velocity.x - bodyB.velocity.x;
+      const relVelZ = bodyA.velocity.z - bodyB.velocity.z;
+      const relSpeed = Math.sqrt(relVelX * relVelX + relVelZ * relVelZ);
 
-          // ── Pęd = masa × prędkość [kg·m/s] ─────────────────────────────────
-          // p = m * v  →  im szybszy i cięższy, tym większy pęd
-          const momA = bodyA.mass * bodyA.velocity.length(); // pęd lokalnego gracza
-          const momB = bodyB.mass * bodyB.velocity.length(); // pęd zdalnego gracza (vel z serwera)
+      // ── Energia zderzenia: E = ½·μ·v_rel² [J] ─────────────────────────
+      // μ = masa zredukowana = (mA·mB)/(mA+mB)
+      const muRem = (bodyA.mass * bodyB.mass) / (bodyA.mass + bodyB.mass);
+      const collisionEnergy = 0.5 * muRem * relSpeed * relSpeed;
 
-          // Stosunek pędów: > 1 = atakujący ma przewagę; < 1 = obrońca ma przewagę
-          const momRatio = momA / Math.max(1, momB);
+      // ── Nadwyżka energii ponad próg = JEDYNE źródło obrażeń ───────────
+      // E ≤ THRESHOLD              → 0 dmg (gate)
+      // E = THRESHOLD + ε          → mikro-dmg (płynne wejście)
+      // E = 2·THRESHOLD            → ekwiwalent v_eff = sqrt(THRESHOLD/μ·2)
+      // Podniesienie progu odejmuje stałą od licznika → REALNA redukcja
+      // obrażeń, nie tylko przesunięcie momentu w którym zaczyna boleć.
+      const energyExcess = collisionEnergy - CAR_ENERGY_THRESHOLD;
+      if (energyExcess <= 0) return;
 
-          // Skala obrażeń zadawanych zdalnemu graczowi:
-          // +2% za każdą jednostkę przewagi pędu, max ×3
-          const outScale = Math.max(0.1, Math.min(3, 1 + (momRatio - 1) * 0.02));
+      // Normalna zderzenia: jednostkowy wektor od B ku A (kierunek odrzutu A)
+      const nx = bodyA.position.x - bodyB.position.x;
+      const nz = bodyA.position.z - bodyB.position.z;
+      const len = Math.sqrt(nx * nx + nz * nz) || 1;
+      const cn = { x: nx / len, y: 0, z: nz / len };
 
-          // Skala obrażeń własnych lokalnego gracza:
-          // przy przewadze pędu (momRatio > 1) bierze mniej — bo "przebija przez"
-          const selfScale = Math.max(0, Math.min(2, 1 - (momRatio - 1) * 0.5));
+      // ── Pęd p = m·|v| [kg·m/s] ────────────────────────────────────────
+      const momA = bodyA.mass * bodyA.velocity.length();
+      const momB = bodyB.mass * bodyB.velocity.length();
+      const momRatio = momA / Math.max(1, momB);
 
-          // ── Impuls uszkodzenia (nie impuls fizyczny!) ────────────────────────
-          // "impact" to skalar używany przez receiveImpact do przeliczenia
-          // na obrażenia HP przez DAMAGE_PER_IMPULSE. Jednostka: [impulse-units]
-          // impact ~ 0.5 * relSpeed * CAR_IMPACT_SCALE  (proporcjonalne do prędkości względnej)
-          const impact = relSpeed * 0.5 * CAR_IMPACT_SCALE;
+      // ── Bazowy impuls obrażeń WPROST z nadwyżki energii ───────────────
+      // E_excess [J] → ekwiwalent prędkości v_eff [m/s]:
+      //   v_eff = sqrt(2·E_excess / μ)
+      // Damage = ½·v_eff·CAR_IMPACT_SCALE_REMOTE — te same jednostki co
+      // dotychczas, ale jasno widać że rośnie ~sqrt(E_excess), a próg
+      // wycina kawałek krzywej u dołu zamiast ją tylko włączać/wyłączać.
+      const vEff = Math.sqrt(2 * energyExcess / Math.max(1, muRem));
+      const baseImpact = 0.5 * vEff * CAR_IMPACT_SCALE_REMOTE;
 
-          // Korekta przewagi pędu: ciało z większym pędem dostaje +5% impulsu
-          // ponad to co wyliczył cannon-es z czystej fizyki równych mas.
-          // momA > momB → lokalny gracz "przebija" mocniej → dodatkowy impuls
-          //               w kierunku -cn (kontynuuje ruch, hamuje mniej)
-          // momB > momA → zdalny gracz bije mocniej → lokalny gracz dostaje
-          //               dodatkowy impuls w +cn (większy odrzut)
-          // Wielkość korekty = 5% różnicy pędów [kg·m/s → N·s]
-          const momDiff = momA - momB; // > 0: A ma przewagę; < 0: B ma przewagę
-          if (Math.abs(momDiff) > 1) {
-            const extraJ = Math.abs(momDiff) * -0.05;
-            // momA > momB: push A w -cn (zmniejsza odrzut), momB > momA: push A w +cn (zwiększa odrzut)
-            const dir = momDiff > 0 ? -1 : 1;
-            bodyA.applyImpulse(
-              new CANNON.Vec3(cn.x * dir * extraJ, 0, cn.z * dir * extraJ),
-              new CANNON.Vec3(0, 0, 0)
-            );
-          }
+      // ── Skale przewagi pędu (NIE energia — pęd) ──────────────────────
+      // outScale: dmg zadawany zdalnemu;  ratio=1: ×1.0 | ratio=2: ×1.02 | max ×3
+      // selfScale: dmg przyjmowany;       ratio=1: ×1.0 | ratio=2: ×0.5 | ratio=0.5: ×1.25
+      const outScale  = Math.max(0.1, Math.min(3.0, 1 + (momRatio - 1) * 0.02));
+      const selfScale = Math.max(0.2, Math.min(2.0, 1.5 - 0.5 * momRatio));
 
-          // Wyślij obrażenia zdalnemu graczowi przez serwer (skalowane przewagą pędu)
-          this._onRemoteHit?.(remoteId, impact * outScale);
-          // Lokalny gracz też bierze obrażenia — proporcjonalne do NIEKORZYŚCI pędu
-          if (selfScale > 0.05) this.player.receiveImpact(impact * selfScale, cn);
-          this.audio?.playHitWall(Math.min(1, relSpeed / 12));
-          this._playScrapeFromBodies(bodyA, bodyB, cn.x, cn.z, 0.9);
-          const advantage = momRatio >= 1 ? `+${((outScale - 1) * 100).toFixed(0)}%` : `−${((1 - outScale) * 100).toFixed(0)}%`;
-          this.hud.showMessage(`🚗 UDERZENIE ${advantage}`, momRatio >= 1 ? '#44ff88' : '#ff6644', 700);
-        }
-        return;
+      // ── Korekta impulsu fizycznego (NIE damage) ──────────────────────
+      // Niewielka domieszka 5% różnicy pędów do tego co policzy cannon-es,
+      // żeby cięższy/szybszy gracz odbijał się mniej, a słabszy bardziej.
+      // ── Korekta zachowania pędu (po-solverowa) ────────────────────────
+      // Remote body jest pseudo-kinematic (vel z serwera, cannon traktuje
+      // jak ścianę o nieskończonej masie). Bez tej korekty lokalny gracz
+      // odbija się jak od muru: v' = +v·e zamiast fizycznego v' = -v·(1-e)/2
+      // dla równych mas → przy 200 km/h gracz cofa się ~14 m/s zamiast
+      // kontynuować w przód z ~21 m/s.
+      //
+      // Składowa prędkości względnej wzdłuż normalnej kontaktu:
+      const v_n_A = bodyA.velocity.x * cn.x + bodyA.velocity.z * cn.z;
+      const v_n_B = bodyB.velocity.x * cn.x + bodyB.velocity.z * cn.z;
+      const approachSpeed = Math.max(0, v_n_B - v_n_A); // dodatnia gdy się zbliżają
+
+      if (approachSpeed > 0.5) {
+        // Cel: zmienić ΔvA·cn o -approachSpeed·(1+e)/2 (push w -cn = do przodu)
+        // Skalujemy przewagą pędu: gracz z większym pędem odbija się jeszcze
+        // mniej (zachowuje więcej pędu), słabszy odbija się trochę bardziej.
+        // Bazowa korekta odpowiada równym masom; momRatio = 1 daje czyste 1.0.
+        const RESTITUTION = 0.20; // musi pasować do material carCar
+        const advantageBoost = Math.max(0.7, Math.min(1.4, 0.85 + 0.15 * momRatio));
+        const correctionMag = bodyA.mass * approachSpeed * (1 + RESTITUTION) / 2 * advantageBoost;
+
+        this._postStepImpulses.push({
+          body: bodyA,
+          impulse: new CANNON.Vec3(-cn.x * correctionMag, 0, -cn.z * correctionMag),
+          point: new CANNON.Vec3(0, 0, 0)
+        });
       }
+
+      // ── OBRAŻENIA: oba kierunki ze WSPÓLNEGO baseImpact ──────────────
+      // → próg energii działa identycznie na remote i na self
+      const dmgRemote = baseImpact * outScale;
+      const dmgSelf   = baseImpact * selfScale;
+
+      this._onRemoteHit?.(remoteId, dmgRemote, momRatio >= 1);
+      if (dmgSelf > 0.05) this.player.receiveImpact(dmgSelf, cn);
+
+      // Audio / HUD
+      this.audio?.playHitWall(Math.min(1, relSpeed / 12));
+      this._playScrapeFromBodies(bodyA, bodyB, cn.x, cn.z, 0.9);
+      const advText = momRatio >= 1
+        ? `+${((outScale - 1) * 100).toFixed(0)}%`
+        : `−${((1 - outScale) * 100).toFixed(0)}%`;
+      this.hud.showMessage(`🚗 UDERZENIE ${advText}`, momRatio >= 1 ? '#44ff88' : '#ff6644', 700);
+      return;
     }
   }
 }
