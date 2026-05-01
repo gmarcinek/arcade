@@ -287,25 +287,67 @@ export class CollisionHandler {
     if (this._remoteBodyMap) {
       const remoteId = this._remoteBodyMap.get(bodyB);
       if (remoteId) {
+        // ── Prędkość względna (różnica wektorów prędkości obu ciał) [m/s] ──
+        // relVel = v_A - v_B  →  jeśli jadę 20, on stoi: relVelX = 20
         const relVelX = bodyA.velocity.x - bodyB.velocity.x;
         const relVelZ = bodyA.velocity.z - bodyB.velocity.z;
+        // Skalar prędkości względnej — moduł wektora różnicy [m/s]
         const relSpeed = Math.sqrt(relVelX * relVelX + relVelZ * relVelZ);
         if (relSpeed > 1.5) {
-          // Impuls fizyczny obsługiwany przez cannon-es (oba DYNAMIC, równa masa, materiał carCar).
-          // Tutaj liczymy tylko obrażenia i efekty audio/HUD.
+          // ── Impuls fizyczny (zmiana pędu) obsługiwany przez cannon-es ──────
+          // Oba ciała są DYNAMIC z tą samą masą → cannon-es stosuje materiał
+          // carCar (restitution=0.25) i liczy j = -(1+e)*v_rel_n / (1/mA + 1/mB)
+          // w punkcie styku. My TYLKO liczymy obrażenia i efekty audio/HUD.
+
+          // Normalna zderzenia: jednostkowy wektor od B ku A (kierunek odrzutu A)
           const nx = bodyA.position.x - bodyB.position.x;
           const nz = bodyA.position.z - bodyB.position.z;
           const len = Math.sqrt(nx * nx + nz * nz) || 1;
-          const cn = { x: nx / len, y: 0, z: nz / len };
+          const cn = { x: nx / len, y: 0, z: nz / len }; // cn = contact normal
 
-          const momA = bodyA.mass * bodyA.velocity.length();
-          const momB = bodyB.mass * bodyB.velocity.length();
+          // ── Pęd = masa × prędkość [kg·m/s] ─────────────────────────────────
+          // p = m * v  →  im szybszy i cięższy, tym większy pęd
+          const momA = bodyA.mass * bodyA.velocity.length(); // pęd lokalnego gracza
+          const momB = bodyB.mass * bodyB.velocity.length(); // pęd zdalnego gracza (vel z serwera)
+
+          // Stosunek pędów: > 1 = atakujący ma przewagę; < 1 = obrońca ma przewagę
           const momRatio = momA / Math.max(1, momB);
+
+          // Skala obrażeń zadawanych zdalnemu graczowi:
+          // +2% za każdą jednostkę przewagi pędu, max ×3
           const outScale = Math.max(0.1, Math.min(3, 1 + (momRatio - 1) * 0.02));
+
+          // Skala obrażeń własnych lokalnego gracza:
+          // przy przewadze pędu (momRatio > 1) bierze mniej — bo "przebija przez"
           const selfScale = Math.max(0, Math.min(2, 1 - (momRatio - 1) * 0.5));
 
+          // ── Impuls uszkodzenia (nie impuls fizyczny!) ────────────────────────
+          // "impact" to skalar używany przez receiveImpact do przeliczenia
+          // na obrażenia HP przez DAMAGE_PER_IMPULSE. Jednostka: [impulse-units]
+          // impact ~ 0.5 * relSpeed * CAR_IMPACT_SCALE  (proporcjonalne do prędkości względnej)
           const impact = relSpeed * 0.5 * CAR_IMPACT_SCALE;
+
+          // Korekta przewagi pędu: ciało z większym pędem dostaje +5% impulsu
+          // ponad to co wyliczył cannon-es z czystej fizyki równych mas.
+          // momA > momB → lokalny gracz "przebija" mocniej → dodatkowy impuls
+          //               w kierunku -cn (kontynuuje ruch, hamuje mniej)
+          // momB > momA → zdalny gracz bije mocniej → lokalny gracz dostaje
+          //               dodatkowy impuls w +cn (większy odrzut)
+          // Wielkość korekty = 5% różnicy pędów [kg·m/s → N·s]
+          const momDiff = momA - momB; // > 0: A ma przewagę; < 0: B ma przewagę
+          if (Math.abs(momDiff) > 1) {
+            const extraJ = Math.abs(momDiff) * -0.05;
+            // momA > momB: push A w -cn (zmniejsza odrzut), momB > momA: push A w +cn (zwiększa odrzut)
+            const dir = momDiff > 0 ? -1 : 1;
+            bodyA.applyImpulse(
+              new CANNON.Vec3(cn.x * dir * extraJ, 0, cn.z * dir * extraJ),
+              new CANNON.Vec3(0, 0, 0)
+            );
+          }
+
+          // Wyślij obrażenia zdalnemu graczowi przez serwer (skalowane przewagą pędu)
           this._onRemoteHit?.(remoteId, impact * outScale);
+          // Lokalny gracz też bierze obrażenia — proporcjonalne do NIEKORZYŚCI pędu
           if (selfScale > 0.05) this.player.receiveImpact(impact * selfScale, cn);
           this.audio?.playHitWall(Math.min(1, relSpeed / 12));
           this._playScrapeFromBodies(bodyA, bodyB, cn.x, cn.z, 0.9);

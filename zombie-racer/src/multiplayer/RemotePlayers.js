@@ -209,6 +209,9 @@ export class RemotePlayers {
     // CCD — lokalny gracz nie przeleci przez remote przy dużej prędkości
     phyBody.ccdSpeedThreshold = 0.1;
     phyBody.ccdIterations     = 10;
+    // Ustaw pod ziemią — brak prawdziwej pozycji przed pierwszym updateState().
+    // Zapobiega kolizjom z graczem zanim ciało zostanie ustawione na właściwym miejscu.
+    phyBody.position.set(0, -1000, 0);
     this._world.addBody(phyBody);
 
     this._entries.set(id, {
@@ -281,6 +284,13 @@ export class RemotePlayers {
         e.curQuat.copy(e.tgtQuat);
         e.group.position.copy(e.curPos);
         e.group.quaternion.copy(e.curQuat);
+        // Snapshotuj ciało fizyczne bezpośrednio — bez tego przez jedną klatkę
+        // prędkość korekcji byłaby (cel - (-1000)) * 30 = ogromny impuls.
+        if (e.phyBody) {
+          e.phyBody.position.set(e.curPos.x, e.curPos.y, e.curPos.z);
+          e.phyBody.velocity.set(0, 0, 0);
+          e.phyBody.quaternion.set(e.curQuat.x, e.curQuat.y, e.curQuat.z, e.curQuat.w);
+        }
         e.ready = true;
       }
 
@@ -306,51 +316,55 @@ export class RemotePlayers {
       if (!e.ready) continue;
       e.curPos.lerp(e.tgtPos, alpha);
       e.curQuat.slerp(e.tgtQuat, alpha);
-      e.group.position.copy(e.curPos);
-      e.group.quaternion.copy(e.curQuat);
 
-      // Synchronizuj ciało fizyczne — pozycja/prędkość z serwera (nadpisuje wynik kroku fizyki)
+      // Napędzaj ciało ku pozycji serwerowej przez prędkość (nie teleport).
+      // Gdy ciało jest w KONTAKCIE z graczem — cannon-es sam liczy impuls 2-ciałowy
+      // (równa masa, poprawny transfer pędu, punkt styku). Nie ingerujemy.
+      // Gdy brak kontaktu — kierujemy prędkością ku pozycji serwerowej.
       if (e.phyBody) {
-        e.phyBody.position.set(e.curPos.x, e.curPos.y, e.curPos.z);
+        const inContact = _isBodyInContact(this._world, e.phyBody);
+        if (!inContact) {
+          const p = e.phyBody.position;
+          e.phyBody.velocity.set(
+            e.tgtVel.x + (e.curPos.x - p.x) * 30,
+            e.tgtVel.y + (e.curPos.y - p.y) * 60,
+            e.tgtVel.z + (e.curPos.z - p.z) * 30
+          );
+          e.phyBody.angularVelocity.set(0, 0, 0);
+          e.phyBody.wakeUp();
+        }
+        // Orientacja zawsze z serwera
         e.phyBody.quaternion.set(e.curQuat.x, e.curQuat.y, e.curQuat.z, e.curQuat.w);
-        e.phyBody.velocity.set(e.tgtVel.x, e.tgtVel.y, e.tgtVel.z);
-        e.phyBody.angularVelocity.set(0, 0, 0); // zeruj obrót — sterujemy z serwera
       }
+
+      // Wizualizacja śledzi ciało fizyczne — widać efekt pchnięcia podczas zderzenia
+      const vPos = e.phyBody ? e.phyBody.position : e.curPos;
+      e.group.position.set(vPos.x, vPos.y, vPos.z);
+      e.group.quaternion.copy(e.curQuat);
 
       // ── Koła: toczenie + skręt ────────────────────────────────
       const speed = e.tgtVel.length();
       e.wheelRoll += (speed / W_R) * dt;
 
-      // Oblicz kąt skrętu: różnica kąta ruchu vs. kierunek auta
       let steer = 0;
       if (speed > 0.5) {
-        // wektor prędkości w local-space auta
-        const invQ    = e.curQuat.clone().invert();
+        const invQ     = e.curQuat.clone().invert();
         const velWorld = e.tgtVel.clone().normalize();
         const velLocal = velWorld.applyQuaternion(invQ);
-        // velLocal.z < 0 = do przodu, velLocal.x = lewo/prawo
         steer = Math.atan2(-velLocal.x, -velLocal.z);
         steer = Math.max(-0.55, Math.min(0.55, steer));
       }
 
-      // Koła terenu: wysokość pod każdą parą kół
       const T = this._terrain;
-      const qw = e.curQuat;
       for (let i = 0; i < e.wheelGroups.length; i++) {
-        const wg  = e.wheelGroups[i];
+        const wg   = e.wheelGroups[i];
         const wPos = wg.position.clone();
-        // Sprawdź wysokość terenu pod kołem (world-space)
-        const wx = e.curPos.x + wPos.x * (e.curQuat.w < 0 ? -1 : 1); // aproksymacja
-        const wz = e.curPos.z + wPos.z;
-        const terrainY = T ? T.getHeightAt(wx, wz) : e.curPos.y;
-        // Zakładamy chassis jest na wysokości ok. 0.85m nad terenem
-        // Zawieszenie: wheel Y w local-space = terrainY - carY + W_R
-        const suspension = terrainY - e.curPos.y + W_R;
+        const wx = vPos.x + wPos.x * (e.curQuat.w < 0 ? -1 : 1);
+        const wz = vPos.z + wPos.z;
+        const terrainY = T ? T.getHeightAt(wx, wz) : vPos.y;
+        const suspension = terrainY - vPos.y + W_R;
         wg.position.y = Math.max(-0.25, Math.min(0.25, suspension - 0.45));
-
-        // Toczenie (oś X)
         wg.rotation.x = e.wheelRoll;
-        // Skręt tylko przednie koła (i=0,1)
         if (i < 2) wg.rotation.y = steer;
       }
     }
@@ -362,6 +376,14 @@ export class RemotePlayers {
 }
 
 // ── Helpers ──────────────────────────────────────────────────────
+
+/** Czy ciało uczestniczy w aktywnym kontakcie (world.contacts po world.step). */
+function _isBodyInContact(world, body) {
+  for (const c of world.contacts) {
+    if (c.bi === body || c.bj === body) return true;
+  }
+  return false;
+}
 
 const _COLORS = [
   0xff4400, 0x0088ff, 0xffcc00, 0xcc00ff,
