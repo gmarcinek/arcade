@@ -13,7 +13,9 @@ export const CFG = {
   forwardSpeed:        65,   // prędkość przy wciśniętym ↑/W
   minSpeed:             12,   // min prędkość przy wciśniętym ↓/S (hamowanie)
   boostSpeed:          90,
-  acceleration:        5,
+  acceleration:        5,   // boost spring-to-speed coefficient (kept for boost only)
+  speedForce:          20,  // throttle / brake force (m/s²) — mirrors steer physics
+  speedFriction:       0.2, // rolling resistance — coast ~3 s back to baseSpeed
   steerAcceleration:   5.5,
   maxThetaVelocity:    4.8,
   groundedFriction:    7.5,
@@ -62,7 +64,7 @@ export const CAM_MAX_VEL       = 4.4;
 export const CAM_FOV_NORMAL    = 66;
 export const CAM_FOV_BOOST     = 120;
 export const CAM_FOV_ENTER_S   = 3.0;
-export const CAM_FOV_EXIT_S    = 1.2;
+export const CAM_FOV_EXIT_S    = 3.0;
 export const CAM_HEIGHT_NORMAL = 4.0;
 export const CAM_HEIGHT_BOOST  = 2.0;
 export const CAM_DIST_NORMAL   = 9;   // domyślna odległość

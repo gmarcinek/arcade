@@ -4,12 +4,6 @@ import { state } from './state.js';
 import { input } from './input.js';
 import { showTrick } from './ui.js';
 
-// Prędkość docelowa na podstawie inputu (brak auto-przyspieszenia)
-function targetBaseSpeed() {
-  if (input.up)   return CFG.forwardSpeed;
-  if (input.down) return CFG.minSpeed;
-  return CFG.baseSpeed;
-}
 
 function evaluateLanding() {
   state.grounded = true;
@@ -48,17 +42,20 @@ export function updatePhysics(dt, left, right, jumpPressed, boostHeld) {
     return;
   }
 
-  const targetSpeed = boostHeld && state.boost > 0.02
-    ? CFG.boostSpeed
-    : targetBaseSpeed();
-  state.speed += (targetSpeed - state.speed) * CFG.acceleration * dt;
-
+  // Force-based forward speed — mirrors lateral steering physics
+  // Boost: retains fast spring-snap (feels intentionally snappy)
   if (boostHeld && state.boost > 0.02) {
+    state.speed += (CFG.boostSpeed - state.speed) * CFG.acceleration * dt;
     state.boost       = Math.max(0, state.boost - CFG.boostDrain * dt);
     state.boostActive = true;
   } else {
     state.boost       = Math.min(1, state.boost + CFG.boostRegen * dt);
     state.boostActive = false;
+    // Newton: throttle/brake apply force; rolling friction pulls toward cruise speed
+    const throttle = (input.up ? 1 : 0) - (input.down ? 1 : 0);
+    state.speed += throttle * CFG.speedForce * dt;
+    state.speed += (CFG.baseSpeed - state.speed) * CFG.speedFriction * dt;
+    state.speed  = THREE.MathUtils.clamp(state.speed, 0, CFG.forwardSpeed + 5);
   }
 
   const dz = state.speed * dt;
