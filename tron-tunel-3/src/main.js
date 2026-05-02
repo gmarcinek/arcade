@@ -4,6 +4,7 @@ import { state } from './state.js';
 import { input, setupInput } from './input.js';
 import { createTunnel, getArcHalfAngle } from './tunnel.js';
 import { createBall, updateCarVisuals } from './ball.js';
+import { createSparks, updateSparks, clearSparks } from './sparks.js';
 import { updatePhysics } from './physics.js';
 import { updateCamera } from './camera.js';
 import { updateHUD, applyFlash, applyDanger, showTrick, endGame } from './ui.js';
@@ -40,6 +41,9 @@ scene.add(new THREE.PointLight(0x0080ff, 2.5, 40));
 const ballObjects = createBall(scene);
 const { carGroup } = ballObjects;
 
+// ---- Sparks ----
+createSparks(scene);
+
 // ---- Input ----
 setupInput();
 
@@ -70,6 +74,7 @@ function startGame() {
     o.traverse(c => { if (c.geometry) c.geometry.dispose(); if (c.material) c.material.dispose(); });
   }
   state.obstacles.length = 0;
+  clearSparks();
 
   overlay.style.display = 'none';
   state.gameRunning = true;
@@ -85,6 +90,7 @@ function tick(dt) {
   if (input.jumpConsumed) input.jumpConsumed = false;
 
   updateCarVisuals(dt, ballObjects, renderer, scene);
+  updateSparks(dt);
 
   if (state.gameRunning && !state.crashed) {
     const tNorm = state.carTheta > Math.PI ? state.carTheta - Math.PI * 2 : state.carTheta;

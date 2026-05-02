@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { BALL_MAT, BALL_PHYS, CFG, TUNNEL_R, CAR_OFF } from './config.js';
 import { state } from './state.js';
+import { emitBounce } from './sparks.js';
 
 export function getBasis(theta) {
   return {
@@ -76,6 +77,12 @@ export function updateCarVisuals(dt, ballObjects, renderer, scene) {
     basis.surfaceOut.y * (r - 0.65),
     state.carZ,
   );
+
+  // Emit sparks on hard bounce (physics sets bounceImpact > 0 this frame)
+  if (state.bounceImpact > 0) {
+    emitBounce(carGroup.position, basis.surfaceOut, state.speed, state.bounceImpact);
+    state.bounceImpact = 0;
+  }
 
   const matrix = new THREE.Matrix4().makeBasis(basis.right, basis.up, basis.forward);
   carGroup.quaternion.setFromRotationMatrix(matrix);

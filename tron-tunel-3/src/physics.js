@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { CFG, BALL_PHYS, BASE_SPEED_START } from './config.js'; // BASE_SPEED_START used only for crash fallback
+import { CFG, BALL_PHYS } from './config.js';
 import { state } from './state.js';
 import { input } from './input.js';
 import { showTrick } from './ui.js';
@@ -124,6 +124,7 @@ export function updatePhysics(dt, left, right, jumpPressed, boostHeld) {
       if (!state.crashed && impact * state.restitutionCurrent > BALL_PHYS.bounceThreshold) {
         state.radialVelocity = impact * state.restitutionCurrent;
         state.grounded       = false;
+        state.bounceImpact   = impact;   // triggers spark emission in ball.js
       } else {
         state.radialVelocity = 0;
         state.grounded       = true;

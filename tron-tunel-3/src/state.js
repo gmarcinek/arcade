@@ -46,6 +46,7 @@ export const state = {
   ballSpinAngle: 0,
   squashTimer:   0,
   frameCount:    0,
+  bounceImpact:  0,   // set by physics on hard bounce; read+cleared by ball visuals
 
   // --- obstacles ---
   obstacles: [],

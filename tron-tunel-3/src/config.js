@@ -11,7 +11,7 @@ export const BASE_SPEED_START = 32;
 export const CFG = {
   baseSpeed:           42,   // prędkość gdy brak inputu
   forwardSpeed:        65,   // prędkość przy wciśniętym ↑/W
-  minSpeed:             8,   // min prędkość przy wciśniętym ↓/S (hamowanie)
+  minSpeed:             12,   // min prędkość przy wciśniętym ↓/S (hamowanie)
   boostSpeed:          90,
   acceleration:        5,
   steerAcceleration:   5.5,

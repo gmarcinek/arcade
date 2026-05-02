@@ -21,45 +21,67 @@ export const tunnelFragmentShader = /* glsl */`
   }
 
   void main() {
-    // angle=0 at tunnel bottom (where car starts, carTheta=0)
     float angle    = atan(vWorld.x, -vWorld.y);
     float absAngle = abs(angle);
-    float localArcH = arcHalfAtZ(vWorld.z);
-    float inSafe    = step(absAngle, localArcH);
+    float arcH     = arcHalfAtZ(vWorld.z);
+    float inSafe   = step(absAngle, arcH);
+    float edgeDist = abs(absAngle - arcH);
 
-    // base colour: bright inside arc, dark danger outside
-    vec3 col = mix(vec3(0.07, 0.01, 0.01), vec3(0.045, 0.065, 0.115), inSafe);
+    // Depth fade — closer = brighter
+    float dz        = abs(vWorld.z - playerZ);
+    float depthFade = 0.55 + 0.45 * exp(-dz * 0.009);
 
-    // panel ridges (120 per circle = 1 per lane)
-    float panel = abs(sin(angle * 60.0));
-    col += smoothstep(0.90, 1.0, panel) * vec3(0.14, 0.20, 0.30) * (0.25 + inSafe * 0.75);
+    // ---- base colour: dark navy (safe) / dark maroon (danger) ----
+    vec3 col = mix(vec3(0.062, 0.010, 0.005), vec3(0.014, 0.022, 0.048), inSafe);
+    // Polished sheen: subtle highlight near bottom (angle ≈ 0)
+    float sheen = pow(max(0.0, 1.0 - absAngle * 1.6), 4.0);
+    col += sheen * vec3(0.020, 0.042, 0.085) * inSafe;
+    col *= depthFade;
 
-    // longitudinal ring seams
-    float ring = abs(sin(vWorld.z * 0.7854));
-    col += smoothstep(0.96, 1.0, ring) * vec3(0.10, 0.18, 0.30) * inSafe;
+    // ---- fine angular grid: 120 divisions ----
+    float fineAng = smoothstep(0.91, 1.0, abs(sin(angle * 60.0)));
+    col += fineAng * vec3(0.0, 0.28, 0.52) * (0.22 + inSafe * 0.78) * depthFade;
 
-    // 8 cyan running-light strips (safe zone only)
-    float strip = step(0.985, abs(sin(angle * 4.0)));
-    float pulse = sin(vWorld.z * 0.55 - time * 6.0);
-    pulse = smoothstep(0.25, 1.0, pulse);
-    col += strip * inSafe * vec3(0.0, 0.75, 1.0) * (0.45 + pulse * 0.7);
+    // ---- ring seams: every ~4 m ----
+    float ringSeam = smoothstep(0.94, 1.0, abs(sin(vWorld.z * 0.7854)));
+    col += ringSeam * vec3(0.0, 0.28, 0.52) * inSafe * depthFade;
 
-    // amber dot lights
-    float aDot = step(0.992, abs(sin(angle * 16.0 + 0.4)));
-    float zDot = step(0.94, abs(sin(vWorld.z * 1.3)));
-    col += aDot * zDot * inSafe * vec3(1.0, 0.55, 0.08) * 0.9;
+    // ---- coarse ring seams: every ~16 m ----
+    float ringCoarse = smoothstep(0.91, 1.0, abs(sin(vWorld.z * 0.196)));
+    col += ringCoarse * vec3(0.0, 0.50, 0.85) * inSafe * depthFade * 0.75;
 
-    // scrolling chevrons on the floor
-    float ground = smoothstep(0.7, 0.0, absAngle) * inSafe;
-    float chev   = abs(sin(vWorld.z * 0.85 - time * 5.0));
-    col += ground * step(0.90, chev) * vec3(0.0, 0.85, 1.0) * 0.55;
+    // ---- 8 bright cyan running-light strips ----
+    float strip = step(0.984, abs(sin(angle * 4.0)));
+    float pulse = 0.5 + 0.5 * sin(vWorld.z * 0.55 - time * 6.5);
+    col += strip * inSafe * vec3(0.06, 1.0, 1.0) * (0.55 + pulse * 0.95) * depthFade;
 
-    // orange warning glow at arc boundary
-    float edgeDist = abs(absAngle - localArcH);
-    col += smoothstep(0.14, 0.0, edgeDist) * vec3(1.0, 0.38, 0.0) * 1.1;
+    // ---- mirror-specular on the 8 strips (polished surface glint) ----
+    col += strip * sheen * inSafe * vec3(0.25, 0.65, 1.0) * 0.30 * depthFade;
 
-    // depth fade
-    col *= 0.85 + 0.15 * smoothstep(80.0, 0.0, abs(vWorld.z - playerZ - 30.0));
+    // ---- amber rectangular panel tiles ----
+    float tileAng  = step(0.955, abs(sin(angle * 22.0 + 0.5)));
+    float tileZ    = step(0.920, abs(sin(vWorld.z * 0.85)));
+    float tilePulse = 0.72 + 0.28 * sin(time * 0.4 + vWorld.z * 0.1);
+    col += tileAng * tileZ * inSafe * vec3(1.0, 0.52, 0.07) * 1.35 * tilePulse * depthFade;
+
+    // ---- cyan tile variant ----
+    float tileAng2 = step(0.968, abs(sin(angle * 38.0 + 1.8)));
+    float tileZ2   = step(0.948, abs(sin(vWorld.z * 1.85 - time * 0.11)));
+    col += tileAng2 * tileZ2 * inSafe * vec3(0.1, 0.85, 1.0) * 0.95 * depthFade;
+
+    // ---- scrolling chevrons on floor ----
+    float ground = smoothstep(0.55, 0.0, absAngle) * inSafe;
+    float chev   = abs(sin(vWorld.z * 0.85 - time * 5.5));
+    col += ground * step(0.86, chev) * vec3(0.0, 0.95, 1.0) * 0.85 * depthFade;
+
+    // ---- danger zone: dim orange grid ----
+    float dangerGrid = smoothstep(0.91, 1.0, abs(sin(angle * 60.0))) * (1.0 - inSafe) * 0.45;
+    col += dangerGrid * vec3(0.55, 0.10, 0.02) * depthFade;
+
+    // ---- orange boundary glow ----
+    col += smoothstep(0.025, 0.0, edgeDist) * vec3(1.0, 0.92, 0.5) * 5.0 * depthFade;
+    col += smoothstep(0.20,  0.0, edgeDist) * inSafe       * vec3(1.0, 0.40, 0.0) * 1.9 * depthFade;
+    col += smoothstep(0.28,  0.0, edgeDist) * (1.0-inSafe) * vec3(0.9, 0.18, 0.0) * 1.5 * depthFade;
 
     gl_FragColor = vec4(col, 1.0);
   }
