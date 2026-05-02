@@ -9,9 +9,21 @@
 </head>
 
 <body>
+    <div class="scene-backdrop" aria-hidden="true">
+        <div class="ambient-grid"></div>
+        <div class="noise"></div>
+        <div class="glow one"></div>
+        <div class="glow two"></div>
+        <div class="glow three"></div>
+        <div class="orbital-lines"></div>
+        <div class="floating-tile a"></div>
+        <div class="floating-tile b"></div>
+        <div class="floating-tile c"></div>
+    </div>
+
     <canvas id="game"></canvas>
 
-    <button id="backBtn" onclick="location.href='../index.html'">&#8592; Arcade</button>
+    <button id="backBtn" onclick="location.href='./preview.html'">&#8592; Landing</button>
 
     <!-- Settings gear button — top right, visible during play -->
     <button id="settingsBtn" onclick="openDrawer()" title="Settings">

@@ -247,6 +247,7 @@ function showWin(reason) {
   if (gameOverVisible) return;
   gameOverVisible = true;
   audio.playWin();
+  const landingHref = window.location.pathname.includes('/dist/') ? '../landingPage.html' : './landingPage.html';
   const el = document.createElement('div');
   el.style.cssText = `position:fixed;inset:0;background:rgba(0,0,0,0.88);
     display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:200;`;
@@ -257,7 +258,7 @@ function showWin(reason) {
     <button onclick="location.reload()"
       style="padding:14px 44px;font-size:18px;font-weight:800;background:#00cc66;color:#fff;
              border:none;border-radius:10px;cursor:pointer;letter-spacing:2px;">ZAGRAJ PONOWNIE</button>
-    <button onclick="location.href='../index.html'"
+    <button onclick="location.href='${landingHref}'"
       style="margin-top:12px;padding:10px 32px;font-size:14px;background:transparent;
              color:#888;border:1px solid #444;border-radius:8px;cursor:pointer;">← Arcade</button>
   `;
@@ -515,6 +516,7 @@ timer.onGameOver = () => {
 
   // Plansza pojawia się po 5s — scena renderuje się normalnie przez cały czas
   setTimeout(() => {
+    const landingHref = window.location.pathname.includes('/dist/') ? '../landingPage.html' : './landingPage.html';
     gameOverVisible = true;
     const el = document.createElement('div');
     el.style.cssText = `position:fixed;inset:0;background:rgba(0,0,0,0.88);
@@ -525,7 +527,7 @@ timer.onGameOver = () => {
       <button onclick="location.reload()"
         style="padding:14px 44px;font-size:18px;font-weight:800;background:#ef4444;color:#fff;
                border:none;border-radius:10px;cursor:pointer;letter-spacing:2px;">ZAGRAJ PONOWNIE</button>
-      <button onclick="location.href='../index.html'"
+      <button onclick="location.href='${landingHref}'"
         style="margin-top:12px;padding:10px 32px;font-size:14px;background:transparent;
                color:#888;border:1px solid #444;border-radius:8px;cursor:pointer;">\u2190 Arcade</button>
     `;

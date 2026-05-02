@@ -1,369 +1,1235 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="pl">
 
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width,initial-scale=1">
-    <title>Arcade</title>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Arcade — Game Lobby</title>
+    <meta name="description" content="Nowoczesne lobby Arcade z wyborem gier: Block Dock i Zombie Racer." />
     <style>
+        :root {
+            --bg: #eef2f8;
+            --bg-2: #f8faff;
+            --surface: rgba(255, 255, 255, .78);
+            --surface-strong: #fff;
+            --text: #26324a;
+            --muted: #7c879f;
+            --line: rgba(44, 56, 86, .12);
+            --shadow: 0 28px 80px rgba(45, 59, 96, .14);
+            --blue: #3f86ff;
+            --blue-2: #76a9ff;
+            --pink: #ff1f6d;
+            --green: #35d76f;
+            --green-2: #a8ff45;
+            --orange: #ff8a2a;
+            --radius: 28px;
+            color-scheme: light;
+        }
+
+        [data-theme="dark"] {
+            --bg: #080a0f;
+            --bg-2: #111622;
+            --surface: rgba(17, 22, 34, .72);
+            --surface-strong: #141a27;
+            --text: #f2f6ff;
+            --muted: #9ba8c2;
+            --line: rgba(255, 255, 255, .1);
+            --shadow: 0 30px 90px rgba(0, 0, 0, .48);
+            color-scheme: dark;
+        }
+
         * {
-            margin: 0;
-            padding: 0;
             box-sizing: border-box;
-            -webkit-tap-highlight-color: transparent;
         }
 
-        html,
+        html {
+            scroll-behavior: smooth;
+        }
+
         body {
-            min-height: 100%;
-            background: #f5f7fb;
-            color: #2b3550;
-            font-family: -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
-            user-select: none;
-            -webkit-user-select: none;
+            margin: 0;
+            min-height: 100vh;
+            font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+            background:
+                radial-gradient(circle at 15% 12%, rgba(63, 134, 255, .16), transparent 28%),
+                radial-gradient(circle at 80% 18%, rgba(53, 215, 111, .13), transparent 25%),
+                radial-gradient(circle at 50% 95%, rgba(255, 31, 109, .09), transparent 30%),
+                linear-gradient(135deg, var(--bg), var(--bg-2));
+            color: var(--text);
+            overflow-x: hidden;
         }
 
-        /* ── Header ── */
-        header {
-            padding: 36px 24px 0;
-            text-align: center;
-        }
-
-        header .title {
-            font-size: 13px;
-            letter-spacing: 4px;
-            font-weight: 700;
-            color: #8a94ae;
-            text-transform: uppercase;
-            margin-bottom: 6px;
-        }
-
-        header h1 {
-            font-size: 38px;
-            font-weight: 900;
-            letter-spacing: 2px;
-            color: #2b3550;
-            line-height: 1;
-        }
-
-        header .tagline {
-            margin-top: 10px;
-            font-size: 14px;
-            color: #8a94ae;
-            font-weight: 500;
-        }
-
-        /* ── Grid ── */
-        .grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-            gap: 20px;
-            padding: 32px 24px 48px;
-            max-width: 960px;
-            margin: 0 auto;
-        }
-
-        /* ── Card ── */
-        .card {
-            background: #fff;
-            border-radius: 22px;
-            overflow: hidden;
-            box-shadow: 0 4px 24px rgba(60, 80, 130, 0.09);
-            transition: transform .15s, box-shadow .15s;
-            cursor: pointer;
-            text-decoration: none;
+        a {
             color: inherit;
+            text-decoration: none;
+        }
+
+        button {
+            font: inherit;
+        }
+
+        .page {
+            position: relative;
+            min-height: 100vh;
+            isolation: isolate;
+            overflow: hidden;
+        }
+
+        canvas {
+            position: fixed;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+            z-index: -4;
+            pointer-events: none;
+            opacity: .85;
+        }
+
+        .grid {
+            position: fixed;
+            inset: 0;
+            z-index: -5;
+            pointer-events: none;
+            background:
+                linear-gradient(90deg, rgba(91, 111, 148, .09) 1px, transparent 1px),
+                linear-gradient(0deg, rgba(91, 111, 148, .08) 1px, transparent 1px);
+            background-size: 64px 64px;
+            mask-image: radial-gradient(circle at 50% 30%, black, transparent 76%);
+            opacity: .7;
+        }
+
+        .orb {
+            position: fixed;
+            width: 44vw;
+            height: 44vw;
+            min-width: 460px;
+            min-height: 460px;
+            border-radius: 999px;
+            filter: blur(30px);
+            pointer-events: none;
+            z-index: -3;
+            animation: drift 16s ease-in-out infinite alternate;
+            opacity: .72;
+        }
+
+        .orb.blue {
+            top: -20%;
+            left: -14%;
+            background: radial-gradient(circle, rgba(63, 134, 255, .25), rgba(63, 134, 255, .07) 45%, transparent 72%);
+        }
+
+        .orb.green {
+            right: -18%;
+            top: 8%;
+            background: radial-gradient(circle, rgba(53, 215, 111, .22), rgba(53, 215, 111, .06) 45%, transparent 72%);
+            animation-delay: -7s;
+            animation-duration: 19s;
+        }
+
+        .orb.pink {
+            left: 34%;
+            bottom: -36%;
+            background: radial-gradient(circle, rgba(255, 31, 109, .16), rgba(255, 31, 109, .05) 46%, transparent 72%);
+            animation-delay: -11s;
+            animation-duration: 23s;
+        }
+
+        @keyframes drift {
+            from {
+                transform: translate3d(-2%, 1%, 0) scale(.94);
+            }
+
+            to {
+                transform: translate3d(7%, -5%, 0) scale(1.12);
+            }
+        }
+
+        .nav {
+            position: relative;
+            z-index: 20;
             display: flex;
-            flex-direction: column;
+            justify-content: space-between;
+            align-items: center;
+            gap: 20px;
+            height: 76px;
+            padding: 0 clamp(20px, 6vw, 96px);
         }
 
-        .card:hover {
-            transform: translateY(-4px);
-            box-shadow: 0 10px 36px rgba(60, 80, 130, 0.15);
+        .brand {
+            display: inline-flex;
+            align-items: center;
+            gap: 12px;
+            font-weight: 950;
+            letter-spacing: .08em;
+            text-transform: uppercase;
         }
 
-        .card:active {
-            transform: scale(0.98);
+        .brand-mark {
+            width: 37px;
+            height: 37px;
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            grid-template-rows: repeat(3, 1fr);
+            gap: 4px;
+            padding: 3px;
+            border-radius: 12px;
+            background: linear-gradient(145deg, rgba(255, 255, 255, .86), rgba(255, 255, 255, .28));
+            border: 1px solid var(--line);
+            box-shadow: 0 10px 28px rgba(60, 80, 120, .16);
         }
 
-        /* thumbnail */
-        .card-thumb {
-            height: 180px;
+        [data-theme="dark"] .brand-mark {
+            background: rgba(255, 255, 255, .06);
+        }
+
+        .brand-mark i {
+            border-radius: 4px;
+            background: linear-gradient(180deg, var(--blue-2), var(--blue));
+        }
+
+        .brand-mark i:nth-child(2),
+        .brand-mark i:nth-child(6) {
+            background: linear-gradient(180deg, #a8ff45, #35d76f);
+        }
+
+        .brand-mark i:nth-child(4),
+        .brand-mark i:nth-child(8) {
+            background: linear-gradient(180deg, #ff74aa, #ff1f6d);
+        }
+
+        .nav-actions {
             display: flex;
             align-items: center;
+            gap: 12px;
+        }
+
+        .chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 9px;
+            height: 38px;
+            padding: 0 14px;
+            border-radius: 999px;
+            border: 1px solid var(--line);
+            background: rgba(255, 255, 255, .42);
+            color: var(--muted);
+            font-size: 13px;
+            font-weight: 850;
+            backdrop-filter: blur(16px);
+        }
+
+        [data-theme="dark"] .chip {
+            background: rgba(255, 255, 255, .04);
+        }
+
+        .theme-toggle {
+            width: 42px;
+            height: 42px;
+            border: 1px solid var(--line);
+            border-radius: 999px;
+            background: var(--surface);
+            color: var(--text);
+            cursor: pointer;
+            backdrop-filter: blur(16px);
+            box-shadow: 0 10px 30px rgba(40, 60, 100, .08);
+        }
+
+        .shell {
+            position: relative;
+            z-index: 2;
+            min-height: calc(100vh - 76px);
+            display: grid;
+            align-content: center;
+            padding: clamp(26px, 4vw, 54px) clamp(20px, 6vw, 96px) 44px;
+        }
+
+        .hero {
+            text-align: center;
+            max-width: 900px;
+            margin: 0 auto 34px;
+        }
+
+        .kicker {
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 12px;
+            color: var(--muted);
+            text-transform: uppercase;
+            font-size: 12px;
+            font-weight: 950;
+            letter-spacing: .28em;
+        }
+
+        .kicker::before,
+        .kicker::after {
+            content: "";
+            width: 10px;
+            height: 10px;
+            border: 2px solid currentColor;
+            opacity: .55;
+        }
+
+        .kicker::before {
+            border-right: 0;
+            border-bottom: 0;
+        }
+
+        .kicker::after {
+            border-left: 0;
+            border-top: 0;
+        }
+
+        h1 {
+            margin: 0;
+            font-size: clamp(54px, 8vw, 104px);
+            line-height: .84;
+            letter-spacing: -.07em;
+            text-transform: uppercase;
+            font-weight: 1000;
+        }
+
+        .hero p {
+            margin: 18px auto 0;
+            max-width: 620px;
+            color: var(--muted);
+            font-size: 17px;
+            line-height: 1.55;
+        }
+
+        .toolbar {
+            display: flex;
             justify-content: center;
+            align-items: center;
+            gap: 12px;
+            flex-wrap: wrap;
+            margin: 28px auto 0;
+        }
+
+        .filter {
+            border: 1px solid var(--line);
+            border-radius: 999px;
+            padding: 10px 15px;
+            color: var(--muted);
+            background: var(--surface);
+            cursor: pointer;
+            font-weight: 850;
+            backdrop-filter: blur(16px);
+            transition: transform .18s ease, color .18s ease, border-color .18s ease, background .18s ease;
+        }
+
+        .filter:hover,
+        .filter.active {
+            transform: translateY(-1px);
+            color: var(--text);
+            border-color: rgba(63, 134, 255, .38);
+            background: rgba(63, 134, 255, .10);
+        }
+
+        .games {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(300px, 460px));
+            gap: 26px;
+            justify-content: center;
+            align-items: stretch;
+            margin: 0 auto;
+            width: 100%;
+        }
+
+        .game-card {
             position: relative;
             overflow: hidden;
+            min-height: 530px;
+            border-radius: 34px;
+            border: 1px solid var(--line);
+            background:
+                linear-gradient(180deg, rgba(255, 255, 255, .62), rgba(255, 255, 255, .38)),
+                var(--surface);
+            box-shadow: var(--shadow);
+            backdrop-filter: blur(22px);
+            isolation: isolate;
+            transform-style: preserve-3d;
+            transition: transform .24s ease, box-shadow .24s ease, border-color .24s ease;
         }
 
-        /* Zombie Racer thumbnail */
-        .thumb-zombieracer {
-            background: linear-gradient(135deg, #0d1f0d 0%, #1a3d1a 50%, #2d4a0a 100%);
+        [data-theme="dark"] .game-card {
+            background:
+                linear-gradient(180deg, rgba(255, 255, 255, .07), rgba(255, 255, 255, .025)),
+                var(--surface);
         }
 
-        /* Block Dock thumbnail */
-        .thumb-blockdock {
-            background: linear-gradient(135deg, #e8ecf8 0%, #d4daf2 100%);
+        .game-card:hover {
+            transform: translateY(-8px);
+            box-shadow: 0 40px 110px rgba(45, 59, 96, .20);
+            border-color: rgba(63, 134, 255, .26);
         }
 
-        .thumb-blockdock .mini-board {
-            display: grid;
-            grid-template-columns: repeat(9, 14px);
-            grid-template-rows: repeat(9, 14px);
-            gap: 1px;
-            border-radius: 6px;
+        [data-theme="dark"] .game-card:hover {
+            box-shadow: 0 44px 120px rgba(0, 0, 0, .58);
+        }
+
+        .preview {
+            position: relative;
+            height: 270px;
             overflow: hidden;
-            box-shadow: 0 4px 16px rgba(43, 53, 80, 0.18);
+            border-bottom: 1px solid var(--line);
         }
 
-        .mini-board .mc {
-            border-radius: 2px;
+        .preview::after {
+            content: "";
+            position: absolute;
+            inset: 0;
+            pointer-events: none;
+            background: linear-gradient(180deg, transparent 58%, rgba(0, 0, 0, .22));
         }
 
-        /* card body */
+        .block-preview {
+            display: grid;
+            place-items: center;
+            background:
+                radial-gradient(circle at 50% 28%, rgba(255, 31, 109, .18), transparent 24%),
+                linear-gradient(180deg, #17141d, #100e15 72%);
+        }
+
+        [data-theme="dark"] .block-preview {
+            background:
+                radial-gradient(circle at 50% 28%, rgba(255, 31, 109, .2), transparent 24%),
+                linear-gradient(180deg, #17141d, #100e15 72%);
+        }
+
+        .block-board {
+            width: 148px;
+            height: 148px;
+            display: grid;
+            grid-template-columns: repeat(7, 1fr);
+            grid-template-rows: repeat(7, 1fr);
+            gap: 5px;
+            padding: 11px;
+            border-radius: 20px;
+            background: rgba(17, 15, 22, .96);
+            border: 1px solid rgba(255, 31, 109, .18);
+            box-shadow: 0 22px 60px rgba(255, 31, 109, .2);
+            transform: rotateX(10deg) rotateZ(-2deg);
+            animation: floatBlockBoard 4.5s ease-in-out infinite;
+        }
+
+        [data-theme="dark"] .block-board {
+            background: rgba(17, 15, 22, .96);
+            box-shadow: 0 22px 60px rgba(0, 0, 0, .34), 0 0 50px rgba(255, 31, 109, .18);
+        }
+
+        @keyframes floatBlockBoard {
+
+            0%,
+            100% {
+                translate: 0 0;
+            }
+
+            50% {
+                translate: 0 -10px;
+            }
+        }
+
+        .block-cell {
+            border-radius: 4px;
+            background: rgba(255, 255, 255, .05);
+            box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .04);
+        }
+
+        .block-cell.a,
+        .block-cell.b,
+        .block-cell.c,
+        .block-cell.d,
+        .block-cell.e {
+            background: linear-gradient(180deg, #ff4f99, #ff0f67);
+            box-shadow: 0 0 16px rgba(255, 31, 109, .28);
+        }
+
+        .block-piece {
+            position: absolute;
+            width: 34px;
+            height: 34px;
+            border-radius: 8px;
+            background: linear-gradient(180deg, #ff4b96, #ff1f6d);
+            box-shadow: 0 18px 36px rgba(255, 31, 109, .18), 0 0 26px rgba(255, 31, 109, .24);
+            animation: orbitPiece 6s ease-in-out infinite;
+        }
+
+        .block-piece.one {
+            left: 16%;
+            top: 22%;
+        }
+
+        .block-piece.two {
+            right: 17%;
+            bottom: 24%;
+            animation-delay: -2.1s;
+            background: linear-gradient(180deg, #ff67a8, #ff1f6d);
+        }
+
+        .block-piece.three {
+            right: 21%;
+            top: 18%;
+            animation-delay: -3.4s;
+            background: linear-gradient(180deg, #ff7fb5, #ff3b84);
+        }
+
+        @keyframes orbitPiece {
+
+            0%,
+            100% {
+                transform: translate(0, 0) rotate(0);
+            }
+
+            50% {
+                transform: translate(18px, -16px) rotate(12deg);
+            }
+        }
+
+        .zombie-preview {
+            background:
+                radial-gradient(circle at 52% 42%, rgba(53, 215, 111, .22), transparent 22%),
+                linear-gradient(180deg, #123818, #0a1e0f 70%);
+        }
+
+        .road {
+            position: absolute;
+            left: 50%;
+            bottom: -80px;
+            width: 220px;
+            height: 360px;
+            translate: -50% 0;
+            transform: perspective(420px) rotateX(64deg);
+            background:
+                linear-gradient(90deg, transparent 46%, rgba(255, 255, 255, .4) 48%, rgba(255, 255, 255, .4) 52%, transparent 54%),
+                linear-gradient(180deg, #2e3438, #111619);
+            border-radius: 40px 40px 0 0;
+            box-shadow: 0 -20px 70px rgba(53, 215, 111, .15);
+        }
+
+        .zombie-car {
+            position: absolute;
+            left: 50%;
+            bottom: 68px;
+            width: 110px;
+            height: 64px;
+            translate: -50% 0;
+            filter: drop-shadow(0 24px 32px rgba(0, 0, 0, .35));
+            animation: carIdle 1.4s ease-in-out infinite;
+        }
+
+        @keyframes carIdle {
+
+            0%,
+            100% {
+                transform: translateY(0) rotate(-1deg);
+            }
+
+            50% {
+                transform: translateY(-3px) rotate(1deg);
+            }
+        }
+
+        .zombie-car::before {
+            content: "";
+            position: absolute;
+            inset: 20px 4px 3px;
+            border-radius: 18px 18px 9px 9px;
+            background: linear-gradient(145deg, #27d961, #075326 74%);
+            border-bottom: 9px solid #081010;
+        }
+
+        .zombie-car::after {
+            content: "";
+            position: absolute;
+            left: 32px;
+            right: 32px;
+            top: 8px;
+            height: 24px;
+            border-radius: 14px 14px 4px 4px;
+            background: linear-gradient(180deg, rgba(219, 255, 250, .76), rgba(60, 90, 90, .28));
+        }
+
+        .flame {
+            position: absolute;
+            left: 50%;
+            bottom: 131px;
+            width: 34px;
+            height: 58px;
+            translate: -50% 0;
+            background: radial-gradient(circle at 50% 78%, #ffed77, #ff7b20 52%, transparent 72%);
+            filter: blur(.2px) drop-shadow(0 0 16px rgba(255, 123, 32, .7));
+            border-radius: 50% 50% 45% 45%;
+            animation: flame 290ms ease-in-out infinite alternate;
+            mix-blend-mode: screen;
+        }
+
+        @keyframes flame {
+            from {
+                transform: scale(.85) rotate(-4deg);
+                opacity: .75;
+            }
+
+            to {
+                transform: scale(1.12) rotate(4deg);
+                opacity: 1;
+            }
+        }
+
+        .smoke {
+            position: absolute;
+            left: 50%;
+            bottom: 170px;
+            width: 18px;
+            height: 18px;
+            translate: -50% 0;
+            border-radius: 999px;
+            background: rgba(155, 170, 165, .45);
+            box-shadow:
+                -14px -28px 0 8px rgba(155, 170, 165, .22),
+                13px -56px 0 14px rgba(155, 170, 165, .18),
+                -8px -88px 0 20px rgba(155, 170, 165, .13),
+                18px -128px 0 24px rgba(155, 170, 165, .1);
+            filter: blur(3px);
+            animation: smoke 2.6s ease-in-out infinite;
+        }
+
+        @keyframes smoke {
+
+            0%,
+            100% {
+                transform: translateY(0) scale(.94);
+                opacity: .6;
+            }
+
+            50% {
+                transform: translateY(-12px) scale(1.12);
+                opacity: .85;
+            }
+        }
+
+        .zombie-dot {
+            position: absolute;
+            width: 14px;
+            height: 14px;
+            border-radius: 99px 99px 55px 55px;
+            background: #79ff45;
+            box-shadow: 0 0 18px rgba(121, 255, 69, .56);
+            animation: stagger 2.4s ease-in-out infinite;
+        }
+
+        .zombie-dot::after {
+            content: "";
+            position: absolute;
+            left: 3px;
+            top: 12px;
+            width: 8px;
+            height: 14px;
+            border-radius: 4px;
+            background: #223323;
+        }
+
+        .zombie-dot.z1 {
+            left: 24%;
+            top: 34%;
+        }
+
+        .zombie-dot.z2 {
+            right: 21%;
+            top: 41%;
+            animation-delay: -.7s;
+        }
+
+        .zombie-dot.z3 {
+            left: 37%;
+            top: 20%;
+            animation-delay: -1.4s;
+        }
+
+        @keyframes stagger {
+
+            0%,
+            100% {
+                transform: translateY(0);
+            }
+
+            50% {
+                transform: translateY(-8px);
+            }
+        }
+
         .card-body {
-            padding: 18px 20px 20px;
-            flex: 1;
+            padding: 24px;
+        }
+
+        .label-row {
             display: flex;
-            flex-direction: column;
-        }
-
-        .card-tag {
-            font-size: 10px;
-            letter-spacing: 2px;
-            font-weight: 700;
-            color: #8a94ae;
-            text-transform: uppercase;
-            margin-bottom: 6px;
-        }
-
-        .card-title {
-            font-size: 22px;
-            font-weight: 900;
-            color: #2b3550;
-            margin-bottom: 8px;
-            letter-spacing: .5px;
-        }
-
-        .card-desc {
-            font-size: 13px;
-            color: #8a94ae;
-            line-height: 1.6;
-            flex: 1;
-            margin-bottom: 18px;
-        }
-
-        .card-footer {
-            display: flex;
-            align-items: center;
             justify-content: space-between;
+            gap: 12px;
+            align-items: center;
+            margin-bottom: 12px;
         }
 
-        .badge {
+        .genre {
+            color: var(--muted);
+            font-size: 11px;
+            font-weight: 950;
+            letter-spacing: .18em;
+            text-transform: uppercase;
+        }
+
+        .status {
+            display: inline-flex;
+            align-items: center;
+            gap: 7px;
+            color: var(--muted);
+            font-size: 12px;
+            font-weight: 850;
+        }
+
+        .status::before {
+            content: "";
+            width: 8px;
+            height: 8px;
+            border-radius: 99px;
+            background: var(--green);
+            box-shadow: 0 0 14px rgba(53, 215, 111, .5);
+        }
+
+        .game-card h2 {
+            margin: 0;
+            font-size: 30px;
+            line-height: 1;
+            letter-spacing: -.045em;
+        }
+
+        .game-lead {
+            margin-top: 8px;
+            color: var(--muted);
+            font-size: 12px;
+            font-weight: 900;
+            letter-spacing: .14em;
+            text-transform: uppercase;
+        }
+
+        .game-card p {
+            margin: 12px 0 0;
+            min-height: 72px;
+            color: var(--muted);
+            font-size: 14px;
+            line-height: 1.55;
+        }
+
+        .meta {
             display: flex;
-            gap: 6px;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-top: 18px;
         }
 
-        .badge span {
-            font-size: 10px;
-            font-weight: 700;
-            letter-spacing: 1px;
-            padding: 4px 10px;
+        .tag {
+            display: inline-flex;
+            align-items: center;
+            height: 28px;
+            padding: 0 10px;
             border-radius: 999px;
-            background: #f0f3fb;
-            color: #6b7894;
+            border: 1px solid var(--line);
+            color: var(--muted);
+            background: rgba(127, 147, 186, .08);
+            font-size: 11px;
+            font-weight: 900;
             text-transform: uppercase;
+            letter-spacing: .04em;
         }
 
-        .play-btn {
-            background: linear-gradient(180deg, #5aa3ff, #3b82f6);
+        .card-actions {
+            display: flex;
+            gap: 10px;
+            margin-top: 24px;
+        }
+
+        .btn {
+            display: inline-flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 46px;
+            padding: 0 18px;
+            border: 0;
+            border-radius: 15px;
             color: #fff;
-            border: none;
-            padding: 10px 22px;
-            font-size: 12px;
-            font-weight: 800;
-            letter-spacing: 2px;
-            border-radius: 999px;
             cursor: pointer;
-            box-shadow: 0 4px 14px rgba(59, 130, 246, 0.38);
-            transition: transform .1s;
+            font-weight: 950;
+            box-shadow: 0 16px 38px rgba(63, 134, 255, .24);
+            transition: transform .18s ease, filter .18s ease, box-shadow .18s ease;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            filter: saturate(1.1);
+        }
+
+        .btn.primary {
+            flex: 1;
+            background: linear-gradient(180deg, #76a9ff, #3f86ff);
+        }
+
+        .btn.zombie {
+            flex: 1;
+            color: #061208;
+            background: linear-gradient(180deg, #bfff63, #35d76f);
+            box-shadow: 0 16px 38px rgba(53, 215, 111, .22);
+        }
+
+        .btn.secondary {
+            color: var(--text);
+            background: rgba(127, 147, 186, .10);
+            border: 1px solid var(--line);
+            box-shadow: none;
+        }
+
+        .featured {
+            position: absolute;
+            right: 18px;
+            top: 18px;
+            z-index: 4;
+            padding: 8px 11px;
+            border-radius: 999px;
+            color: #fff;
+            background: rgba(0, 0, 0, .42);
+            border: 1px solid rgba(255, 255, 255, .14);
+            backdrop-filter: blur(12px);
+            font-size: 11px;
+            font-weight: 950;
+            letter-spacing: .08em;
             text-transform: uppercase;
         }
 
-        .play-btn:active {
-            transform: scale(0.95);
+        .bottom {
+            display: flex;
+            justify-content: center;
+            margin-top: 34px;
+            color: var(--muted);
+            font-size: 12px;
+            letter-spacing: .16em;
+            text-transform: uppercase;
+            font-weight: 850;
         }
 
-        /* ── Footer ── */
-        footer {
-            text-align: center;
-            padding: 0 24px 36px;
-            font-size: 12px;
-            color: #b8bfd0;
-            letter-spacing: 1px;
+        .modal {
+            position: fixed;
+            inset: 0;
+            z-index: 80;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            padding: 24px;
+            background: rgba(6, 8, 12, .55);
+            backdrop-filter: blur(18px);
+        }
+
+        .modal.open {
+            display: flex;
+        }
+
+        .modal-box {
+            width: min(760px, 100%);
+            border: 1px solid var(--line);
+            border-radius: 28px;
+            background: var(--surface-strong);
+            box-shadow: 0 40px 120px rgba(0, 0, 0, .35);
+            overflow: hidden;
+        }
+
+        .modal-preview {
+            min-height: 240px;
+            background: linear-gradient(145deg, rgba(63, 134, 255, .16), rgba(53, 215, 111, .11));
+            display: grid;
+            place-items: center;
+        }
+
+        .modal-content {
+            padding: 26px;
+        }
+
+        .modal-content h2 {
+            margin: 0;
+            font-size: 34px;
+            letter-spacing: -.05em;
+        }
+
+        .modal-content p {
+            color: var(--muted);
+            line-height: 1.58;
+        }
+
+        .modal-actions {
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+            margin-top: 18px;
+        }
+
+        @media (max-width: 980px) {
+            .games {
+                grid-template-columns: minmax(300px, 520px);
+            }
+
+            .game-card {
+                min-height: auto;
+            }
+        }
+
+        @media (max-width: 640px) {
+            .nav {
+                height: auto;
+                padding: 18px;
+            }
+
+            .chip {
+                display: none;
+            }
+
+            .shell {
+                padding-inline: 18px;
+            }
+
+            h1 {
+                font-size: clamp(48px, 17vw, 78px);
+            }
+
+            .hero {
+                margin-bottom: 24px;
+            }
+
+            .toolbar {
+                justify-content: flex-start;
+                overflow-x: auto;
+                padding-bottom: 4px;
+            }
+
+            .games {
+                grid-template-columns: 1fr;
+            }
+
+            .game-card {
+                border-radius: 26px;
+            }
+
+            .preview {
+                height: 236px;
+            }
+
+            .card-body {
+                padding: 20px;
+            }
+
+            .card-actions {
+                flex-direction: column;
+            }
+
+            .btn.secondary {
+                width: 100%;
+            }
         }
     </style>
 </head>
 
 <body>
+    <div class="page">
+        <canvas id="particles"></canvas>
+        <div class="grid"></div>
+        <div class="orb blue"></div>
+        <div class="orb green"></div>
+        <div class="orb pink"></div>
 
-    <header>
-        <div class="title">Mini Games</div>
-        <h1>ARCADE</h1>
-        <p class="tagline">Wybierz grę i zagraj</p>
-    </header>
+        <header class="nav">
+            <a href="#" class="brand" aria-label="Arcade lobby">
+                <span class="brand-mark" aria-hidden="true">
+                    <i></i><i></i><i></i>
+                    <i></i><i></i><i></i>
+                    <i></i><i></i><i></i>
+                </span>
+                <span>Mini Games Arcade</span>
+            </a>
 
-    <div class="grid" id="gameGrid"></div>
+            <div class="nav-actions">
+                <span class="chip">2 games available</span>
+                <button class="theme-toggle" type="button" id="themeToggle" aria-label="Przełącz motyw">◐</button>
+            </div>
+        </header>
 
-    <footer>ARCADE &nbsp;·&nbsp; 2026</footer>
+        <main class="shell">
+            <section class="hero">
+                <div class="kicker">Choose your game</div>
+                <h1>Arcade Lobby</h1>
+                <p>Nowoczesne lobby startowe dla obu gier. Duże karty, czytelne akcje, szybkie wejście do landing page'y
+                    i animowane preview zamiast martwych kafelków.</p>
+
+                <div class="toolbar" aria-label="Filtry gier">
+                    <button class="filter active" type="button" data-filter="all">All</button>
+                    <button class="filter" type="button" data-filter="puzzle">Puzzle</button>
+                    <button class="filter" type="button" data-filter="survival">Survival</button>
+                    <button class="filter" type="button" data-filter="racing">Racing</button>
+                </div>
+            </section>
+
+            <section class="games" aria-label="Lista gier">
+                <article class="game-card" data-type="puzzle" data-title="Block Dock">
+                    <span class="featured">Puzzle</span>
+                    <div class="preview block-preview" aria-hidden="true">
+                        <div class="block-piece one"></div>
+                        <div class="block-piece two"></div>
+                        <div class="block-piece three"></div>
+                        <div class="block-board" id="blockBoard"></div>
+                    </div>
+
+                    <div class="card-body">
+                        <div class="label-row">
+                            <span class="genre">Logic Puzzle</span>
+                            <span class="status">Ready</span>
+                        </div>
+                        <h2>Block Dock</h2>
+                        <p>Przeciągaj bloki na planszę, wypełniaj rzędy i kolumny, kasuj układy i graj coraz dłużej bez
+                            zablokowania ruchu.</p>
+
+                        <div class="meta">
+                            <span class="tag">Puzzle</span>
+                            <span class="tag">6–18</span>
+                            <span class="tag">Score</span>
+                            <span class="tag">Minimal</span>
+                        </div>
+
+                        <div class="card-actions">
+                            <a class="btn primary" href="./block-dock/preview.html">Graj</a>
+                            <button class="btn secondary" type="button" data-details="block">Info</button>
+                        </div>
+                    </div>
+                </article>
+
+                <article class="game-card" data-type="survival racing" data-title="Zombie Racer">
+                    <span class="featured">3D Survival</span>
+                    <div class="preview zombie-preview" aria-hidden="true">
+                        <div class="road"></div>
+                        <div class="smoke"></div>
+                        <div class="flame"></div>
+                        <div class="zombie-car"></div>
+                        <div class="zombie-dot z1"></div>
+                        <div class="zombie-dot z2"></div>
+                        <div class="zombie-dot z3"></div>
+                    </div>
+
+                    <div class="card-body">
+                        <div class="label-row">
+                            <span class="genre">Survival Racing</span>
+                            <span class="status">Ready</span>
+                        </div>
+                        <h2>Zombie Racer</h2>
+                        <div class="game-lead">Carmageddon like 0.5</div>
+                        <p>Rozjeżdżaj zombie, zarządzaj boostem i leć przez miejskie areny. Gra stawia na tempo, chaos,
+                            rampy i krótką pętlę survival arcade.</p>
+
+                        <div class="meta">
+                            <span class="tag">3D</span>
+                            <span class="tag">Survival</span>
+                            <span class="tag">Racing</span>
+                            <span class="tag">Boost</span>
+                        </div>
+
+                        <div class="card-actions">
+                            <a class="btn zombie" href="./zombie-racer/landingPage.html">Graj</a>
+                            <button class="btn secondary" type="button" data-details="zombie">Info</button>
+                        </div>
+                    </div>
+                </article>
+            </section>
+
+            <div class="bottom">Arcade · 2026</div>
+        </main>
+
+        <div class="modal" id="modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+            <div class="modal-box">
+                <div class="modal-preview" id="modalPreview"></div>
+                <div class="modal-content">
+                    <h2 id="modalTitle">Game</h2>
+                    <p id="modalText"></p>
+                    <div class="modal-actions">
+                        <a class="btn primary" id="modalPlay" href="#">Graj</a>
+                        <button class="btn secondary" type="button" id="modalClose">Zamknij</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
 
     <script>
-        const GAMES = [
-            {
-                id: 'block-dock',
-                title: 'Block Dock',
-                tag: 'Puzzle',
-                desc: 'Przeciągaj klocki na planszę. Wypełnij rzędy, kolumny lub kwadraty 3×3 żeby je kasować. Dostępne rozmiary: 6×6, 9×9, 12×12, 15×15, 18×18.',
-                badges: ['Puzzle', '6–18'],
-                url: 'block-dock/index.html',
-                thumb: 'blockdock',
-                accentColor: '#3b82f6',
-            },
-            {
-                id: 'zombie-racer',
-                title: 'Zombie Racer',
-                tag: 'SURVIVAL',
-                desc: 'Rozjeżdżaj zombie i rozbijaj wrogie auta, zanim skończy się czas. Teren 3D, fizyka, widok za autem.',
-                badges: ['3D', 'Survival', 'Racing'],
-                url: 'zombie-racer/dist/index.html',
-                thumb: 'zombieracer',
-                accentColor: '#22cc44',
-            },
-        ];
-
-        const PALETTE = [
-            '#3b82f6', '#10b981', '#a855f7',
-            '#f97316', '#ef4444', '#06b6d4',
-            '#eab308', '#ec4899',
-        ];
-
-        function makeMiniBoard() {
-            // Generate a random-looking but visually pleasing mini board snapshot
-            const board = Array.from({ length: 9 }, () => Array(9).fill(null));
-            // place a few random pieces
-            const rnd = (n) => Math.floor(Math.random() * n);
-            const attempts = 30;
-            for (let a = 0; a < attempts; a++) {
-                const color = PALETTE[rnd(PALETTE.length)];
-                const pieces = [
-                    [[0, 0], [1, 0], [2, 0]], [[0, 0], [0, 1], [0, 2]],
-                    [[0, 0], [1, 0], [0, 1], [1, 1]], [[0, 0], [1, 0], [2, 0], [1, 1]],
-                    [[0, 0]], [[0, 0], [1, 0]],
-                    [[0, 0], [1, 1], [0, 1]],
-                ];
-                const shape = pieces[rnd(pieces.length)];
-                const col = rnd(9), row = rnd(9);
-                let ok = true;
-                for (const [dx, dy] of shape) {
-                    if (col + dx >= 9 || row + dy >= 9 || board[row + dy][col + dx]) { ok = false; break; }
-                }
-                if (ok) for (const [dx, dy] of shape) board[row + dy][col + dx] = color;
-            }
-            return board;
+        const root = document.documentElement;
+        const themeToggle = document.getElementById("themeToggle");
+        const storedTheme = localStorage.getItem("arcade-theme");
+        if (storedTheme) {
+            root.setAttribute("data-theme", storedTheme);
         }
 
-        function renderBlockDockThumb() {
-            const board = makeMiniBoard();
-            const div = document.createElement('div');
-            div.className = 'mini-board';
-            for (let y = 0; y < 9; y++) {
-                for (let x = 0; x < 9; x++) {
-                    const cell = document.createElement('div');
-                    cell.className = 'mc';
-                    if (board[y][x]) {
-                        cell.style.background = board[y][x];
-                    } else {
-                        const shaded = (Math.floor(x / 3) + Math.floor(y / 3)) % 2 === 1;
-                        cell.style.background = shaded ? '#d8deee' : '#e8ecf6';
+        themeToggle.addEventListener("click", () => {
+            const next = root.getAttribute("data-theme") === "dark" ? "light" : "dark";
+            if (next === "light") {
+                root.removeAttribute("data-theme");
+                localStorage.setItem("arcade-theme", "light");
+            } else {
+                root.setAttribute("data-theme", "dark");
+                localStorage.setItem("arcade-theme", "dark");
+            }
+        });
+
+        const blockBoard = document.getElementById("blockBoard");
+        const blockPattern = [
+            "", "", "a", "a", "a", "a", "a",
+            "", "", "a", "a", "", "a", "",
+            "", "", "", "", "a", "", "a",
+            "", "", "", "", "a", "", "",
+            "a", "a", "a", "a", "a", "", "a",
+            "", "", "", "", "a", "", "a",
+            "a", "", "a", "", "a", "", "a"
+        ];
+
+        blockPattern.forEach(type => {
+            const cell = document.createElement("div");
+            cell.className = type ? `block-cell ${type}` : "block-cell";
+            blockBoard.appendChild(cell);
+        });
+
+        const filters = document.querySelectorAll(".filter");
+        const cards = document.querySelectorAll(".game-card");
+
+        filters.forEach(filter => {
+            filter.addEventListener("click", () => {
+                filters.forEach(f => f.classList.remove("active"));
+                filter.classList.add("active");
+                const value = filter.dataset.filter;
+
+                cards.forEach(card => {
+                    const types = card.dataset.type || "";
+                    const visible = value === "all" || types.includes(value);
+                    card.style.display = visible ? "" : "none";
+                    if (visible) {
+                        card.animate(
+                            [{ opacity: 0, transform: "translateY(14px)" }, { opacity: 1, transform: "translateY(0)" }],
+                            { duration: 260, easing: "ease-out" }
+                        );
                     }
-                    div.appendChild(cell);
-                }
+                });
+            });
+        });
+
+        const details = {
+            block: {
+                title: "Block Dock",
+                text: "Block Dock to spokojniejsza, logiczna gra z neonowym landing page'em i szybkim wejściem do samej rozgrywki. Karta prowadzi do preview gry, a dopiero stamtąd do PLAY.",
+                href: "./block-dock/preview.html",
+                color: "linear-gradient(145deg, rgba(63,134,255,.2), rgba(255,31,109,.14))"
+            },
+            zombie: {
+                title: "Zombie Racer",
+                text: "Zombie Racer ma cięższy, bardziej arcade'owy charakter: zielone auto, ogień, dym, rooftopy, survival i racing. Karta prowadzi do landingu gry z screenami i gameplay preview.",
+                href: "./zombie-racer/landingPage.html",
+                color: "linear-gradient(145deg, rgba(53,215,111,.18), rgba(255,138,42,.18))"
             }
-            return div;
+        };
+
+        const modal = document.getElementById("modal");
+        const modalTitle = document.getElementById("modalTitle");
+        const modalText = document.getElementById("modalText");
+        const modalPlay = document.getElementById("modalPlay");
+        const modalClose = document.getElementById("modalClose");
+        const modalPreview = document.getElementById("modalPreview");
+
+        document.querySelectorAll("[data-details]").forEach(button => {
+            button.addEventListener("click", () => {
+                const data = details[button.dataset.details];
+                modalTitle.textContent = data.title;
+                modalText.textContent = data.text;
+                modalPlay.href = data.href;
+                modalPreview.style.background = data.color;
+                modal.classList.add("open");
+            });
+        });
+
+        function closeModal() {
+            modal.classList.remove("open");
         }
 
-        function buildCard(game) {
-            const a = document.createElement('a');
-            a.className = 'card';
-            a.href = game.url;
+        modalClose.addEventListener("click", closeModal);
+        modal.addEventListener("click", event => {
+            if (event.target === modal) closeModal();
+        });
+        window.addEventListener("keydown", event => {
+            if (event.key === "Escape") closeModal();
+        });
 
-            // thumbnail
-            const thumb = document.createElement('div');
-            thumb.className = 'card-thumb';
-            if (game.thumb === 'blockdock') {
-                thumb.classList.add('thumb-blockdock');
-                thumb.appendChild(renderBlockDockThumb());
-            } else if (game.thumb === 'zombieracer') {
-                thumb.classList.add('thumb-zombieracer');
-                thumb.innerHTML = `
-                  <div style="position:relative;width:90px;height:90px;">
-                    <div style="position:absolute;bottom:0;width:90px;height:45px;background:#2a2a2a;border-radius:4px;"></div>
-                    <div style="position:absolute;bottom:22px;left:50%;transform:translateX(-50%);width:16px;height:28px;background:#00dd66;border-radius:3px;box-shadow:0 0 10px #00ff66;"></div>
-                    <div style="position:absolute;top:8px;left:15px;width:8px;height:16px;background:#44bb44;border-radius:50% 50% 0 0;"></div>
-                    <div style="position:absolute;top:8px;right:12px;width:8px;height:16px;background:#55cc33;border-radius:50% 50% 0 0;"></div>
-                    <div style="position:absolute;top:0;right:0;background:#ef4444;color:#fff;font-size:9px;font-weight:900;padding:2px 5px;border-radius:4px;">TIMER</div>
-                  </div>`;
-            }
-            a.appendChild(thumb);
+        const canvas = document.getElementById("particles");
+        const ctx = canvas.getContext("2d", { alpha: true });
+        let width = 0;
+        let height = 0;
+        let dots = [];
 
-            // body
-            const body = document.createElement('div');
-            body.className = 'card-body';
+        function resize() {
+            const dpr = Math.min(window.devicePixelRatio || 1, 2);
+            width = window.innerWidth;
+            height = window.innerHeight;
+            canvas.width = Math.floor(width * dpr);
+            canvas.height = Math.floor(height * dpr);
+            canvas.style.width = width + "px";
+            canvas.style.height = height + "px";
+            ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
-            const tag = document.createElement('div');
-            tag.className = 'card-tag';
-            tag.textContent = game.tag;
-
-            const title = document.createElement('div');
-            title.className = 'card-title';
-            title.textContent = game.title;
-
-            const desc = document.createElement('div');
-            desc.className = 'card-desc';
-            desc.textContent = game.desc;
-
-            const footer = document.createElement('div');
-            footer.className = 'card-footer';
-
-            const badge = document.createElement('div');
-            badge.className = 'badge';
-            for (const b of game.badges) {
-                const s = document.createElement('span');
-                s.textContent = b;
-                badge.appendChild(s);
-            }
-
-            const btn = document.createElement('button');
-            btn.className = 'play-btn';
-            btn.textContent = 'GRAJ';
-            btn.style.background = `linear-gradient(180deg, ${game.accentColor}cc, ${game.accentColor})`;
-
-            footer.appendChild(badge);
-            footer.appendChild(btn);
-
-            body.appendChild(tag);
-            body.appendChild(title);
-            body.appendChild(desc);
-            body.appendChild(footer);
-            a.appendChild(body);
-
-            return a;
+            const count = Math.min(80, Math.floor(width / 18));
+            dots = Array.from({ length: count }, (_, index) => ({
+                x: Math.random() * width,
+                y: Math.random() * height,
+                size: 2 + Math.random() * 5,
+                vx: -.18 + Math.random() * .36,
+                vy: -.12 + Math.random() * .24,
+                color: index % 3 === 0 ? "63,134,255" : index % 3 === 1 ? "53,215,111" : "255,31,109",
+                alpha: .12 + Math.random() * .24
+            }));
         }
 
-        const grid = document.getElementById('gameGrid');
-        for (const game of GAMES) {
-            grid.appendChild(buildCard(game));
+        function draw() {
+            ctx.clearRect(0, 0, width, height);
+
+            for (const dot of dots) {
+                dot.x += dot.vx;
+                dot.y += dot.vy;
+
+                if (dot.x < -20) dot.x = width + 20;
+                if (dot.x > width + 20) dot.x = -20;
+                if (dot.y < -20) dot.y = height + 20;
+                if (dot.y > height + 20) dot.y = -20;
+
+                ctx.fillStyle = `rgba(${dot.color}, ${dot.alpha})`;
+                ctx.beginPath();
+                ctx.roundRect(dot.x, dot.y, dot.size, dot.size, 2);
+                ctx.fill();
+            }
+
+            requestAnimationFrame(draw);
         }
+
+        window.addEventListener("resize", resize, { passive: true });
+        resize();
+        draw();
+
+        document.querySelectorAll(".game-card").forEach(card => {
+            card.addEventListener("pointermove", event => {
+                const rect = card.getBoundingClientRect();
+                const px = (event.clientX - rect.left) / rect.width - .5;
+                const py = (event.clientY - rect.top) / rect.height - .5;
+                card.style.transform = `translateY(-8px) rotateX(${py * -5}deg) rotateY(${px * 6}deg)`;
+            });
+
+            card.addEventListener("pointerleave", () => {
+                card.style.transform = "";
+            });
+        });
     </script>
 </body>
 

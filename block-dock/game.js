@@ -29,7 +29,7 @@ if (typeof ALL_SHAPES === 'undefined') throw new Error('shapes.js must be loaded
 
 // ── Color settings ──────────────────────────────
 // Three independent colors stored in localStorage.
-const DEFAULTS = { bg: '#292929', block: '#ff4788', grid: '#303030' };
+const DEFAULTS = { bg: '#09090d', block: '#ff1f6d', grid: '#332334' };
 
 function getBgColor()    { return localStorage.getItem('BD_BG')    || DEFAULTS.bg;    }
 function getBlockColor() { return localStorage.getItem('BD_BLOCK') || DEFAULTS.block; }
@@ -48,6 +48,10 @@ function colorDarken(hex, amount) {
   const [r,g,b] = hexToRgb(hex);
   return `rgb(${Math.max(0,r-amount)},${Math.max(0,g-amount)},${Math.max(0,b-amount)})`;
 }
+function colorLighten(hex, amount) {
+  const [r,g,b] = hexToRgb(hex);
+  return `rgb(${Math.min(255,r+amount)},${Math.min(255,g+amount)},${Math.min(255,b+amount)})`;
+}
 
 // Returns perceived luminance 0..1 (sRGB approximation)
 function luminance(hex) {
@@ -64,12 +68,15 @@ function applyAccent() {
   const light = luminance(bg) > 0.35;
   const s = document.documentElement.style;
   s.setProperty('--bd-accent', block);
-  s.setProperty('--bd-glow',   themeRgba(block, 0.35));
+  s.setProperty('--bd-accent-soft', colorLighten(block, 34));
+  s.setProperty('--bd-glow',   themeRgba(block, 0.32));
   s.setProperty('--bd-bg',     bg);
-  s.setProperty('--bd-text',   light ? '#111827' : '#e2e8f0');
-  s.setProperty('--bd-sub',    light ? '#6b7280' : '#4e6080');
-  s.setProperty('--bd-card',   light ? 'rgba(0,0,0,0.06)' : 'rgba(255,255,255,0.06)');
-  s.setProperty('--bd-overlay',light ? 'rgba(240,240,240,0.97)' : 'rgba(14,26,46,0.97)');
+  s.setProperty('--bd-bg-2',   light ? colorDarken(bg, 12) : colorLighten(bg, 12));
+  s.setProperty('--bd-text',   light ? '#111216' : '#f5f5f7');
+  s.setProperty('--bd-sub',    light ? '#535761' : '#a9a9b4');
+  s.setProperty('--bd-card',   light ? 'rgba(0,0,0,0.06)' : 'rgba(255,255,255,0.05)');
+  s.setProperty('--bd-panel',  light ? 'rgba(244,244,247,0.78)' : 'rgba(18,18,25,0.72)');
+  s.setProperty('--bd-overlay',light ? 'rgba(245,245,247,0.84)' : 'rgba(10,10,15,0.82)');
   document.body.style.background = bg;
 }
 
@@ -90,10 +97,10 @@ window.addEventListener('resize', resize);
 window.addEventListener('orientationchange', () => setTimeout(resize, 100));
 
 function layout() {
-  const hudH      = 72 * DPR;
+  const hudH      = 118 * DPR;
   const trayPad   = 24 * DPR;
   const traySlotH = 80 * DPR;  // reserved height for tray pieces
-  const bottomPad = 16 * DPR;
+  const bottomPad = 34 * DPR;
 
   // Fixed cell size — board grows/shrinks with grid count
   cell      = CELL_PX * DPR;
@@ -223,19 +230,22 @@ function showMenu() {
   const hasSaved = hasSave();
 
   ov.innerHTML = `
-    <h1>BLOCK DOCK</h1>
-    <div class="sub">Przeciągnij klocki na planszę.<br>Wypełnij rząd, kolumnę lub kwadrat 3×3.</div>
+    <div class="overlay-panel">
+      <div class="menu-kicker">Neon puzzle challenge</div>
+      <h1>BLOCK DOCK</h1>
+      <div class="sub">Przeciągnij klocki na planszę, czyść linie i kwadraty 3×3, a potem utrzymaj rytm. Ten ekran jest teraz wizualnie spięty z landing page.</div>
 
-    ${hasSaved ? `<button id="continueBtn" style="margin-bottom:12px">KONTYNUUJ</button>` : ''}
+      ${hasSaved ? `<button id="continueBtn" style="margin-bottom:14px">Kontynuuj</button>` : ''}
 
-    <div class="size-label" style="margin-top:${hasSaved ? 16 : 0}px">Nowa gra</div>
-    <div class="size-picker" id="sizePicker">
-      ${GRID_SIZES.map(n =>
-        `<button class="size-btn${n === GRID ? ' active' : ''}" data-size="${n}">${n}×${n}</button>`
-      ).join('')}
+      <div class="size-label" style="margin-top:${hasSaved ? 10 : 0}px">Nowa gra</div>
+      <div class="size-picker" id="sizePicker">
+        ${GRID_SIZES.map(n =>
+          `<button class="size-btn${n === GRID ? ' active' : ''}" data-size="${n}">${n}×${n}</button>`
+        ).join('')}
+      </div>
+
+      <button id="startBtn" style="margin-top:18px" class="secondary">Start</button>
     </div>
-
-    <button id="startBtn" style="margin-top:16px" class="secondary">START</button>
   `;
   ov.classList.remove('hidden');
 
@@ -263,14 +273,17 @@ function showGameOver() {
   if (score > best) { best = score; saveBest(); }
   const ov = document.getElementById('overlay');
   ov.innerHTML = `
-    <h1 style="color:var(--bd-accent)">GAME OVER</h1>
-    <div class="big">${score}</div>
-    <div class="row">
-      <div class="stat"><div class="l">SCORE</div><div class="v">${score}</div></div>
-      <div class="stat"><div class="l">BEST</div><div class="v">${best}</div></div>
+    <div class="overlay-panel">
+      <div class="menu-kicker">Run complete</div>
+      <h1 style="color:var(--bd-accent)">GAME OVER</h1>
+      <div class="big">${score}</div>
+      <div class="row">
+        <div class="stat"><div class="l">Score</div><div class="v">${score}</div></div>
+        <div class="stat"><div class="l">Best</div><div class="v">${best}</div></div>
+      </div>
+      <button id="restartBtn">Jeszcze raz</button>
+      <button class="secondary" id="menuBtn" style="margin-top:12px">Menu</button>
     </div>
-    <button id="restartBtn">JESZCZE RAZ</button>
-    <button class="secondary" id="menuBtn" style="margin-top:12px">MENU</button>
   `;
   ov.classList.remove('hidden');
   document.getElementById('restartBtn').addEventListener('click', () => startGame(GRID));
@@ -452,21 +465,91 @@ function roundRect(x, y, w, h, r) {
   ctx.closePath();
 }
 
+function circleGlow(x, y, radius, color, alpha) {
+  const glow = ctx.createRadialGradient(x, y, 0, x, y, radius);
+  glow.addColorStop(0, themeRgba(color, alpha));
+  glow.addColorStop(0.45, themeRgba(color, alpha * 0.34));
+  glow.addColorStop(1, themeRgba(color, 0));
+  ctx.fillStyle = glow;
+  ctx.beginPath();
+  ctx.arc(x, y, radius, 0, Math.PI * 2);
+  ctx.fill();
+}
+
+function drawSceneBackground() {
+  const bg = getBgColor();
+  const gradient = ctx.createLinearGradient(0, 0, W, H);
+  gradient.addColorStop(0, colorDarken(bg, 8));
+  gradient.addColorStop(0.46, colorLighten(bg, 10));
+  gradient.addColorStop(1, colorDarken(bg, 2));
+  ctx.fillStyle = gradient;
+  ctx.fillRect(0, 0, W, H);
+
+  circleGlow(W * 0.18, H * 0.14, Math.max(W, H) * 0.22, getBlockColor(), 0.16);
+  circleGlow(W * 0.84, H * 0.25, Math.max(W, H) * 0.28, getBlockColor(), 0.14);
+  circleGlow(W * 0.62, H * 0.88, Math.max(W, H) * 0.24, getBlockColor(), 0.1);
+
+  ctx.strokeStyle = themeRgba('#ffffff', 0.03);
+  ctx.lineWidth = 1;
+  const step = 72 * DPR;
+  for (let x = 0; x <= W; x += step) {
+    ctx.beginPath();
+    ctx.moveTo(x, 0);
+    ctx.lineTo(x, H);
+    ctx.stroke();
+  }
+  for (let y = 0; y <= H; y += step) {
+    ctx.beginPath();
+    ctx.moveTo(0, y);
+    ctx.lineTo(W, y);
+    ctx.stroke();
+  }
+
+  ctx.save();
+  ctx.translate(W * 0.82, H * 0.55);
+  ctx.rotate(-0.22);
+  ctx.strokeStyle = themeRgba(getBlockColor(), 0.2);
+  ctx.lineWidth = 2 * DPR;
+  ctx.beginPath();
+  ctx.ellipse(0, 0, 240 * DPR, 92 * DPR, 0, 0.2, Math.PI * 1.76);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.ellipse(-70 * DPR, 44 * DPR, 154 * DPR, 56 * DPR, 0, 0.4, Math.PI * 1.9);
+  ctx.stroke();
+  ctx.restore();
+
+  const vignette = ctx.createRadialGradient(W * 0.5, H * 0.42, Math.min(W, H) * 0.18, W * 0.5, H * 0.45, Math.max(W, H) * 0.72);
+  vignette.addColorStop(0, 'rgba(0,0,0,0)');
+  vignette.addColorStop(1, 'rgba(0,0,0,0.46)');
+  ctx.fillStyle = vignette;
+  ctx.fillRect(0, 0, W, H);
+}
+
 function drawBlock(x, y, size, color, alpha = 1) {
-  const pad = Math.max(1, size * 0.05);
-  const r   = size * 0.05;
+  const pad = Math.max(1, size * 0.08);
+  const r   = size * 0.16;
   ctx.save();
   ctx.globalAlpha = alpha;
 
-  // Flat fill — base color only
-  ctx.fillStyle = color;
+  ctx.shadowColor = themeRgba(color, 0.45 * alpha);
+  ctx.shadowBlur = size * 0.28;
+
+  const gradient = ctx.createLinearGradient(x, y, x, y + size);
+  gradient.addColorStop(0, colorLighten(color, 22));
+  gradient.addColorStop(0.45, color);
+  gradient.addColorStop(1, colorDarken(color, 28));
+  ctx.fillStyle = gradient;
   roundRect(x+pad, y+pad, size-pad*2, size-pad*2, r);
   ctx.fill();
 
-  // Subtle inner shadow at bottom edge
-  ctx.fillStyle = colorDarken(color, 40);
-  ctx.globalAlpha = alpha * 0.35;
-  roundRect(x+pad, y+size-pad-size*0.18, size-pad*2, size*0.18, r);
+  ctx.shadowBlur = 0;
+  ctx.strokeStyle = themeRgba('#ffffff', 0.2 * alpha);
+  ctx.lineWidth = Math.max(1, size * 0.025);
+  roundRect(x+pad, y+pad, size-pad*2, size-pad*2, r);
+  ctx.stroke();
+
+  ctx.fillStyle = themeRgba('#ffffff', 0.13 * alpha);
+  roundRect(x + pad * 1.5, y + pad * 1.5, size - pad * 3, size * 0.18, r * 0.8);
   ctx.fill();
 
   ctx.restore();
@@ -475,16 +558,31 @@ function drawBlock(x, y, size, color, alpha = 1) {
 function drawBoard() {
   const gridColor  = getGridColor();
   const bpr = GRID / BLOCK;
+  const framePad = 14 * DPR;
 
-  // board background — slightly darkened bg color
-  ctx.fillStyle = colorDarken(getBgColor(), 12);
-  roundRect(boardX - 6*DPR, boardY - 6*DPR, boardSize + 12*DPR, boardSize + 12*DPR, 12*DPR);
+  ctx.save();
+  ctx.shadowColor = themeRgba(getBlockColor(), 0.14);
+  ctx.shadowBlur = 38 * DPR;
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.28)';
+  roundRect(boardX - framePad, boardY - framePad, boardSize + framePad * 2, boardSize + framePad * 2, 26 * DPR);
   ctx.fill();
+  ctx.restore();
+
+  const boardGradient = ctx.createLinearGradient(boardX, boardY, boardX, boardY + boardSize);
+  boardGradient.addColorStop(0, 'rgba(18,18,25,0.96)');
+  boardGradient.addColorStop(1, 'rgba(10,10,15,0.92)');
+  ctx.fillStyle = boardGradient;
+  roundRect(boardX - 6*DPR, boardY - 6*DPR, boardSize + 12*DPR, boardSize + 12*DPR, 22*DPR);
+  ctx.fill();
+
+  ctx.strokeStyle = themeRgba('#ffffff', 0.08);
+  ctx.lineWidth = 1.5 * DPR;
+  roundRect(boardX - 6*DPR, boardY - 6*DPR, boardSize + 12*DPR, boardSize + 12*DPR, 22*DPR);
+  ctx.stroke();
 
   const ga = getGridAlpha();
 
-  // sub-block checker: grid color tint
-  ctx.fillStyle = themeRgba(gridColor, 0.25 * ga);
+  ctx.fillStyle = themeRgba(gridColor, 0.22 * ga);
   for (let by = 0; by < bpr; by++) {
     for (let bx = 0; bx < bpr; bx++) {
       if ((bx + by) % 2 === 1)
@@ -492,7 +590,6 @@ function drawBoard() {
     }
   }
 
-  // thin cell grid lines
   ctx.strokeStyle = themeRgba(gridColor, ga);
   ctx.lineWidth   = 1;
   for (let i = 0; i <= GRID; i++) {
@@ -500,8 +597,7 @@ function drawBoard() {
     ctx.beginPath(); ctx.moveTo(boardX, boardY + i*cell); ctx.lineTo(boardX + boardSize, boardY + i*cell); ctx.stroke();
   }
 
-  // thick block-boundary lines
-  ctx.strokeStyle = themeRgba(gridColor, ga);
+  ctx.strokeStyle = themeRgba(getBlockColor(), 0.1 + ga * 0.12);
   ctx.lineWidth   = 2;
   for (let i = 0; i <= GRID; i += BLOCK) {
     ctx.beginPath(); ctx.moveTo(boardX + i*cell, boardY); ctx.lineTo(boardX + i*cell, boardY + boardSize); ctx.stroke();
@@ -531,7 +627,21 @@ function drawBoard() {
 }
 
 function drawTray() {
+  const slotGap = 10 * DPR;
+  const slotW = boardSize / 3 - slotGap;
+  const slotH = trayH - 6 * DPR;
+
   for (let i = 0; i < 3; i++) {
+    const slotX = boardX + i * boardSize / 3 + slotGap / 2;
+    const slotY = trayY + 3 * DPR;
+    ctx.fillStyle = 'rgba(18,18,25,0.72)';
+    roundRect(slotX, slotY, slotW, slotH, 18 * DPR);
+    ctx.fill();
+    ctx.strokeStyle = themeRgba('#ffffff', 0.07);
+    ctx.lineWidth = 1.2 * DPR;
+    roundRect(slotX, slotY, slotW, slotH, 18 * DPR);
+    ctx.stroke();
+
     const piece = tray[i];
     if (!piece || (drag && drag.pieceIdx === i)) continue;
     const origin = trayOrigins[i];
@@ -562,8 +672,8 @@ function loop(now) {
   const dt = Math.min((now - lastT) / 1000, 1/20);
   lastT = now;
 
-  ctx.fillStyle = getBgColor();
-  ctx.fillRect(0, 0, W, H);
+  ctx.clearRect(0, 0, W, H);
+  drawSceneBackground();
 
   if (gameState === 'playing' && grid) {
     drawBoard();
