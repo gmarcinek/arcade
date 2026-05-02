@@ -15,12 +15,13 @@ const _mat = new THREE.MeshBasicMaterial({
 
 let sparkMesh = null;
 
-const _dummy  = new THREE.Object3D();
-const _col    = new THREE.Color();
-const _up     = new THREE.Vector3(0, 1, 0);
-const _vel    = new THREE.Vector3();
-const _q      = new THREE.Quaternion();
-const _hidden = new THREE.Matrix4().makeScale(0, 0, 0);
+const _dummy    = new THREE.Object3D();
+const _col      = new THREE.Color();
+const _up       = new THREE.Vector3(0, 1, 0);
+const _vel      = new THREE.Vector3();
+const _q        = new THREE.Quaternion();
+const _qSpin    = new THREE.Quaternion();
+const _hidden   = new THREE.Matrix4().makeScale(0, 0, 0);
 
 export function createSparks(scene) {
   sparkMesh = new THREE.InstancedMesh(_geo, _mat, MAX_SPARKS);
@@ -55,6 +56,9 @@ export function emitBounce(pos, normalOut, speed, impact) {
       age:  0,
       life: 0.5 + Math.random() * 1.3,
       len:  0.06 + Math.random() * 0.30,
+      // torque — spin around velocity axis (rifling)
+      spin: (8 + Math.random() * 22) * (Math.random() < 0.5 ? 1 : -1),
+      angle: 0,
     });
   }
   while (pool.length > MAX_SPARKS) pool.shift();
@@ -75,6 +79,7 @@ export function updateSparks(dt) {
     s.x  += s.vx * dt;
     s.y  += s.vy * dt;
     s.z  += s.vz * dt;
+    s.angle += s.spin * dt;
   }
 
   // Upload to InstancedMesh
@@ -92,10 +97,12 @@ export function updateSparks(dt) {
     if (vLen > 0.1) {
       _vel.normalize();
       _q.setFromUnitVectors(_up, _vel);
-      _dummy.quaternion.copy(_q);
     } else {
-      _dummy.quaternion.identity();
+      _q.identity();
     }
+    // spin around velocity axis (local Y = forward direction)
+    _qSpin.setFromAxisAngle(_up, s.angle);
+    _dummy.quaternion.copy(_q).multiply(_qSpin);
     _dummy.scale.set(1, motionLen, 1);
     _dummy.updateMatrix();
     sparkMesh.setMatrixAt(i, _dummy.matrix);

@@ -14,8 +14,8 @@ export const CFG = {
   minSpeed:             12,   // min prędkość przy wciśniętym ↓/S (hamowanie)
   boostSpeed:          90,
   acceleration:        5,   // boost spring-to-speed coefficient (kept for boost only)
-  speedForce:          20,  // throttle / brake force (m/s²) — mirrors steer physics
-  speedFriction:       0.2, // rolling resistance — coast ~3 s back to baseSpeed
+  speedForce:          10,  // throttle / brake force (m/s²) — mirrors steer physics
+  speedFriction:       0.1, // rolling resistance — coast ~3 s back to baseSpeed
   steerAcceleration:   5.5,
   maxThetaVelocity:    4.8,
   groundedFriction:    7.5,
