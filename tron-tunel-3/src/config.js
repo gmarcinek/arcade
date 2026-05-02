@@ -9,7 +9,9 @@ export const BASE_SPEED_START = 32;
 
 // ---- Physics config ----
 export const CFG = {
-  baseSpeed:           32,
+  baseSpeed:           42,   // prędkość gdy brak inputu
+  forwardSpeed:        65,   // prędkość przy wciśniętym ↑/W
+  minSpeed:             8,   // min prędkość przy wciśniętym ↓/S (hamowanie)
   boostSpeed:          90,
   acceleration:        5,
   steerAcceleration:   5.5,
@@ -63,6 +65,6 @@ export const CAM_FOV_ENTER_S   = 3.0;
 export const CAM_FOV_EXIT_S    = 1.2;
 export const CAM_HEIGHT_NORMAL = 4.0;
 export const CAM_HEIGHT_BOOST  = 2.0;
-export const CAM_DIST_NORMAL   = 13;
-export const CAM_DIST_FORWARD  = 19;
-export const CAM_DIST_BACK     = 9;
+export const CAM_DIST_NORMAL   = 9;   // domyślna odległość
+export const CAM_DIST_FORWARD  = 16;  // ↑/W – gaz, kamera cofa się
+export const CAM_DIST_BACK     = 6;   // ↓/S – hamowanie, zoom in

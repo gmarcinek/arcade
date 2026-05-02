@@ -56,7 +56,7 @@ function startGame() {
   state.speed = BASE_SPEED_START;  state.boost = 1;  state.boostActive = false;
   state.score = 0;  state.timeLeft = 60;  state.timeElapsed = 0;
   state.flashAlpha = 0;  state.totalDistance = 0;  state.dangerTimer = 0;
-  state.cameraFovCurrent = 66;  state.cameraBackDistanceCurrent = 13;  state.cameraHeightCurrent = 4.0;
+  state.cameraFovCurrent = 66;  state.cameraBackDistanceCurrent = 9;  state.cameraHeightCurrent = 4.0;
   state.restitutionCurrent = BALL_PHYS.restitution;
   state.materialDamp = 1.0;
   state.jumpCooldown = 0;

@@ -1,11 +1,14 @@
 import * as THREE from 'three';
-import { CFG, BALL_PHYS, BASE_SPEED_START } from './config.js';
+import { CFG, BALL_PHYS, BASE_SPEED_START } from './config.js'; // BASE_SPEED_START used only for crash fallback
 import { state } from './state.js';
 import { input } from './input.js';
 import { showTrick } from './ui.js';
 
-export function currentBaseSpeed() {
-  return BASE_SPEED_START + Math.min(state.timeElapsed, 60); // 32 → 92 over 60 s
+// Prędkość docelowa na podstawie inputu (brak auto-przyspieszenia)
+function targetBaseSpeed() {
+  if (input.up)   return CFG.forwardSpeed;
+  if (input.down) return CFG.minSpeed;
+  return CFG.baseSpeed;
 }
 
 function evaluateLanding() {
@@ -31,7 +34,7 @@ function respawnAfterCrash() {
 export function updatePhysics(dt, left, right, jumpPressed, boostHeld) {
   if (state.crashed) {
     state.crashTimer    -= dt;
-    state.speed         += (currentBaseSpeed() * 0.4 - state.speed) * 5 * dt;
+    state.speed         += (CFG.baseSpeed * 0.4 - state.speed) * 5 * dt;
     state.carZ          += state.speed * dt;
     state.totalDistance += state.speed * dt;
     state.timeElapsed   += dt;
@@ -45,10 +48,9 @@ export function updatePhysics(dt, left, right, jumpPressed, boostHeld) {
     return;
   }
 
-  const bSpeed      = currentBaseSpeed();
   const targetSpeed = boostHeld && state.boost > 0.02
-    ? CFG.boostSpeed + (bSpeed - CFG.baseSpeed)
-    : bSpeed;
+    ? CFG.boostSpeed
+    : targetBaseSpeed();
   state.speed += (targetSpeed - state.speed) * CFG.acceleration * dt;
 
   if (boostHeld && state.boost > 0.02) {

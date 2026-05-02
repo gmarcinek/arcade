@@ -49,10 +49,10 @@ export function updateCamera(dt, camera, carGroup) {
     (state.boostActive ? 3.0 : 1.2)) * dt;
   state.cameraHeightCurrent = moveToward(state.cameraHeightCurrent, hTarget, hStep);
 
-  // Back-distance: ↑ = pull back (see ahead), ↓ = zoom in (brake/absorb)
+  // Back-distance: ↑/W = gaz (kamera cofa), ↓/S = hamowanie (zoom in); lerp ~3s
   const distTarget = input.up ? CAM_DIST_FORWARD : input.down ? CAM_DIST_BACK : CAM_DIST_NORMAL;
   state.cameraBackDistanceCurrent +=
-    (distTarget - state.cameraBackDistanceCurrent) * (1 - Math.exp(-3.2 * dt));
+    (distTarget - state.cameraBackDistanceCurrent) * (1 - Math.exp(-1.0 * dt));
 
   const camSurf = new THREE.Vector3(Math.sin(state.cameraTheta), -Math.cos(state.cameraTheta), 0);
   const camUp   = camSurf.clone().multiplyScalar(-1);

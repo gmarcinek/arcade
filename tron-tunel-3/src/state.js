@@ -39,7 +39,7 @@ export const state = {
   cameraTheta:             0,
   cameraThetaVelocity:     0,
   cameraFovCurrent:        66,
-  cameraBackDistanceCurrent: 13,
+  cameraBackDistanceCurrent: 9,
   cameraHeightCurrent:     4.0,
 
   // --- visuals ---
