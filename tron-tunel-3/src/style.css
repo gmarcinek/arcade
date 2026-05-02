@@ -46,27 +46,33 @@ html, body {
 .tc-bar-r { transform: scaleX(-1); }
 #time { font-size: 50px; font-weight: 700; letter-spacing: -1px; }
 
-/* ---- Boost bar ---- */
-.boost-bar {
-  width: 188px; height: 7px;
-  background: rgba(0, 0, 0, 0.55);
+/* ---- Boost segments ---- */
+.boost-segs {
+  display: flex;
+  gap: 3px;
+  margin-top: 7px;
+  align-items: flex-end;
+}
+.boost-seg {
+  /* skewed parallelogram: 15° tilt to the right */
+  width: 52px;
+  height: 18px;
+  clip-path: polygon(10px 0%, 100% 0%, calc(100% - 10px) 100%, 0% 100%);
+  background: rgba(0, 210, 255, 0.12);
   border: 1px solid rgba(0, 210, 255, 0.28);
-  border-radius: 2px; overflow: hidden;
-  margin-top: 5px; position: relative;
+  transition: background 0.12s, box-shadow 0.12s;
 }
-.boost-bar::after {
-  content: ''; position: absolute; inset: 0; z-index: 2; pointer-events: none;
-  background: repeating-linear-gradient(
-    90deg,
-    transparent, transparent calc(25% - 1px),
-    rgba(0,0,0,0.5) calc(25% - 1px), rgba(0,0,0,0.5) 25%
-  );
+.boost-seg.on {
+  background: linear-gradient(135deg, #00c8ff, #0068cc);
+  border-color: rgba(0, 220, 255, 0.7);
+  box-shadow: 0 0 10px rgba(0, 210, 255, 0.65), inset 0 0 6px rgba(255,255,255,0.12);
 }
-.boost-fill {
-  height: 100%;
-  background: linear-gradient(90deg, #0090cc, #00d9ff);
-  box-shadow: 0 0 6px rgba(0, 217, 255, 0.7);
-  transition: width 0.08s linear;
+.boost-seg.pulse {
+  animation: boostPulse 0.35s ease-out;
+}
+@keyframes boostPulse {
+  0%   { box-shadow: 0 0 18px rgba(0,210,255,1), inset 0 0 8px rgba(255,255,255,0.25); }
+  100% { box-shadow: 0 0 10px rgba(0,210,255,0.65), inset 0 0 6px rgba(255,255,255,0.12); }
 }
 
 /* ---- Speed ---- */

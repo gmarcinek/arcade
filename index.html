@@ -608,6 +608,184 @@
             }
         }
 
+        /* ---- Tron Tunel 3 preview ---- */
+        .tron-preview {
+            background:
+                radial-gradient(circle at 50% 50%, rgba(0, 210, 255, .18), transparent 38%),
+                linear-gradient(180deg, #03050d, #060b14 70%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+        }
+
+        .tron-tunnel {
+            position: absolute;
+            width: 220px;
+            height: 220px;
+            border-radius: 50%;
+            border: 2px solid rgba(0, 200, 255, .18);
+            box-shadow:
+                0 0 0 6px rgba(0, 200, 255, .07),
+                0 0 0 18px rgba(0, 200, 255, .04),
+                inset 0 0 60px rgba(0, 200, 255, .06);
+            animation: tronPulse 2.8s ease-in-out infinite;
+        }
+
+        .tron-tunnel::before {
+            content: "";
+            position: absolute;
+            inset: 18px;
+            border-radius: 50%;
+            border: 1.5px solid rgba(0, 200, 255, .25);
+        }
+
+        .tron-tunnel::after {
+            content: "";
+            position: absolute;
+            inset: 42px;
+            border-radius: 50%;
+            border: 1px solid rgba(0, 200, 255, .35);
+            box-shadow: 0 0 16px rgba(0, 200, 255, .22);
+        }
+
+        .tron-strips {
+            position: absolute;
+            width: 220px;
+            height: 220px;
+        }
+
+        .tron-strips span {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 2px;
+            height: 108px;
+            transform-origin: 50% 0%;
+            background: linear-gradient(180deg, rgba(0, 210, 255, .7) 0%, transparent 100%);
+            border-radius: 2px;
+            animation: tronStrip 2.8s ease-in-out infinite;
+        }
+
+        .tron-strips span:nth-child(1) {
+            transform: rotate(0deg) translateX(-50%);
+            animation-delay: 0s;
+        }
+
+        .tron-strips span:nth-child(2) {
+            transform: rotate(45deg) translateX(-50%);
+            animation-delay: .35s;
+        }
+
+        .tron-strips span:nth-child(3) {
+            transform: rotate(90deg) translateX(-50%);
+            animation-delay: .7s;
+        }
+
+        .tron-strips span:nth-child(4) {
+            transform: rotate(135deg) translateX(-50%);
+            animation-delay: 1.05s;
+        }
+
+        .tron-strips span:nth-child(5) {
+            transform: rotate(180deg) translateX(-50%);
+            animation-delay: 1.4s;
+        }
+
+        .tron-strips span:nth-child(6) {
+            transform: rotate(225deg) translateX(-50%);
+            animation-delay: 1.75s;
+        }
+
+        .tron-strips span:nth-child(7) {
+            transform: rotate(270deg) translateX(-50%);
+            animation-delay: 2.1s;
+        }
+
+        .tron-strips span:nth-child(8) {
+            transform: rotate(315deg) translateX(-50%);
+            animation-delay: 2.45s;
+        }
+
+        .tron-ball {
+            position: absolute;
+            width: 22px;
+            height: 22px;
+            border-radius: 50%;
+            background: radial-gradient(circle at 38% 35%, #e8f8ff, #c0e8ff 50%, #60c8ee 80%);
+            box-shadow: 0 0 18px rgba(0, 200, 255, .7), 0 0 5px #fff;
+            animation: tronBall 2.8s ease-in-out infinite;
+        }
+
+        .tron-boundary {
+            position: absolute;
+            width: 224px;
+            height: 224px;
+            border-radius: 50%;
+            border: 3px solid transparent;
+            background: radial-gradient(circle, transparent 96%, rgba(255, 140, 0, .8) 100%) border-box;
+            box-shadow: 0 0 22px rgba(255, 120, 0, .45), inset 0 0 12px rgba(255, 100, 0, .2);
+            animation: tronBoundary 2.8s ease-in-out infinite;
+        }
+
+        @keyframes tronPulse {
+
+            0%,
+            100% {
+                opacity: .7;
+            }
+
+            50% {
+                opacity: 1;
+            }
+        }
+
+        @keyframes tronStrip {
+
+            0%,
+            100% {
+                opacity: .45;
+            }
+
+            50% {
+                opacity: 1;
+            }
+        }
+
+        @keyframes tronBall {
+            0% {
+                transform: translate(0, 0);
+            }
+
+            25% {
+                transform: translate(38px, -28px);
+            }
+
+            50% {
+                transform: translate(64px, 20px);
+            }
+
+            75% {
+                transform: translate(-18px, 44px);
+            }
+
+            100% {
+                transform: translate(0, 0);
+            }
+        }
+
+        @keyframes tronBoundary {
+
+            0%,
+            100% {
+                box-shadow: 0 0 22px rgba(255, 120, 0, .45), inset 0 0 12px rgba(255, 100, 0, .2);
+            }
+
+            50% {
+                box-shadow: 0 0 38px rgba(255, 120, 0, .75), inset 0 0 20px rgba(255, 100, 0, .35);
+            }
+        }
+
         .zombie-dot {
             position: absolute;
             width: 14px;
@@ -1041,6 +1219,40 @@
                         </div>
                     </div>
                 </article>
+                <article class="game-card" data-type="arcade action" data-title="Tron Tunel 3">
+                    <span class="featured">Arcade</span>
+                    <div class="preview tron-preview" aria-hidden="true">
+                        <div class="tron-boundary"></div>
+                        <div class="tron-tunnel"></div>
+                        <div class="tron-strips">
+                            <span></span><span></span><span></span><span></span>
+                            <span></span><span></span><span></span><span></span>
+                        </div>
+                        <div class="tron-ball"></div>
+                    </div>
+
+                    <div class="card-body">
+                        <div class="label-row">
+                            <span class="genre">Tunnel Runner</span>
+                            <span class="status">Ready</span>
+                        </div>
+                        <h2>Tron Tunel 3</h2>
+                        <p>Prowadź świetlistą kulę przez neonowy tunel. Skacz, boost, odbijaj się od ścian i przeżyj jak
+                            najdłużej — szybkie arcade z efektami iskier i live refleksją.</p>
+
+                        <div class="meta">
+                            <span class="tag">3D</span>
+                            <span class="tag">WebGL</span>
+                            <span class="tag">Boost</span>
+                            <span class="tag">Sparks</span>
+                        </div>
+
+                        <div class="card-actions">
+                            <a class="btn primary" href="./tron-tunel-3/dist/index.html">Graj</a>
+                            <button class="btn secondary" type="button" data-details="tron">Info</button>
+                        </div>
+                    </div>
+                </article>
             </section>
 
             <div class="bottom">Arcade · 2026</div>
@@ -1132,6 +1344,12 @@
                 text: "Zombie Racer ma cięższy, bardziej arcade'owy charakter: zielone auto, ogień, dym, rooftopy, survival i racing. Karta prowadzi do landingu gry z screenami i gameplay preview.",
                 href: "./zombie-racer/landingPage.html",
                 color: "linear-gradient(145deg, rgba(53,215,111,.18), rgba(255,138,42,.18))"
+            },
+            tron: {
+                title: "Tron Tunel 3",
+                text: "Prowadź odbijającą się kulę przez procedural­nie generowany neonowy tunel. Sterowanie WASD/strzałki, skok Spacja, boost Shift. Single-file build Three.js — działa bez serwera.",
+                href: "./tron-tunel-3/dist/index.html",
+                color: "linear-gradient(145deg, rgba(0,200,255,.18), rgba(255,120,0,.14))"
             }
         };
 

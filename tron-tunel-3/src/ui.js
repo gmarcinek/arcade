@@ -16,14 +16,28 @@ export function showTrick(name) {
   trickHide = setTimeout(() => { el.style.opacity = '0'; }, 1600);
 }
 
+const boostSegs = [0,1,2,3].map(i => document.getElementById('bseg-' + i));
+
 export function updateHUD() {
-  document.getElementById('score').textContent      = Math.floor(state.score).toLocaleString();
+  document.getElementById('score').textContent = Math.floor(state.score).toLocaleString();
   const m = Math.floor(state.timeLeft / 60);
   const s = Math.floor(state.timeLeft % 60);
-  document.getElementById('time').textContent       = m + ':' + (s < 10 ? '0' : '') + s;
-  document.getElementById('speed').textContent      = Math.floor(state.speed * 3.6);
-  document.getElementById('boost-fill').style.width = (state.boost * 100).toFixed(0) + '%';
-  document.getElementById('dist').textContent       = Math.floor(state.totalDistance) + ' m';
+  document.getElementById('time').textContent  = m + ':' + (s < 10 ? '0' : '') + s;
+  document.getElementById('speed').textContent = Math.floor(state.speed * 3.6);
+  document.getElementById('dist').textContent  = Math.floor(state.totalDistance) + ' m';
+  // 4 segments: each represents 25% boost
+  const lit = Math.ceil(state.boost * 4);
+  boostSegs.forEach((seg, i) => {
+    const on = i < lit;
+    if (on && !seg.classList.contains('on')) {
+      seg.classList.add('on');
+      seg.classList.remove('pulse');
+      void seg.offsetWidth; // reflow to restart animation
+      seg.classList.add('pulse');
+    } else if (!on) {
+      seg.classList.remove('on', 'pulse');
+    }
+  });
 }
 
 export function applyFlash(dt) {
