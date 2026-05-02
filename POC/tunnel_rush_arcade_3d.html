@@ -1,0 +1,634 @@
+<style>
+#game-wrap {
+  width: 100%; height: 540px; position: relative;
+  background: #02040c; border-radius: var(--border-radius-lg);
+  overflow: hidden; font-family: var(--font-sans);
+}
+#game-canvas { width: 100%; height: 100%; display: block; }
+#flash { position: absolute; inset: 0; pointer-events: none; background: transparent; transition: background 0.08s; }
+.hud { position: absolute; pointer-events: none; color: #fff; }
+.hud-tl { top: 14px; left: 18px; }
+.hud-tc { top: 14px; left: 50%; transform: translateX(-50%); text-align: center; }
+.hud-tr { top: 14px; right: 18px; text-align: right; }
+.hud-bl { bottom: 18px; left: 18px; }
+.hud-br { bottom: 18px; right: 18px; }
+.lbl { font-size: 11px; opacity: 0.65; letter-spacing: 1.6px; text-transform: lowercase; }
+.val { font-size: 24px; font-weight: 500; line-height: 1.1; }
+.val-big { font-size: 30px; font-weight: 500; line-height: 1.05; margin-top: 2px; }
+.combo { color: #fbbf24; font-size: 26px; font-weight: 500; line-height: 1.1; }
+.pos { font-size: 18px; font-weight: 500; opacity: 0.9; }
+#trick-display { margin-top: 10px; opacity: 0; transition: opacity 0.25s; min-height: 38px; }
+.trick-name { color: #fbbf24; font-size: 12px; font-weight: 500; letter-spacing: 1.4px; text-transform: lowercase; }
+.trick-pts { color: #fbbf24; font-size: 18px; font-weight: 500; margin-top: 1px; }
+.boost-bar { width: 220px; height: 14px; background: rgba(0,0,0,0.5); border: 1px solid rgba(0,217,255,0.35); border-radius: 3px; overflow: hidden; margin-top: 4px; }
+.boost-fill { height: 100%; background: #00d9ff; transition: width 0.1s linear; }
+.spd-row { display: flex; align-items: baseline; justify-content: flex-end; gap: 6px; }
+.km { font-size: 12px; opacity: 0.65; letter-spacing: 1px; }
+#overlay { position: absolute; inset: 0; background: rgba(2,5,13,0.82); display: flex; align-items: center; justify-content: center; flex-direction: column; gap: 16px; pointer-events: auto; color: #fff; padding: 20px; box-sizing: border-box; }
+.title { font-size: 36px; font-weight: 500; color: #00d9ff; letter-spacing: 5px; }
+.hint-row { display: flex; gap: 18px; flex-wrap: wrap; justify-content: center; font-size: 13px; opacity: 0.78; letter-spacing: 0.4px; }
+.hint-row span { white-space: nowrap; }
+.kbd { background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.18); padding: 2px 8px; border-radius: 4px; font-family: var(--font-mono); font-size: 12px; margin-right: 4px; }
+.btn { padding: 12px 32px; background: #00d9ff; color: #001824; border: none; border-radius: 6px; font-weight: 500; font-size: 15px; cursor: pointer; letter-spacing: 1.2px; font-family: inherit; }
+.btn:hover { background: #50e8ff; }
+.end-card { background: rgba(0,0,0,0.5); border: 1px solid rgba(0,217,255,0.35); padding: 26px 40px; border-radius: 12px; text-align: center; display: flex; flex-direction: column; gap: 10px; align-items: center; }
+.end-label { font-size: 12px; opacity: 0.7; letter-spacing: 1.6px; text-transform: lowercase; }
+.end-score { font-size: 52px; font-weight: 500; color: #00d9ff; line-height: 1; }
+.end-stat { font-size: 13px; opacity: 0.75; }
+</style>
+
+<div id="game-wrap">
+  <canvas id="game-canvas"></canvas>
+  <div id="flash"></div>
+
+  <div class="hud hud-tl">
+    <div class="lbl">score</div>
+    <div class="val-big" id="score">0</div>
+    <div style="height: 10px;"></div>
+    <div class="lbl">combo</div>
+    <div class="combo">×<span id="combo">1</span></div>
+    <div id="trick-display">
+      <div class="trick-name" id="trick-name"></div>
+      <div class="trick-pts" id="trick-pts"></div>
+    </div>
+  </div>
+
+  <div class="hud hud-tc">
+    <div class="val-big" id="time">1:00</div>
+    <div class="lbl">time remaining</div>
+  </div>
+
+  <div class="hud hud-tr">
+    <div class="lbl">distance</div>
+    <div class="val" id="dist">0 m</div>
+  </div>
+
+  <div class="hud hud-bl">
+    <div class="lbl">boost · shift</div>
+    <div class="boost-bar"><div class="boost-fill" id="boost-fill" style="width:100%"></div></div>
+  </div>
+
+  <div class="hud hud-br">
+    <div class="spd-row"><span class="val" id="speed">0</span><span class="km">km/h</span></div>
+  </div>
+
+  <div id="overlay">
+    <div class="title">Tunnel rush</div>
+    <div style="font-size: 14px; opacity: 0.85; max-width: 520px; text-align: center; line-height: 1.6;">
+      Pędzisz przez nieskończony obrotowy tunel. Skręcaj między pasami, skacz nad przepaściami, łap rampy z boostem. 60 sekund na maksa punktów.
+    </div>
+    <div class="hint-row">
+      <span><span class="kbd">←</span><span class="kbd">→</span> zmiana pasa</span>
+      <span><span class="kbd">space</span> skok</span>
+      <span><span class="kbd">shift</span> boost (trzymaj)</span>
+    </div>
+    <button class="btn" id="start-btn">start</button>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+(function(){
+  const canvas = document.getElementById('game-canvas');
+  const wrap = document.getElementById('game-wrap');
+  const overlay = document.getElementById('overlay');
+  const flashEl = document.getElementById('flash');
+
+  const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+
+  const scene = new THREE.Scene();
+  scene.background = new THREE.Color(0x02040c);
+  scene.fog = new THREE.Fog(0x040816, 28, 220);
+
+  const camera = new THREE.PerspectiveCamera(75, 1, 0.1, 500);
+
+  function resize() {
+    const w = wrap.clientWidth, h = wrap.clientHeight;
+    renderer.setSize(w, h, false);
+    camera.aspect = w / Math.max(1, h);
+    camera.updateProjectionMatrix();
+  }
+  resize();
+  new ResizeObserver(resize).observe(wrap);
+
+  const TUNNEL_R = 12;
+  const TUNNEL_LEN = 380;
+  const LANE_COUNT = 8;
+  const LANE_ANGLE = (Math.PI * 2) / LANE_COUNT;
+  const CAR_OFF = 0.32;
+  const GRAVITY = 34;
+
+  // ---- Tunnel shader (custom GLSL: panel ridges, neon strips, scrolling chevrons) ----
+  const tunnelMat = new THREE.ShaderMaterial({
+    uniforms: { time: { value: 0 }, playerZ: { value: 0 } },
+    vertexShader: `
+      varying vec3 vWorld;
+      void main() {
+        vec4 wp = modelMatrix * vec4(position, 1.0);
+        vWorld = wp.xyz;
+        gl_Position = projectionMatrix * viewMatrix * wp;
+      }
+    `,
+    fragmentShader: `
+      uniform float time;
+      uniform float playerZ;
+      varying vec3 vWorld;
+      void main() {
+        float angle = atan(vWorld.y, vWorld.x);
+
+        // base steel panels
+        vec3 col = vec3(0.045, 0.065, 0.115);
+
+        // angular panel ridges (32 around)
+        float panel = abs(sin(angle * 32.0));
+        col += smoothstep(0.92, 1.0, panel) * vec3(0.16, 0.22, 0.32);
+
+        // longitudinal seams every 4m
+        float ring = abs(sin(vWorld.z * 0.7854));
+        col += smoothstep(0.96, 1.0, ring) * vec3(0.10, 0.18, 0.30);
+
+        // 8 cyan running-light strips (animated pulse)
+        float strip = step(0.985, abs(sin(angle * 4.0)));
+        float pulse = sin(vWorld.z * 0.55 - time * 6.0);
+        pulse = smoothstep(0.25, 1.0, pulse);
+        col += strip * vec3(0.0, 0.75, 1.0) * (0.45 + pulse * 0.7);
+
+        // amber dotted lights at finer angle
+        float aDot = step(0.992, abs(sin(angle * 16.0 + 0.4)));
+        float zDot = step(0.94, abs(sin(vWorld.z * 1.3)));
+        col += aDot * zDot * vec3(1.0, 0.55, 0.08) * 0.9;
+
+        // chevrons scrolling forward on the bottom (the "ground")
+        float ground = smoothstep(0.7, 0.0, abs(angle));
+        float chev = abs(sin(vWorld.z * 0.85 - time * 5.0));
+        col += ground * step(0.90, chev) * vec3(0.0, 0.85, 1.0) * 0.55;
+
+        // subtle scanline brightness based on world Z — sense of depth
+        col *= 0.85 + 0.15 * smoothstep(80.0, 0.0, abs(vWorld.z - playerZ - 30.0));
+
+        gl_FragColor = vec4(col, 1.0);
+      }
+    `,
+    side: THREE.BackSide,
+  });
+
+  const tunnelGeo = new THREE.CylinderGeometry(TUNNEL_R, TUNNEL_R, TUNNEL_LEN, 64, 32, true);
+  tunnelGeo.rotateX(Math.PI / 2);
+  const tunnel = new THREE.Mesh(tunnelGeo, tunnelMat);
+  scene.add(tunnel);
+
+  // ---- Lights ----
+  scene.add(new THREE.HemisphereLight(0x6090ff, 0x281410, 0.55));
+  const carLight = new THREE.PointLight(0x80ffff, 1.7, 22);
+  scene.add(carLight);
+  const tailLight = new THREE.PointLight(0xff5020, 0.9, 14);
+  scene.add(tailLight);
+
+  // ---- Car ----
+  const carGroup = new THREE.Group();
+  const bodyMat = new THREE.MeshStandardMaterial({ color: 0x10c060, metalness: 0.7, roughness: 0.25, emissive: 0x002012 });
+  const body = new THREE.Mesh(new THREE.BoxGeometry(1.05, 0.5, 1.85), bodyMat);
+  body.position.y = 0.34; carGroup.add(body);
+
+  const roof = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.36, 0.95), bodyMat);
+  roof.position.set(0, 0.74, -0.08); carGroup.add(roof);
+
+  const winMat = new THREE.MeshStandardMaterial({ color: 0x0c1622, metalness: 0.25, roughness: 0.05, emissive: 0x102035 });
+  const winF = new THREE.Mesh(new THREE.BoxGeometry(0.91, 0.28, 0.45), winMat);
+  winF.position.set(0, 0.74, 0.5); carGroup.add(winF);
+
+  // taillights (red)
+  const tlMat = new THREE.MeshBasicMaterial({ color: 0xff3030 });
+  for (const x of [-0.36, 0.36]) {
+    const m = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.1, 0.05), tlMat);
+    m.position.set(x, 0.42, -0.94); carGroup.add(m);
+  }
+
+  // wheels
+  const wGeo = new THREE.CylinderGeometry(0.24, 0.24, 0.18, 14);
+  wGeo.rotateZ(Math.PI / 2);
+  const wMat = new THREE.MeshStandardMaterial({ color: 0x161616, roughness: 0.7, metalness: 0.2 });
+  for (const [x, z] of [[-0.58, 0.62], [0.58, 0.62], [-0.58, -0.62], [0.58, -0.62]]) {
+    const w = new THREE.Mesh(wGeo, wMat);
+    w.position.set(x, 0.05, z); carGroup.add(w);
+  }
+
+  // boost flames
+  const flames = [];
+  for (const x of [-0.32, 0.32]) {
+    const fGeo = new THREE.ConeGeometry(0.2, 1.5, 10);
+    fGeo.rotateX(Math.PI / 2);
+    const f = new THREE.Mesh(fGeo, new THREE.MeshBasicMaterial({ color: 0x40c8ff, transparent: true, opacity: 0.6 }));
+    f.position.set(x, 0.32, -1.7);
+    flames.push(f); carGroup.add(f);
+  }
+  scene.add(carGroup);
+
+  // ---- State ----
+  let carTheta = 0, carThetaTarget = 0, cameraTheta = 0;
+  let carZ = 0, speed = 60;
+  const baseSpeed = 60, maxSpeed = 145;
+  let boost = 1, boostActive = false;
+  let jumpY = 0, jumpVel = 0, isAirborne = false;
+  let combo = 1, comboTimer = 0;
+  let score = 0, timeLeft = 60;
+  let gameRunning = false;
+  let prevOnRamp = null;
+  let lastObstZ = 30;
+  let crashTimer = 0;
+  let flashAlpha = 0;
+  let totalDistance = 0;
+  let tricksCount = 0;
+
+  const obstacles = [];
+
+  // ---- Geometry helpers ----
+  function makeWedge(w, h, l) {
+    const g = new THREE.BufferGeometry();
+    const X = w / 2, Y = h, Z = l / 2;
+    const v = new Float32Array([
+      -X, 0, -Z,  X, 0, -Z,  X, 0,  Z,  -X, 0,  Z,
+      -X, Y,  Z,  X, Y,  Z,
+    ]);
+    const idx = [
+      0, 2, 1,  0, 3, 2,
+      0, 5, 1,  0, 4, 5,
+      3, 4, 5,  3, 5, 2,
+      0, 4, 3,
+      1, 2, 5,
+    ];
+    g.setAttribute('position', new THREE.BufferAttribute(v, 3));
+    g.setIndex(idx);
+    g.computeVertexNormals();
+    return g;
+  }
+
+  function placeOnTunnel(node, theta, z, hAbove) {
+    const r = TUNNEL_R - hAbove;
+    node.position.set(Math.sin(theta) * r, -Math.cos(theta) * r, z);
+    node.rotation.set(0, 0, theta);
+  }
+
+  // ---- Obstacle spawning ----
+  function spawnObstacle(z) {
+    const r = Math.random();
+    let type;
+    if (r < 0.50) type = 'block';
+    else if (r < 0.80) type = 'ramp';
+    else type = 'gap';
+
+    const theta = Math.floor(Math.random() * LANE_COUNT) * LANE_ANGLE;
+    const wrap = new THREE.Group();
+
+    if (type === 'block') {
+      const bw = 1.5, bh = 1.1, bl = 1.4;
+      const m = new THREE.Mesh(
+        new THREE.BoxGeometry(bw, bh, bl),
+        new THREE.MeshStandardMaterial({ color: 0xc02844, emissive: 0x401012, metalness: 0.4, roughness: 0.4 })
+      );
+      m.position.y = bh / 2;
+      const top = new THREE.Mesh(
+        new THREE.BoxGeometry(bw * 0.85, 0.06, bl * 0.85),
+        new THREE.MeshBasicMaterial({ color: 0xff4060 })
+      );
+      top.position.y = bh + 0.04;
+      m.add(top);
+      wrap.add(m);
+      placeOnTunnel(wrap, theta, z, 0);
+      wrap.userData = { type, theta, z, len: bl, angWidth: 0.30, height: bh, hit: false };
+    }
+    else if (type === 'ramp') {
+      const len = 3.6, height = 1.45, angWidth = 0.32;
+      const g = makeWedge(1.7, height, len);
+      const ramp = new THREE.Mesh(g, new THREE.MeshStandardMaterial({
+        color: 0xff8520, emissive: 0x301008, metalness: 0.45, roughness: 0.35
+      }));
+      // glowing edge stripe along slope
+      const stripe = new THREE.Mesh(
+        new THREE.PlaneGeometry(0.18, len * 1.02),
+        new THREE.MeshBasicMaterial({ color: 0xffd040, transparent: true, opacity: 0.95 })
+      );
+      stripe.rotation.x = -Math.atan2(height, len);
+      stripe.position.set(0, height / 2, 0);
+      ramp.add(stripe);
+      wrap.add(ramp);
+      placeOnTunnel(wrap, theta, z, 0);
+      wrap.userData = { type, theta, z, len, angWidth, height, hit: false };
+    }
+    else {
+      const len = 4.2, angWidth = 0.36;
+      const gap = new THREE.Mesh(
+        new THREE.PlaneGeometry(2.6, len),
+        new THREE.MeshBasicMaterial({ color: 0xff1840, transparent: true, opacity: 0.55, side: THREE.DoubleSide })
+      );
+      gap.rotation.x = -Math.PI / 2;
+      gap.position.y = 0.02;
+      for (let i = -1; i <= 1; i++) {
+        const ch = new THREE.Mesh(
+          new THREE.BoxGeometry(0.22, 0.05, 0.7),
+          new THREE.MeshBasicMaterial({ color: 0xfff080 })
+        );
+        ch.position.set(0, 0.06, i * 1.4);
+        gap.add(ch);
+      }
+      wrap.add(gap);
+      placeOnTunnel(wrap, theta, z, 0);
+      wrap.userData = { type, theta, z, len, angWidth, height: 0, hit: false, cleared: false };
+    }
+
+    scene.add(wrap);
+    obstacles.push(wrap);
+  }
+
+  function maybeGenerate() {
+    while (lastObstZ < carZ + 220) {
+      lastObstZ += 9 + Math.random() * 13;
+      spawnObstacle(lastObstZ);
+    }
+  }
+
+  function despawnOld() {
+    for (let i = obstacles.length - 1; i >= 0; i--) {
+      if (obstacles[i].userData.z < carZ - 25) {
+        const o = obstacles[i];
+        scene.remove(o);
+        o.traverse(c => {
+          if (c.geometry) c.geometry.dispose();
+          if (c.material) c.material.dispose();
+        });
+        obstacles.splice(i, 1);
+      }
+    }
+  }
+
+  // ---- Collision ----
+  function shortAng(a, b) {
+    let d = a - b;
+    while (d > Math.PI) d -= 2 * Math.PI;
+    while (d < -Math.PI) d += 2 * Math.PI;
+    return d;
+  }
+
+  function checkCollisions() {
+    let onRamp = null;
+    for (const o of obstacles) {
+      const ud = o.userData;
+      const dz = carZ - ud.z;
+      if (Math.abs(dz) > ud.len / 2 + 1.4) continue;
+      const dT = shortAng(carTheta, ud.theta);
+      if (Math.abs(dT) > ud.angWidth / 2 + 0.05) continue;
+
+      if (ud.type === 'block') {
+        if (Math.abs(dz) < ud.len / 2 + 0.4 && jumpY < ud.height - 0.1 && !ud.hit) {
+          ud.hit = true;
+          speed = Math.max(20, speed * 0.42);
+          combo = 1;
+          flashAlpha = 1.0;
+          crashTimer = 0.55;
+        } else if (Math.abs(dz) < 0.35 && jumpY >= ud.height - 0.1 && !ud.hit) {
+          ud.hit = true;
+          addTrick('Over obstacle', 500);
+        }
+      }
+      else if (ud.type === 'ramp') {
+        if (Math.abs(dz) < ud.len / 2) {
+          const t = (dz + ud.len / 2) / ud.len;
+          const surface = ud.height * t;
+          if (jumpY < surface + 0.5) {
+            jumpY = Math.max(jumpY, surface);
+            jumpVel = Math.max(jumpVel, 1.5);
+          }
+          onRamp = ud;
+        }
+      }
+      else if (ud.type === 'gap') {
+        if (Math.abs(dz) < ud.len / 2) {
+          if (jumpY < 0.7 && !ud.hit) {
+            ud.hit = true;
+            speed = Math.max(15, speed * 0.32);
+            combo = 1;
+            flashAlpha = 1.0;
+            crashTimer = 0.65;
+          } else if (jumpY >= 0.7 && Math.abs(dz) < 0.4 && !ud.cleared) {
+            ud.cleared = true;
+            addTrick(boostActive ? 'Gap boost clear' : 'Gap clear', boostActive ? 1500 : 900);
+          }
+        }
+      }
+    }
+    return onRamp;
+  }
+
+  // ---- Tricks / Score ----
+  let trickHide = null;
+  function showTrick(name, points) {
+    document.getElementById('trick-name').textContent = name;
+    document.getElementById('trick-pts').textContent = '+' + points.toLocaleString();
+    const el = document.getElementById('trick-display');
+    el.style.opacity = '1';
+    if (trickHide) clearTimeout(trickHide);
+    trickHide = setTimeout(() => { el.style.opacity = '0'; }, 1500);
+  }
+
+  function addTrick(name, points) {
+    const total = Math.floor(points * combo);
+    score += total;
+    combo = Math.min(99, combo + 1);
+    comboTimer = 3.0;
+    tricksCount++;
+    showTrick(name, total);
+  }
+
+  function tryJump() {
+    if (jumpY < 0.6 && !isAirborne) {
+      jumpVel = 13 + (boostActive ? 5 : 0);
+      isAirborne = true;
+      addTrick(boostActive ? 'Air jump + boost' : 'Air jump', boostActive ? 1200 : 450);
+    }
+  }
+
+  // ---- Per-frame updates ----
+  function updateCar(dt) {
+    carTheta += (carThetaTarget - carTheta) * Math.min(1, 9 * dt);
+
+    jumpVel -= GRAVITY * dt;
+    jumpY += jumpVel * dt;
+    if (jumpY <= 0) { jumpY = 0; jumpVel = 0; isAirborne = false; }
+
+    const target = boostActive ? maxSpeed : baseSpeed;
+    speed += (target - speed) * Math.min(1, 1.7 * dt);
+    if (boostActive) boost = Math.max(0, boost - dt * 0.42);
+    else boost = Math.min(1, boost + dt * 0.20);
+
+    if (crashTimer > 0) { crashTimer -= dt; speed = Math.min(speed, 32); }
+
+    const dz = speed * dt;
+    carZ += dz;
+    totalDistance += dz;
+
+    const r = TUNNEL_R - CAR_OFF - jumpY;
+    carGroup.position.set(Math.sin(carTheta) * r, -Math.cos(carTheta) * r, carZ);
+    carGroup.rotation.set(0, 0, carTheta);
+
+    // car lights
+    const cx = Math.sin(carTheta), cy = -Math.cos(carTheta);
+    carLight.position.set(cx * (r - 1.5), cy * (r - 1.5), carZ + 1.5);
+    tailLight.position.set(cx * r, cy * r, carZ - 1.5);
+    tailLight.intensity = boostActive ? 2.1 : 0.7;
+
+    // flame visuals
+    const fS = boostActive ? 1.7 : (speed > baseSpeed * 1.05 ? 1.0 : 0.45);
+    flames.forEach(f => {
+      f.scale.z = fS + Math.random() * 0.18;
+      f.material.opacity = boostActive ? 0.95 : 0.55;
+      f.material.color.setHex(boostActive ? 0x80ffff : 0x40b0ff);
+    });
+  }
+
+  function updateCamera(dt) {
+    // delayed-rotation camera — gives the "tunnel rotates" look when you change lanes
+    const d = shortAng(carTheta, cameraTheta);
+    cameraTheta += d * Math.min(1, 3.0 * dt);
+
+    const camR = TUNNEL_R - 4.0;
+    const lookR = TUNNEL_R - 1.0;
+    const camBack = 7.5;
+    const lookFwd = 18;
+
+    camera.up.set(-Math.sin(cameraTheta), Math.cos(cameraTheta), 0);
+    camera.position.set(
+      Math.sin(cameraTheta) * camR,
+      -Math.cos(cameraTheta) * camR,
+      carZ - camBack
+    );
+    camera.lookAt(
+      Math.sin(cameraTheta) * lookR,
+      -Math.cos(cameraTheta) * lookR,
+      carZ + lookFwd
+    );
+
+    const targetFov = boostActive ? 90 : 75;
+    camera.fov += (targetFov - camera.fov) * Math.min(1, 4 * dt);
+    camera.updateProjectionMatrix();
+  }
+
+  function updateHUD() {
+    document.getElementById('score').textContent = Math.floor(score).toLocaleString();
+    document.getElementById('combo').textContent = combo;
+    const m = Math.floor(timeLeft / 60);
+    const s = Math.floor(timeLeft % 60);
+    document.getElementById('time').textContent = m + ':' + (s < 10 ? '0' : '') + s;
+    document.getElementById('speed').textContent = Math.floor(speed * 3.6);
+    document.getElementById('boost-fill').style.width = (boost * 100).toFixed(0) + '%';
+    document.getElementById('dist').textContent = Math.floor(totalDistance) + ' m';
+  }
+
+  function applyFlash(dt) {
+    flashAlpha = Math.max(0, flashAlpha - dt * 2.2);
+    flashEl.style.background = flashAlpha > 0
+      ? 'rgba(224, 32, 64, ' + (flashAlpha * 0.5).toFixed(3) + ')'
+      : 'transparent';
+  }
+
+  function tick(dt) {
+    if (gameRunning) {
+      timeLeft -= dt;
+      if (timeLeft <= 0) { timeLeft = 0; endGame(); return; }
+
+      comboTimer -= dt;
+      if (comboTimer <= 0) combo = 1;
+
+      updateCar(dt);
+      const onRamp = checkCollisions();
+      if (prevOnRamp && !onRamp && prevOnRamp.type === 'ramp') {
+        jumpVel = 13 + (boostActive ? 9 : 0);
+        isAirborne = true;
+        addTrick(boostActive ? 'Ramp + boost' : 'Ramp jump', boostActive ? 1500 : 700);
+      }
+      prevOnRamp = onRamp;
+
+      maybeGenerate();
+      despawnOld();
+
+      score += speed * dt * 0.18 * combo;
+
+      updateHUD();
+    }
+    applyFlash(dt);
+    updateCamera(dt);
+  }
+
+  // ---- Main loop ----
+  let lastT = performance.now();
+  function loop(t) {
+    const dt = Math.min(0.05, (t - lastT) / 1000);
+    lastT = t;
+
+    tunnelMat.uniforms.time.value = t / 1000;
+    tunnelMat.uniforms.playerZ.value = carZ;
+    tunnel.position.z = carZ;
+
+    boostActive = !!keys['Shift'] && boost > 0.02 && gameRunning && crashTimer <= 0;
+
+    tick(dt);
+    renderer.render(scene, camera);
+    requestAnimationFrame(loop);
+  }
+
+  // ---- Input ----
+  const keys = {};
+  window.addEventListener('keydown', (e) => {
+    if (['ArrowLeft','ArrowRight','ArrowUp','ArrowDown',' ','Shift','a','A','d','D'].includes(e.key)) {
+      e.preventDefault();
+    }
+    if (keys[e.key]) return;
+    keys[e.key] = true;
+    if (!gameRunning) return;
+    if (e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'A') carThetaTarget -= LANE_ANGLE;
+    else if (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') carThetaTarget += LANE_ANGLE;
+    else if (e.key === ' ') tryJump();
+  });
+  window.addEventListener('keyup', (e) => { keys[e.key] = false; });
+
+  // ---- Game flow ----
+  function startGame() {
+    carTheta = 0; carThetaTarget = 0; cameraTheta = 0; carZ = 0;
+    speed = 60; boost = 1; jumpY = 0; jumpVel = 0; isAirborne = false;
+    combo = 1; comboTimer = 0; score = 0; timeLeft = 60;
+    crashTimer = 0; flashAlpha = 0; totalDistance = 0; tricksCount = 0;
+
+    for (const o of obstacles) {
+      scene.remove(o);
+      o.traverse(c => { if (c.geometry) c.geometry.dispose(); if (c.material) c.material.dispose(); });
+    }
+    obstacles.length = 0;
+    lastObstZ = 30;
+    prevOnRamp = null;
+
+    overlay.style.display = 'none';
+    gameRunning = true;
+  }
+
+  function endGame() {
+    gameRunning = false;
+    overlay.style.display = 'flex';
+    overlay.innerHTML = `
+      <div class="end-card">
+        <div class="end-label">final score</div>
+        <div class="end-score">${Math.floor(score).toLocaleString()}</div>
+        <div class="end-stat">${tricksCount} tricks · ${Math.floor(totalDistance)} m</div>
+        <button class="btn" id="restart-btn" style="margin-top: 14px;">play again</button>
+      </div>
+    `;
+    document.getElementById('restart-btn').addEventListener('click', startGame);
+  }
+
+  document.getElementById('start-btn').addEventListener('click', startGame);
+
+  // pre-spawn a few obstacles so the menu screen looks alive
+  for (let i = 0; i < 8; i++) spawnObstacle(40 + i * 15);
+
+  requestAnimationFrame(loop);
+})();
+</script>

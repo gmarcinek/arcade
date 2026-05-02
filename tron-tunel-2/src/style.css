@@ -1,0 +1,327 @@
+:root {
+  color-scheme: dark;
+  --bg-1: #06070d;
+  --bg-2: #0c1020;
+  --panel: rgba(9, 12, 24, 0.74);
+  --panel-strong: rgba(10, 17, 34, 0.92);
+  --line: rgba(255, 255, 255, 0.12);
+  --text: #f5f7fb;
+  --muted: #9aa4b8;
+  --accent: #45ff9a;
+  --accent-2: #72ffe8;
+  --danger: #ff4365;
+  --warning: #ffd84d;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  min-height: 100%;
+  overflow: hidden;
+  background:
+    radial-gradient(circle at 50% 40%, #171827 0%, #07070b 56%, #020205 100%),
+    linear-gradient(180deg, var(--bg-2), var(--bg-1));
+  color: var(--text);
+  font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+#game,
+#hud,
+#touchControls {
+  position: absolute;
+  inset: 0;
+}
+
+#game {
+  width: 100%;
+  height: 100%;
+  display: block;
+  touch-action: none;
+}
+
+#hud {
+  pointer-events: none;
+}
+
+.tt-hud {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  padding: 18px;
+}
+
+.tt-topbar,
+.tt-bottom {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.tt-panel {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  box-shadow: 0 16px 54px rgba(0, 0, 0, 0.42);
+  backdrop-filter: blur(16px);
+  padding: 14px 16px;
+}
+
+.tt-title {
+  margin-bottom: 6px;
+  color: var(--accent);
+  font-size: 14px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.tt-sub {
+  max-width: 520px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.tt-metrics {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(104px, 1fr));
+  gap: 8px 14px;
+  min-width: 380px;
+  font-variant-numeric: tabular-nums;
+}
+
+.tt-metric-label {
+  color: var(--muted);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.tt-metric-value {
+  margin-top: 2px;
+  color: var(--text);
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.tt-event {
+  display: grid;
+  align-content: center;
+  justify-items: center;
+  text-align: center;
+}
+
+.tt-event-label {
+  color: var(--muted);
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.tt-event-title {
+  margin-top: 6px;
+  font-size: clamp(1.2rem, 2vw, 1.9rem);
+  font-weight: 900;
+}
+
+.tt-event-score {
+  margin-top: 4px;
+  color: var(--warning);
+  font-size: 1.4rem;
+  font-weight: 900;
+}
+
+.tt-controls {
+  max-width: 560px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.65;
+}
+
+.tt-key {
+  display: inline-block;
+  min-width: 20px;
+  margin: 0 2px;
+  padding: 1px 7px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 7px;
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text);
+  text-align: center;
+}
+
+.tt-bar-wrap {
+  width: 240px;
+}
+
+.tt-bar-label {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 7px;
+  color: var(--muted);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.tt-bar {
+  height: 10px;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 100px;
+  background: rgba(255, 255, 255, 0.09);
+}
+
+.tt-bar-fill {
+  height: 100%;
+  transform-origin: left center;
+  background: linear-gradient(90deg, var(--accent), var(--accent-2));
+  box-shadow: 0 0 18px rgba(69, 255, 154, 0.48);
+}
+
+.tt-note {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  color: rgba(255, 255, 255, 0.74);
+  font-size: 13px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.tt-note.visible {
+  opacity: 1;
+}
+
+.tt-overlay {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  pointer-events: auto;
+  background:
+    radial-gradient(circle at 50% 22%, rgba(69, 255, 154, 0.08), transparent 32%),
+    linear-gradient(180deg, rgba(4, 7, 15, 0.84), rgba(2, 3, 8, 0.94));
+}
+
+.tt-overlay-card {
+  width: min(720px, calc(100vw - 40px));
+  padding: 28px 30px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 20px;
+  background: var(--panel-strong);
+  box-shadow: 0 26px 80px rgba(0, 0, 0, 0.45);
+}
+
+.tt-overlay h1 {
+  margin: 0 0 10px;
+  font-size: clamp(2.8rem, 8vw, 4.8rem);
+  line-height: 0.9;
+}
+
+.tt-overlay p {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.tt-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin: 20px 0 24px;
+}
+
+.tt-grid div {
+  padding: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.tt-grid strong {
+  display: block;
+  margin-bottom: 4px;
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.tt-grid span {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.tt-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 220px;
+  border: 0;
+  border-radius: 12px;
+  padding: 14px 20px;
+  background: linear-gradient(90deg, var(--accent), var(--accent-2));
+  color: #05150d;
+  font: inherit;
+  font-weight: 900;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+#touchControls {
+  pointer-events: none;
+}
+
+.tt-touch {
+  position: absolute;
+  left: 16px;
+  right: 16px;
+  bottom: 14px;
+  display: none;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+  pointer-events: auto;
+}
+
+.tt-touch button {
+  min-height: 56px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 14px;
+  background: rgba(10, 16, 31, 0.74);
+  color: var(--text);
+  font: inherit;
+}
+
+@media (max-width: 760px) {
+  .tt-topbar,
+  .tt-bottom {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .tt-metrics {
+    min-width: 0;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .tt-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (pointer: coarse), (max-width: 800px) {
+  .tt-touch {
+    display: grid;
+  }
+}

@@ -1,0 +1,431 @@
+:root {
+  color-scheme: dark;
+  --bg: #030711;
+  --panel: rgba(8, 16, 34, 0.72);
+  --panel-strong: rgba(10, 22, 46, 0.92);
+  --line: rgba(101, 210, 255, 0.24);
+  --cyan: #36d8ff;
+  --gold: #ffd84d;
+  --pink: #ff5faa;
+  --white: #f7fbff;
+  --muted: rgba(240, 246, 255, 0.72);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  min-height: 100%;
+  overflow: hidden;
+  background:
+    radial-gradient(circle at 50% 15%, rgba(52, 132, 255, 0.18), transparent 28%),
+    radial-gradient(circle at 85% 50%, rgba(255, 92, 168, 0.12), transparent 24%),
+    linear-gradient(180deg, #030611, #02040a 76%);
+  font-family: "Eurostile", "Bank Gothic", "Agency FB", sans-serif;
+}
+
+body {
+  color: var(--white);
+}
+
+#game,
+#hud,
+#touchControls {
+  position: absolute;
+  inset: 0;
+}
+
+#game {
+  width: 100%;
+  height: 100%;
+  display: block;
+  touch-action: none;
+}
+
+#hud {
+  pointer-events: none;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.tt-shell {
+  position: absolute;
+  inset: 0;
+}
+
+.tt-corner {
+  position: absolute;
+  display: grid;
+  gap: 18px;
+}
+
+.tt-left {
+  left: 38px;
+  top: 34px;
+}
+
+.tt-right {
+  right: 38px;
+  top: 34px;
+  justify-items: end;
+}
+
+.tt-center {
+  position: absolute;
+  top: 18px;
+  left: 50%;
+  transform: translateX(-50%);
+  text-align: center;
+}
+
+.tt-label {
+  display: block;
+  margin-bottom: 4px;
+  font-size: 0.82rem;
+  color: var(--muted);
+}
+
+.tt-value {
+  display: block;
+  font-size: 3rem;
+  line-height: 0.92;
+  font-weight: 900;
+  text-shadow: 0 0 20px rgba(90, 200, 255, 0.18);
+}
+
+.tt-timer {
+  font-size: 5.6rem;
+  line-height: 0.85;
+  font-weight: 900;
+}
+
+.tt-sub {
+  color: var(--muted);
+  font-size: 0.95rem;
+}
+
+.tt-card {
+  min-width: 244px;
+  padding: 16px 18px;
+  border: 1px solid var(--line);
+  background: linear-gradient(180deg, rgba(13, 29, 63, 0.88), rgba(8, 12, 26, 0.55));
+  clip-path: polygon(0 0, calc(100% - 18px) 0, 100% 18px, 100% 100%, 18px 100%, 0 calc(100% - 18px));
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.28);
+  backdrop-filter: blur(12px);
+}
+
+.tt-combo {
+  color: var(--gold);
+  font-size: 4rem;
+  line-height: 0.84;
+  font-weight: 900;
+}
+
+.tt-event-title {
+  font-size: 1.65rem;
+  font-weight: 900;
+}
+
+.tt-event-score {
+  margin-top: 6px;
+  color: var(--gold);
+  font-size: 2.1rem;
+  font-weight: 900;
+}
+
+.tt-objective {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 12px;
+  color: rgba(247, 251, 255, 0.88);
+}
+
+.tt-objective span:first-child {
+  width: 16px;
+  color: rgba(255, 255, 255, 0.42);
+}
+
+.tt-objective.done span:first-child {
+  color: var(--gold);
+}
+
+.tt-boost-wrap {
+  position: absolute;
+  left: 38px;
+  bottom: 34px;
+  width: min(420px, calc(100vw - 76px));
+}
+
+.tt-bar {
+  margin-top: 8px;
+  padding: 7px;
+  border-radius: 20px 8px 20px 8px;
+  border: 1px solid rgba(61, 199, 255, 0.42);
+  background: linear-gradient(180deg, rgba(18, 49, 98, 0.64), rgba(6, 14, 30, 0.25));
+}
+
+.tt-bar-fill {
+  height: 24px;
+  transform-origin: left center;
+  border-radius: 14px 6px 14px 6px;
+  background: linear-gradient(90deg, #179efe, #6df0ff 72%, #f2fdff);
+  box-shadow: 0 0 24px rgba(69, 226, 255, 0.42);
+}
+
+.tt-speed {
+  position: absolute;
+  right: 24px;
+  bottom: 18px;
+  width: 220px;
+  height: 220px;
+  display: grid;
+  place-items: center;
+}
+
+.tt-speed svg {
+  position: absolute;
+  inset: 0;
+  filter: drop-shadow(0 20px 40px rgba(0, 0, 0, 0.46));
+}
+
+.tt-speed-text {
+  position: relative;
+  z-index: 1;
+  margin-top: 28px;
+  text-align: center;
+}
+
+.tt-speed-text strong {
+  display: block;
+  font-size: 4rem;
+  line-height: 0.86;
+}
+
+.tt-speed-text span {
+  color: var(--muted);
+}
+
+.tt-progress {
+  position: absolute;
+  top: 88px;
+  right: 78px;
+  width: 20px;
+  height: 210px;
+  display: flex;
+  justify-content: center;
+}
+
+.tt-progress-track {
+  position: relative;
+  width: 4px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.3);
+}
+
+.tt-progress-marker {
+  position: absolute;
+  left: 50%;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  background: white;
+  box-shadow: 0 0 18px rgba(255, 255, 255, 0.35);
+}
+
+.tt-progress-player {
+  background: #8cff18;
+  box-shadow: 0 0 18px rgba(140, 255, 24, 0.52);
+}
+
+.tt-progress-finish {
+  border-radius: 3px;
+  width: 18px;
+  height: 18px;
+  background: transparent;
+  border: 3px solid rgba(255, 255, 255, 0.8);
+  border-left-color: transparent;
+  border-right-color: transparent;
+}
+
+.tt-overlay {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  pointer-events: auto;
+  background:
+    radial-gradient(circle at top, rgba(58, 123, 255, 0.18), transparent 38%),
+    linear-gradient(180deg, rgba(4, 7, 16, 0.78), rgba(3, 4, 9, 0.94));
+  backdrop-filter: blur(10px);
+}
+
+.tt-overlay-card {
+  width: min(760px, calc(100vw - 40px));
+  padding: 32px;
+  border: 1px solid rgba(92, 222, 255, 0.24);
+  background: linear-gradient(180deg, rgba(12, 24, 58, 0.9), rgba(5, 10, 25, 0.82));
+  box-shadow: 0 26px 68px rgba(0, 0, 0, 0.42);
+}
+
+.tt-overlay h1 {
+  margin: 0 0 12px;
+  font-size: clamp(3rem, 7vw, 5.8rem);
+  line-height: 0.88;
+  letter-spacing: 0.1em;
+}
+
+.tt-overlay p {
+  margin: 0;
+  max-width: 44rem;
+  font-size: 1.08rem;
+  line-height: 1.45;
+  color: rgba(239, 246, 255, 0.84);
+}
+
+.tt-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+  margin: 28px 0;
+}
+
+.tt-grid div {
+  padding: 14px;
+  border: 1px solid rgba(94, 204, 255, 0.18);
+  background: rgba(86, 192, 255, 0.08);
+}
+
+.tt-grid strong {
+  display: block;
+  margin-bottom: 4px;
+}
+
+.tt-grid span {
+  color: rgba(237, 246, 255, 0.72);
+}
+
+.tt-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 220px;
+  padding: 14px 28px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: linear-gradient(90deg, #11a9ff, #42f4ff);
+  color: #041120;
+  font: inherit;
+  font-weight: 900;
+  font-size: 1rem;
+  letter-spacing: 0.18em;
+  cursor: pointer;
+}
+
+#touchControls {
+  pointer-events: none;
+}
+
+.tt-touch {
+  position: absolute;
+  left: 16px;
+  right: 16px;
+  bottom: 18px;
+  display: none;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+  pointer-events: auto;
+}
+
+.tt-touch button {
+  min-height: 58px;
+  border: 1px solid rgba(91, 217, 255, 0.28);
+  background: rgba(9, 19, 43, 0.65);
+  color: var(--white);
+  font: inherit;
+  font-size: 0.95rem;
+  letter-spacing: 0.08em;
+}
+
+@media (max-width: 960px) {
+  .tt-left {
+    left: 18px;
+    top: 18px;
+  }
+
+  .tt-right {
+    right: 18px;
+    top: 18px;
+  }
+
+  .tt-card {
+    min-width: 0;
+    width: min(240px, 42vw);
+  }
+
+  .tt-value {
+    font-size: 2.15rem;
+  }
+
+  .tt-combo {
+    font-size: 3rem;
+  }
+
+  .tt-timer {
+    font-size: 4rem;
+  }
+
+  .tt-progress {
+    right: 40px;
+    top: 70px;
+    height: 160px;
+  }
+
+  .tt-speed {
+    right: 6px;
+    bottom: 4px;
+    width: 170px;
+    height: 170px;
+  }
+
+  .tt-speed-text strong {
+    font-size: 3rem;
+  }
+
+  .tt-boost-wrap {
+    left: 18px;
+    bottom: 18px;
+    width: min(320px, calc(100vw - 200px));
+  }
+
+  .tt-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (pointer: coarse), (max-width: 800px) {
+  .tt-left,
+  .tt-right {
+    transform: scale(0.88);
+  }
+
+  .tt-left {
+    transform-origin: top left;
+  }
+
+  .tt-right {
+    transform-origin: top right;
+  }
+
+  .tt-touch {
+    display: grid;
+  }
+
+  .tt-boost-wrap {
+    bottom: 94px;
+    width: min(280px, calc(100vw - 190px));
+  }
+}

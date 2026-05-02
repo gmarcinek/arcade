@@ -1,0 +1,998 @@
+<!DOCTYPE html>
+<html lang="pl">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Physics First Tunnel Racer — Preview</title>
+    <style>
+        :root {
+            --bg: #07070b;
+            --panel: rgba(12, 14, 22, 0.76);
+            --text: #f5f7fb;
+            --muted: #9aa4b8;
+            --accent: #45ff9a;
+            --danger: #ff4365;
+            --line: rgba(255, 255, 255, 0.14);
+        }
+
+        html,
+        body {
+            margin: 0;
+            height: 100%;
+            overflow: hidden;
+            background: radial-gradient(circle at 50% 40%, #171827 0%, #07070b 56%, #020205 100%);
+            color: var(--text);
+            font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        }
+
+        canvas {
+            display: block;
+        }
+
+        .hud {
+            position: fixed;
+            inset: 0;
+            pointer-events: none;
+            display: grid;
+            grid-template-rows: auto 1fr auto;
+            padding: 18px;
+            box-sizing: border-box;
+        }
+
+        .topbar {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 16px;
+        }
+
+        .panel {
+            background: var(--panel);
+            border: 1px solid var(--line);
+            box-shadow: 0 16px 54px rgba(0, 0, 0, 0.42);
+            backdrop-filter: blur(16px);
+            border-radius: 18px;
+            padding: 14px 16px;
+        }
+
+        .title {
+            font-size: 14px;
+            letter-spacing: 0.12em;
+            text-transform: uppercase;
+            color: var(--accent);
+            margin-bottom: 6px;
+            font-weight: 700;
+        }
+
+        .sub {
+            font-size: 12px;
+            color: var(--muted);
+            line-height: 1.45;
+            max-width: 520px;
+        }
+
+        .metrics {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(104px, 1fr));
+            gap: 8px 14px;
+            min-width: 260px;
+            font-variant-numeric: tabular-nums;
+        }
+
+        .metric-label {
+            color: var(--muted);
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+        }
+
+        .metric-value {
+            color: var(--text);
+            font-size: 15px;
+            margin-top: 2px;
+            font-weight: 650;
+        }
+
+        .bottom {
+            display: flex;
+            justify-content: space-between;
+            align-items: end;
+            gap: 16px;
+        }
+
+        .controls {
+            font-size: 12px;
+            line-height: 1.65;
+            color: var(--muted);
+            max-width: 560px;
+        }
+
+        .key {
+            display: inline-block;
+            min-width: 20px;
+            padding: 1px 7px;
+            margin: 0 2px;
+            border-radius: 7px;
+            color: var(--text);
+            background: rgba(255, 255, 255, 0.08);
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            text-align: center;
+        }
+
+        .bar-wrap {
+            width: 220px;
+        }
+
+        .bar-label {
+            display: flex;
+            justify-content: space-between;
+            color: var(--muted);
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            margin-bottom: 7px;
+        }
+
+        .bar {
+            height: 10px;
+            border-radius: 100px;
+            background: rgba(255, 255, 255, 0.09);
+            overflow: hidden;
+            border: 1px solid rgba(255, 255, 255, 0.10);
+        }
+
+        .bar-fill {
+            height: 100%;
+            width: 100%;
+            border-radius: inherit;
+            background: linear-gradient(90deg, #45ff9a, #72ffe8);
+            box-shadow: 0 0 18px rgba(69, 255, 154, 0.48);
+            transform-origin: left center;
+            transform: scaleX(1);
+        }
+
+        .center-note {
+            position: fixed;
+            left: 50%;
+            top: 50%;
+            transform: translate(-50%, -50%);
+            color: rgba(255, 255, 255, 0.68);
+            text-align: center;
+            font-size: 13px;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.2s ease;
+        }
+
+        .center-note.visible {
+            opacity: 1;
+        }
+
+        @media (max-width: 760px) {
+
+            .topbar,
+            .bottom {
+                flex-direction: column;
+                align-items: stretch;
+            }
+
+            .metrics {
+                min-width: 0;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="hud">
+        <div class="topbar">
+            <div class="panel">
+                <div class="title">Physics First Tunnel Racer</div>
+                <div class="sub">
+                    Minimalny podgląd: auto jest tylko debugowym boxem. Sprawdza się fizykę ruchu po wewnętrznej
+                    powierzchni cylindra: kąt θ, promień, skok radialny i kamera z opóźnieniem.
+                </div>
+            </div>
+
+            <div class="panel metrics">
+                <div>
+                    <div class="metric-label">Speed</div>
+                    <div class="metric-value" id="speed">0</div>
+                </div>
+                <div>
+                    <div class="metric-label">Theta</div>
+                    <div class="metric-value" id="theta">0.00</div>
+                </div>
+                <div>
+                    <div class="metric-label">Theta velocity</div>
+                    <div class="metric-value" id="thetaVel">0.00</div>
+                </div>
+                <div>
+                    <div class="metric-label">Radial offset</div>
+                    <div class="metric-value" id="radial">0.00</div>
+                </div>
+                <div>
+                    <div class="metric-label">Grounded</div>
+                    <div class="metric-value" id="grounded">true</div>
+                </div>
+                <div>
+                    <div class="metric-label">Z</div>
+                    <div class="metric-value" id="zpos">0</div>
+                </div>
+                <div>
+                    <div class="metric-label">Score</div>
+                    <div class="metric-value" id="score">0</div>
+                </div>
+                <div>
+                    <div class="metric-label">Combo</div>
+                    <div class="metric-value" id="combo">x1</div>
+                </div>
+                <div>
+                    <div class="metric-label">Trick</div>
+                    <div class="metric-value" id="trick">—</div>
+                </div>
+            </div>
+        </div>
+
+        <div></div>
+
+        <div class="bottom">
+            <div class="panel controls">
+                <span class="key">A</span>/<span class="key">←</span> skręt w lewo,
+                <span class="key">D</span>/<span class="key">→</span> skręt w prawo,
+                <span class="key">W</span>/<span class="key">↑</span> lekko szybciej,
+                <span class="key">S</span>/<span class="key">↓</span> lekko wolniej,
+                <span class="key">Space</span> skok radialny,
+                <span class="key">Shift</span> boost,
+                <span class="key">R</span> reset.
+                <br />W powietrzu naciśnij ponownie <span class="key">A</span>/<span class="key">D</span>/<span
+                    class="key">←</span>/<span class="key">→</span>, żeby odpalić jeden kickflip. Do 15° niedokręcenia
+                lądowanie jest czyste, 15–20° trudne, powyżej 20° auto się turla i respawnuje.
+            </div>
+
+            <div class="panel bar-wrap">
+                <div class="bar-label"><span>Boost</span><span id="boostText">100%</span></div>
+                <div class="bar">
+                    <div class="bar-fill" id="boostFill"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="center-note" id="centerNote">RESET</div>
+
+    <script type="module">
+        import * as THREE from "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js";
+
+        const CAR_GEOMETRY_CENTER_HEIGHT = 0.65; // środek całej bryły auta względem punktu kontaktu kół
+
+        const CONFIG = {
+            tunnelRadius: 12,
+            baseSpeed: 64,
+            boostSpeed: 108,
+            acceleration: 8,
+            steerAcceleration: 9.0,
+            maxThetaVelocity: 4.8,
+            groundedFriction: 7.5,
+            airFriction: 1.2,
+            airControl: 0.35,
+            jumpImpulse: 18.5,
+            tunnelGravity: 36,
+            maxRadialOffset: 10,
+            boostDrain: 0.55,
+            boostRegen: 0.28,
+            forwardSpeedBonus: 14,
+            brakeSpeedPenalty: 38,
+            kickflipDuration: 0.72,
+            cleanLandingDegrees: 15,
+            hardLandingDegrees: 20,
+            crashRespawnSeconds: 1.25,
+        };
+
+        const state = {
+            z: 0,
+            theta: 0,
+            zVelocity: CONFIG.baseSpeed,
+            thetaVelocity: 0,
+            radialOffset: 0,
+            radialVelocity: 0,
+            grounded: true,
+            boost: 1,
+            trickUsed: false,
+            trickActive: false,
+            trickRollAngle: 0,
+            trickRollVelocity: 0,
+            trickRollDirection: 0,
+            crashed: false,
+            crashTimer: 0,
+            tumbleRollAngle: 0,
+            tumblePitchAngle: 0,
+            tumbleRollVelocity: 0,
+            tumblePitchVelocity: 0,
+            score: 0,
+            combo: 1,
+            lastTrick: "—",
+        };
+
+        const input = {
+            left: false,
+            right: false,
+            boost: false,
+            forward: false,
+            back: false,
+            jump: false,
+            jumpConsumed: false,
+        };
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.outputColorSpace = THREE.SRGBColorSpace;
+        document.body.appendChild(renderer.domElement);
+
+        const scene = new THREE.Scene();
+        scene.fog = new THREE.FogExp2(0x07070b, 0.018);
+
+        const camera = new THREE.PerspectiveCamera(66, window.innerWidth / window.innerHeight, 0.1, 1200);
+
+        const ambient = new THREE.AmbientLight(0xffffff, 0.35);
+        scene.add(ambient);
+
+        const mainLight = new THREE.DirectionalLight(0xffffff, 1.3);
+        mainLight.position.set(2, 5, -6);
+        scene.add(mainLight);
+
+        const carLight = new THREE.PointLight(0x45ff9a, 2.0, 18);
+        scene.add(carLight);
+
+        function createTunnel(radius, length) {
+            const geometry = new THREE.CylinderGeometry(radius, radius, length, 96, 48, true);
+            geometry.rotateX(Math.PI / 2);
+
+            const material = new THREE.MeshBasicMaterial({
+                color: 0x171925,
+                wireframe: true,
+                side: THREE.BackSide,
+                transparent: true,
+                opacity: 0.54,
+            });
+
+            const mesh = new THREE.Mesh(geometry, material);
+            mesh.name = "debug-wireframe-tunnel";
+            return mesh;
+        }
+
+        const tunnel = createTunnel(CONFIG.tunnelRadius, 900);
+        tunnel.position.z = 360;
+        scene.add(tunnel);
+
+        const tunnelSkinGeo = new THREE.CylinderGeometry(CONFIG.tunnelRadius + 0.02, CONFIG.tunnelRadius + 0.02, 900, 96, 1, true);
+        tunnelSkinGeo.rotateX(Math.PI / 2);
+        const tunnelSkinMat = new THREE.MeshBasicMaterial({
+            color: 0x080910,
+            side: THREE.BackSide,
+            transparent: true,
+            opacity: 0.42,
+        });
+        const tunnelSkin = new THREE.Mesh(tunnelSkinGeo, tunnelSkinMat);
+        tunnelSkin.position.z = 360;
+        scene.add(tunnelSkin);
+
+        const laneGroup = new THREE.Group();
+        scene.add(laneGroup);
+
+        function addLaneLine(theta, color, width = 0.05) {
+            const r = CONFIG.tunnelRadius - 0.04;
+            const surfaceOut = new THREE.Vector3(Math.sin(theta), -Math.cos(theta), 0);
+            const up = surfaceOut.clone().multiplyScalar(-1);
+            const right = new THREE.Vector3(Math.cos(theta), Math.sin(theta), 0);
+            const forward = new THREE.Vector3(0, 0, 1);
+            const matrix = new THREE.Matrix4().makeBasis(right, up, forward);
+
+            const geo = new THREE.BoxGeometry(width, 0.035, 900);
+            const mat = new THREE.MeshBasicMaterial({
+                color,
+                transparent: true,
+                opacity: 0.74,
+            });
+            const line = new THREE.Mesh(geo, mat);
+            line.position.set(surfaceOut.x * r, surfaceOut.y * r, 360);
+            line.quaternion.setFromRotationMatrix(matrix);
+            laneGroup.add(line);
+        }
+
+        for (let i = 0; i < 12; i++) {
+            addLaneLine((i / 12) * Math.PI * 2, i % 3 === 0 ? 0x45ff9a : 0x333a55, i % 3 === 0 ? 0.09 : 0.035);
+        }
+
+        const ringGroup = new THREE.Group();
+        scene.add(ringGroup);
+
+        function createRing(z) {
+            const curve = new THREE.EllipseCurve(0, 0, CONFIG.tunnelRadius, CONFIG.tunnelRadius, 0, Math.PI * 2, false, 0);
+            const points = curve.getPoints(128).map(p => new THREE.Vector3(p.x, p.y, 0));
+            const geo = new THREE.BufferGeometry().setFromPoints(points);
+            const mat = new THREE.LineBasicMaterial({ color: 0x45ff9a, transparent: true, opacity: 0.16 });
+            const line = new THREE.LineLoop(geo, mat);
+            line.position.z = z;
+            return line;
+        }
+
+        for (let z = 0; z < 900; z += 24) {
+            ringGroup.add(createRing(z));
+        }
+
+        function createDebugCar() {
+            const group = new THREE.Group();
+
+            const body = new THREE.Mesh(
+                new THREE.BoxGeometry(1.85, 0.64, 3.25),
+                new THREE.MeshStandardMaterial({
+                    color: 0x45ff9a,
+                    roughness: 0.42,
+                    metalness: 0.18,
+                    emissive: 0x062a15,
+                })
+            );
+            body.position.y = 0.52 - CAR_GEOMETRY_CENTER_HEIGHT;
+            group.add(body);
+
+            const cabin = new THREE.Mesh(
+                new THREE.BoxGeometry(1.28, 0.52, 1.05),
+                new THREE.MeshStandardMaterial({
+                    color: 0xb8ffe0,
+                    roughness: 0.22,
+                    metalness: 0.2,
+                    emissive: 0x0c2c20,
+                })
+            );
+            cabin.position.set(0, 1.04 - CAR_GEOMETRY_CENTER_HEIGHT, -0.18);
+            group.add(cabin);
+
+            const nose = new THREE.Mesh(
+                new THREE.BoxGeometry(1.52, 0.18, 0.44),
+                new THREE.MeshBasicMaterial({ color: 0xd9fff0 })
+            );
+            nose.position.set(0, 0.76 - CAR_GEOMETRY_CENTER_HEIGHT, 1.68);
+            group.add(nose);
+
+            const tail = new THREE.Mesh(
+                new THREE.BoxGeometry(1.52, 0.16, 0.32),
+                new THREE.MeshBasicMaterial({ color: 0xff4365 })
+            );
+            tail.position.set(0, 0.72 - CAR_GEOMETRY_CENTER_HEIGHT, -1.68);
+            group.add(tail);
+
+            const wheelMat = new THREE.MeshStandardMaterial({ color: 0x050507, roughness: 0.75, metalness: 0.15 });
+            const wheelGeo = new THREE.CylinderGeometry(0.27, 0.27, 0.22, 18);
+            wheelGeo.rotateZ(Math.PI / 2);
+
+            for (const x of [-1.02, 1.02]) {
+                for (const z of [-1.05, 1.05]) {
+                    const wheel = new THREE.Mesh(wheelGeo, wheelMat);
+                    wheel.position.set(x, 0.27 - CAR_GEOMETRY_CENTER_HEIGHT, z);
+                    group.add(wheel);
+                }
+            }
+
+            const axes = new THREE.AxesHelper(2.6);
+            axes.position.y = 0;
+            group.add(axes);
+
+            return group;
+        }
+
+        const car = createDebugCar();
+        scene.add(car);
+
+        const shadow = new THREE.Mesh(
+            new THREE.CircleGeometry(1.25, 32),
+            new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.36, side: THREE.DoubleSide })
+        );
+        scene.add(shadow);
+
+        function resetState() {
+            state.z = 0;
+            state.theta = 0;
+            state.zVelocity = CONFIG.baseSpeed;
+            state.thetaVelocity = 0;
+            state.radialOffset = 0;
+            state.radialVelocity = 0;
+            state.grounded = true;
+            state.boost = 1;
+            state.trickUsed = false;
+            state.trickActive = false;
+            state.trickRollAngle = 0;
+            state.trickRollVelocity = 0;
+            state.trickRollDirection = 0;
+            state.crashed = false;
+            state.crashTimer = 0;
+            state.tumbleRollAngle = 0;
+            state.tumblePitchAngle = 0;
+            state.tumbleRollVelocity = 0;
+            state.tumblePitchVelocity = 0;
+            state.score = 0;
+            state.combo = 1;
+            state.lastTrick = "—";
+            cameraTheta = 0;
+            cameraThetaVelocity = 0;
+            cameraHeightCurrent = CAMERA_HEIGHT.normal;
+            cameraFovCurrent = CAMERA_FOV.normal;
+            cameraBackDistanceCurrent = CAMERA_DISTANCE.normal;
+            camera.fov = cameraFovCurrent;
+            camera.updateProjectionMatrix();
+            showCenterNote("RESET");
+        }
+
+        function showCenterNote(text) {
+            const el = document.getElementById("centerNote");
+            el.textContent = text;
+            el.classList.add("visible");
+            clearTimeout(showCenterNote.timer);
+            showCenterNote.timer = setTimeout(() => el.classList.remove("visible"), 420);
+        }
+
+        window.addEventListener("keydown", (e) => {
+            if ((e.code === "ArrowLeft" || e.code === "KeyA") && !e.repeat) triggerKickflip(-1);
+            if ((e.code === "ArrowRight" || e.code === "KeyD") && !e.repeat) triggerKickflip(1);
+            if (e.code === "ArrowLeft" || e.code === "KeyA") input.left = true;
+            if (e.code === "ArrowRight" || e.code === "KeyD") input.right = true;
+            if (e.code === "ShiftLeft" || e.code === "ShiftRight") input.boost = true;
+            if (e.code === "ArrowUp" || e.code === "KeyW") input.forward = true;
+            if (e.code === "ArrowDown" || e.code === "KeyS") input.back = true;
+            if (e.code === "Space") {
+                input.jump = true;
+                e.preventDefault();
+            }
+            if (e.code === "KeyR") resetState();
+        }, { passive: false });
+
+        window.addEventListener("keyup", (e) => {
+            if (e.code === "ArrowLeft" || e.code === "KeyA") input.left = false;
+            if (e.code === "ArrowRight" || e.code === "KeyD") input.right = false;
+            if (e.code === "ShiftLeft" || e.code === "ShiftRight") input.boost = false;
+            if (e.code === "ArrowUp" || e.code === "KeyW") input.forward = false;
+            if (e.code === "ArrowDown" || e.code === "KeyS") input.back = false;
+            if (e.code === "Space") {
+                input.jump = false;
+                input.jumpConsumed = false;
+            }
+        });
+
+        window.addEventListener("resize", () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        function triggerKickflip(direction) {
+            if (state.grounded || state.crashed || state.trickUsed || state.radialOffset < 0.25) return;
+
+            state.trickUsed = true;
+            state.trickActive = true;
+            state.trickRollDirection = direction;
+            state.trickRollAngle = 0;
+            state.trickRollVelocity = direction * ((Math.PI * 2) / CONFIG.kickflipDuration);
+            state.lastTrick = direction > 0 ? "KICKFLIP LEFT" : "KICKFLIP RIGHT";
+            showCenterNote(state.lastTrick);
+        }
+
+        function getFrameInput() {
+            const steer = (input.left ? 1 : 0) - (input.right ? 1 : 0);
+            const jumpPressed = input.jump && !input.jumpConsumed;
+            if (jumpPressed) input.jumpConsumed = true;
+            const throttle = (input.forward ? 1 : 0) - (input.back ? 1 : 0);
+            return { steer, throttle, jumpPressed, boostHeld: input.boost };
+        }
+
+        function updatePhysics(frameInput, dt) {
+            dt = Math.min(dt, 1 / 30);
+
+            if (state.crashed) {
+                updateCrashPhysics(dt);
+                return;
+            }
+
+            const canBoost = frameInput.boostHeld && state.boost > 0.02;
+            const throttleSpeedOffset = frameInput.throttle > 0
+                ? CONFIG.forwardSpeedBonus
+                : frameInput.throttle < 0
+                    ? -CONFIG.brakeSpeedPenalty
+                    : 0;
+            const targetSpeed = (canBoost ? CONFIG.boostSpeed : CONFIG.baseSpeed) + throttleSpeedOffset;
+            state.zVelocity += (targetSpeed - state.zVelocity) * CONFIG.acceleration * dt;
+            state.z += state.zVelocity * dt;
+
+            if (canBoost) {
+                state.boost = Math.max(0, state.boost - CONFIG.boostDrain * dt);
+            } else {
+                state.boost = Math.min(1, state.boost + CONFIG.boostRegen * dt);
+            }
+
+            const grip = state.grounded ? 1 : CONFIG.airControl;
+            const friction = state.grounded ? CONFIG.groundedFriction : CONFIG.airFriction;
+
+            state.thetaVelocity += frameInput.steer * CONFIG.steerAcceleration * grip * dt;
+            state.thetaVelocity = THREE.MathUtils.clamp(state.thetaVelocity, -CONFIG.maxThetaVelocity, CONFIG.maxThetaVelocity);
+            state.thetaVelocity *= Math.exp(-friction * dt);
+            state.theta += state.thetaVelocity * dt;
+
+            if (frameInput.jumpPressed && state.grounded) {
+                state.radialVelocity = CONFIG.jumpImpulse;
+                state.grounded = false;
+                state.trickUsed = false;
+                state.trickActive = false;
+                state.trickRollAngle = 0;
+                state.trickRollVelocity = 0;
+                state.trickRollDirection = 0;
+                state.lastTrick = "AIR";
+                showCenterNote("RADIAL JUMP");
+            }
+
+            if (!state.grounded) {
+                updateTrickPhysics(dt);
+                state.radialVelocity -= CONFIG.tunnelGravity * dt;
+                state.radialOffset += state.radialVelocity * dt;
+
+                if (state.radialOffset > CONFIG.maxRadialOffset) {
+                    state.radialOffset = CONFIG.maxRadialOffset;
+                    state.radialVelocity = Math.min(0, state.radialVelocity);
+                }
+
+                if (state.radialOffset <= 0) {
+                    state.radialOffset = 0;
+                    state.radialVelocity = 0;
+                    evaluateLanding();
+                }
+            }
+
+            const twoPi = Math.PI * 2;
+            state.theta = ((state.theta % twoPi) + twoPi) % twoPi;
+        }
+
+        function updateTrickPhysics(dt) {
+            if (!state.trickActive) return;
+
+            state.trickRollAngle += state.trickRollVelocity * dt;
+            const target = state.trickRollDirection * Math.PI * 2;
+
+            if (
+                (state.trickRollDirection > 0 && state.trickRollAngle >= target) ||
+                (state.trickRollDirection < 0 && state.trickRollAngle <= target)
+            ) {
+                state.trickRollAngle = target;
+                state.trickRollVelocity = 0;
+                state.trickActive = false;
+                state.lastTrick = "KICKFLIP READY";
+            }
+        }
+
+        function getLandingErrorDegrees() {
+            const twoPi = Math.PI * 2;
+            let error = ((state.trickRollAngle % twoPi) + twoPi) % twoPi;
+            if (error > Math.PI) error = twoPi - error;
+            return THREE.MathUtils.radToDeg(Math.abs(error));
+        }
+
+        function evaluateLanding() {
+            state.grounded = true;
+
+            if (!state.trickUsed) {
+                state.trickRollAngle = 0;
+                state.trickActive = false;
+                state.lastTrick = "LANDING";
+                showCenterNote("LANDING");
+                return;
+            }
+
+            const errorDeg = getLandingErrorDegrees();
+
+            if (errorDeg <= CONFIG.cleanLandingDegrees) {
+                const points = 500 * state.combo;
+                state.score += points;
+                state.combo += 1;
+                state.trickRollAngle = 0;
+                state.trickActive = false;
+                state.lastTrick = `CLEAN ${errorDeg.toFixed(1)}°`;
+                showCenterNote(`CLEAN KICKFLIP +${points}`);
+                return;
+            }
+
+            if (errorDeg <= CONFIG.hardLandingDegrees) {
+                const points = 200 * state.combo;
+                state.score += points;
+                state.thetaVelocity += state.trickRollDirection * 1.25;
+                state.zVelocity *= 0.82;
+                state.trickRollAngle = 0;
+                state.trickActive = false;
+                state.lastTrick = `HARD ${errorDeg.toFixed(1)}°`;
+                showCenterNote(`HARD LANDING +${points}`);
+                return;
+            }
+
+            startCrash(errorDeg);
+        }
+
+        function startCrash(errorDeg) {
+            state.crashed = true;
+            state.grounded = true;
+            state.crashTimer = CONFIG.crashRespawnSeconds;
+            state.combo = 1;
+            state.lastTrick = `CRASH ${errorDeg.toFixed(1)}°`;
+            state.tumbleRollAngle = state.trickRollAngle;
+            state.tumblePitchAngle = 0;
+            state.tumbleRollVelocity = state.trickRollDirection * 12;
+            state.tumblePitchVelocity = 8;
+            state.trickActive = false;
+            state.trickRollVelocity = 0;
+            showCenterNote(`CRASH ${errorDeg.toFixed(1)}°`);
+        }
+
+        function updateCrashPhysics(dt) {
+            state.crashTimer -= dt;
+            state.zVelocity += (CONFIG.baseSpeed * 0.35 - state.zVelocity) * 5 * dt;
+            state.z += state.zVelocity * dt;
+            state.theta += state.thetaVelocity * 0.3 * dt;
+            state.thetaVelocity *= Math.exp(-5 * dt);
+            state.tumbleRollAngle += state.tumbleRollVelocity * dt;
+            state.tumblePitchAngle += state.tumblePitchVelocity * dt;
+
+            if (state.crashTimer <= 0) {
+                respawnAfterCrash();
+            }
+
+            const twoPi = Math.PI * 2;
+            state.theta = ((state.theta % twoPi) + twoPi) % twoPi;
+        }
+
+        function respawnAfterCrash() {
+            state.z += 18;
+            state.theta = 0;
+            state.zVelocity = CONFIG.baseSpeed;
+            state.thetaVelocity = 0;
+            state.radialOffset = 0;
+            state.radialVelocity = 0;
+            state.grounded = true;
+            state.crashed = false;
+            state.crashTimer = 0;
+            state.trickUsed = false;
+            state.trickActive = false;
+            state.trickRollAngle = 0;
+            state.trickRollVelocity = 0;
+            state.trickRollDirection = 0;
+            state.tumbleRollAngle = 0;
+            state.tumblePitchAngle = 0;
+            state.tumbleRollVelocity = 0;
+            state.tumblePitchVelocity = 0;
+            state.lastTrick = "RESPAWN";
+            showCenterNote("RESPAWN");
+        }
+
+        function getBasis(theta) {
+            const surfaceOut = new THREE.Vector3(Math.sin(theta), -Math.cos(theta), 0);
+            const up = surfaceOut.clone().multiplyScalar(-1);
+            const right = new THREE.Vector3(Math.cos(theta), Math.sin(theta), 0);
+            const forward = new THREE.Vector3(0, 0, 1);
+            return { surfaceOut, up, right, forward };
+        }
+
+        function getCarTransform() {
+            const { surfaceOut, up, right, forward } = getBasis(state.theta);
+            const radius = CONFIG.tunnelRadius - state.radialOffset;
+
+            const centerRadius = radius - CAR_GEOMETRY_CENTER_HEIGHT;
+
+            const position = new THREE.Vector3(
+                surfaceOut.x * centerRadius,
+                surfaceOut.y * centerRadius,
+                state.z
+            );
+
+            const matrix = new THREE.Matrix4().makeBasis(right, up, forward);
+            const quaternion = new THREE.Quaternion().setFromRotationMatrix(matrix);
+
+            const visualQuaternion = quaternion.clone();
+            if (state.crashed) {
+                const roll = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), state.tumbleRollAngle);
+                const pitch = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), state.tumblePitchAngle);
+                visualQuaternion.multiply(roll).multiply(pitch);
+            } else if (state.trickUsed || Math.abs(state.trickRollAngle) > 0.001) {
+                const roll = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), state.trickRollAngle);
+                visualQuaternion.multiply(roll);
+            }
+
+            return { position, quaternion: visualQuaternion, up, right, forward, surfaceOut };
+        }
+
+        let cameraTheta = 0;
+        let cameraThetaVelocity = 0;
+        let cameraHeightCurrent = 4.0;
+        let cameraFovCurrent = 66;
+        let cameraBackDistanceCurrent = 15.75;
+
+        const CAMERA_HEIGHT = {
+            normal: 4.0,
+            boost: 2.0,
+            enterSeconds: 3.0,
+            exitSeconds: 1.2
+        };
+
+        const CAMERA_FOV = {
+            normal: 66,
+            boost: 120,
+            enterSeconds: 3.0,
+            exitSeconds: 1.2
+        };
+
+        const CAMERA_DISTANCE = {
+            normal: 15.75,
+            forward: 19.25,
+            back: 10.0,
+            lerpSpeed: 3.2
+        };
+
+        const CAMERA_PHYSICS = {
+            thetaSpring: 26,      // jak mocno kamera wraca za graczem
+            thetaDamping: 9.5,    // tłumienie; większe = mniej bujania
+            maxThetaVelocity: 2.2 // limit, żeby kamera nie szarpała przy szybkiej zmianie strony
+        };
+
+        function dampAngle(current, target, lambda, dt) {
+            let delta = target - current;
+            while (delta > Math.PI) delta -= Math.PI * 2;
+            while (delta < -Math.PI) delta += Math.PI * 2;
+            return current + delta * (1 - Math.exp(-lambda * dt));
+        }
+
+        function updateCameraThetaPhysics(dt) {
+            let delta = state.theta - cameraTheta;
+            while (delta > Math.PI) delta -= Math.PI * 2;
+            while (delta < -Math.PI) delta += Math.PI * 2;
+
+            const springForce = delta * CAMERA_PHYSICS.thetaSpring;
+            const dampingForce = cameraThetaVelocity * CAMERA_PHYSICS.thetaDamping;
+
+            cameraThetaVelocity += (springForce - dampingForce) * dt;
+            cameraThetaVelocity = THREE.MathUtils.clamp(
+                cameraThetaVelocity,
+                -CAMERA_PHYSICS.maxThetaVelocity,
+                CAMERA_PHYSICS.maxThetaVelocity
+            );
+
+            cameraTheta += cameraThetaVelocity * dt;
+
+            const twoPi = Math.PI * 2;
+            cameraTheta = ((cameraTheta % twoPi) + twoPi) % twoPi;
+        }
+
+        function updateCamera(carTransform, dt) {
+            updateCameraThetaPhysics(dt);
+
+            const cameraSurfaceOut = new THREE.Vector3(Math.sin(cameraTheta), -Math.cos(cameraTheta), 0);
+            const cameraUp = cameraSurfaceOut.clone().multiplyScalar(-1);
+
+            const boostCameraActive = input.boost && state.boost > 0.02;
+            const cameraHeightTarget = boostCameraActive ? CAMERA_HEIGHT.boost : CAMERA_HEIGHT.normal;
+            const cameraHeightTransitionSeconds = boostCameraActive ? CAMERA_HEIGHT.enterSeconds : CAMERA_HEIGHT.exitSeconds;
+            const cameraHeightSpeed = Math.abs(CAMERA_HEIGHT.normal - CAMERA_HEIGHT.boost) / cameraHeightTransitionSeconds;
+            cameraHeightCurrent = THREE.MathUtils.clamp(
+                cameraHeightCurrent + Math.sign(cameraHeightTarget - cameraHeightCurrent) * cameraHeightSpeed * dt,
+                Math.min(CAMERA_HEIGHT.normal, CAMERA_HEIGHT.boost),
+                Math.max(CAMERA_HEIGHT.normal, CAMERA_HEIGHT.boost)
+            );
+
+            const cameraFovTarget = boostCameraActive ? CAMERA_FOV.boost : CAMERA_FOV.normal;
+            const cameraFovTransitionSeconds = boostCameraActive ? CAMERA_FOV.enterSeconds : CAMERA_FOV.exitSeconds;
+            const cameraFovSpeed = Math.abs(CAMERA_FOV.boost - CAMERA_FOV.normal) / cameraFovTransitionSeconds;
+            cameraFovCurrent = THREE.MathUtils.clamp(
+                cameraFovCurrent + Math.sign(cameraFovTarget - cameraFovCurrent) * cameraFovSpeed * dt,
+                Math.min(CAMERA_FOV.normal, CAMERA_FOV.boost),
+                Math.max(CAMERA_FOV.normal, CAMERA_FOV.boost)
+            );
+            if (Math.abs(camera.fov - cameraFovCurrent) > 0.01) {
+                camera.fov = cameraFovCurrent;
+                camera.updateProjectionMatrix();
+            }
+
+            const cameraDistanceTarget = input.forward
+                ? CAMERA_DISTANCE.forward
+                : input.back
+                    ? CAMERA_DISTANCE.back
+                    : CAMERA_DISTANCE.normal;
+            cameraBackDistanceCurrent += (cameraDistanceTarget - cameraBackDistanceCurrent) * (1 - Math.exp(-CAMERA_DISTANCE.lerpSpeed * dt));
+
+            const cameraRadius = CONFIG.tunnelRadius - cameraHeightCurrent;
+            const cameraBackDistance = cameraBackDistanceCurrent;
+            const lookAhead = 21;
+
+            camera.position.set(
+                cameraSurfaceOut.x * cameraRadius,
+                cameraSurfaceOut.y * cameraRadius,
+                state.z - cameraBackDistance
+            );
+
+            camera.up.copy(cameraUp);
+            camera.lookAt(
+                carTransform.position.x,
+                carTransform.position.y,
+                state.z + lookAhead
+            );
+        }
+
+        function updateDebugVisuals(carTransform) {
+            car.position.copy(carTransform.position);
+            car.quaternion.copy(carTransform.quaternion);
+            carLight.position.copy(carTransform.position).addScaledVector(carTransform.up, 2.4).addScaledVector(carTransform.forward, -1.2);
+            carLight.intensity = input.boost && state.boost > 0.02 ? 4.2 : 1.7;
+
+            const groundBasis = getBasis(state.theta);
+            const groundPoint = new THREE.Vector3(
+                groundBasis.surfaceOut.x * CONFIG.tunnelRadius,
+                groundBasis.surfaceOut.y * CONFIG.tunnelRadius,
+                state.z
+            );
+            const shadowMatrix = new THREE.Matrix4().makeBasis(groundBasis.right, groundBasis.forward, groundBasis.up);
+            shadow.position.copy(groundPoint).addScaledVector(groundBasis.up, 0.012);
+            shadow.quaternion.setFromRotationMatrix(shadowMatrix);
+            shadow.scale.setScalar(1 + state.radialOffset * 0.08);
+            shadow.material.opacity = THREE.MathUtils.clamp(0.36 - state.radialOffset * 0.035, 0.08, 0.36);
+
+            const cycle = Math.floor(state.z / 900);
+            const baseZ = cycle * 900;
+            tunnel.position.z = baseZ + 360;
+            tunnelSkin.position.z = baseZ + 360;
+            laneGroup.position.z = baseZ;
+            ringGroup.position.z = baseZ;
+        }
+
+        const ui = {
+            speed: document.getElementById("speed"),
+            theta: document.getElementById("theta"),
+            thetaVel: document.getElementById("thetaVel"),
+            radial: document.getElementById("radial"),
+            grounded: document.getElementById("grounded"),
+            zpos: document.getElementById("zpos"),
+            boostFill: document.getElementById("boostFill"),
+            boostText: document.getElementById("boostText"),
+            score: document.getElementById("score"),
+            combo: document.getElementById("combo"),
+            trick: document.getElementById("trick"),
+        };
+
+        function updateHud() {
+            ui.speed.textContent = `${Math.round(state.zVelocity * 3.6)} km/h`;
+            ui.theta.textContent = state.theta.toFixed(2);
+            ui.thetaVel.textContent = state.thetaVelocity.toFixed(2);
+            ui.radial.textContent = state.radialOffset.toFixed(2);
+            ui.grounded.textContent = String(state.grounded);
+            ui.zpos.textContent = Math.round(state.z).toString();
+            ui.boostFill.style.transform = `scaleX(${state.boost.toFixed(3)})`;
+            ui.boostText.textContent = `${Math.round(state.boost * 100)}%`;
+            ui.score.textContent = Math.round(state.score).toString();
+            ui.combo.textContent = `x${state.combo}`;
+            ui.trick.textContent = state.lastTrick;
+        }
+
+        let last = performance.now();
+
+        function animate(now) {
+            requestAnimationFrame(animate);
+            const dt = (now - last) / 1000;
+            last = now;
+
+            updatePhysics(getFrameInput(), dt);
+            const transform = getCarTransform();
+            updateDebugVisuals(transform);
+            updateCamera(transform, dt);
+            updateHud();
+
+            renderer.render(scene, camera);
+        }
+
+        resetState();
+        requestAnimationFrame(animate);
+    </script>
+</body>
+
+</html>

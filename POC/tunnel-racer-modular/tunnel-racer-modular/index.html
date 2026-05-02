@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Physics First Tunnel Racer — Modular Preview</title>
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+  <div class="hud">
+    <div class="topbar">
+      <div class="panel">
+        <div class="title">Physics First Tunnel Racer</div>
+        <div class="sub">
+          Minimalny podgląd: auto jest debugowym boxem. Sprawdzana jest fizyka ruchu po wewnętrznej powierzchni cylindra: θ, promień, skok radialny, double jump, kickflip, transfer i kamera z opóźnieniem.
+        </div>
+      </div>
+
+      <div class="panel metrics">
+        <div><div class="metric-label">Speed</div><div class="metric-value" id="speed">0</div></div>
+        <div><div class="metric-label">Theta</div><div class="metric-value" id="theta">0.00</div></div>
+        <div><div class="metric-label">Theta velocity</div><div class="metric-value" id="thetaVel">0.00</div></div>
+        <div><div class="metric-label">Radial offset</div><div class="metric-value" id="radial">0.00</div></div>
+        <div><div class="metric-label">Grounded</div><div class="metric-value" id="grounded">true</div></div>
+        <div><div class="metric-label">Z</div><div class="metric-value" id="zpos">0</div></div>
+        <div><div class="metric-label">Score</div><div class="metric-value" id="score">0</div></div>
+        <div><div class="metric-label">Combo</div><div class="metric-value" id="combo">x1</div></div>
+        <div><div class="metric-label">Trick</div><div class="metric-value" id="trick">—</div></div>
+      </div>
+    </div>
+
+    <div></div>
+
+    <div class="bottom">
+      <div class="panel controls">
+        <span class="key">A</span>/<span class="key">←</span> skręt w lewo,
+        <span class="key">D</span>/<span class="key">→</span> skręt w prawo,
+        <span class="key">W</span>/<span class="key">↑</span> lekko szybciej,
+        <span class="key">S</span>/<span class="key">↓</span> mocniej wolniej,
+        <span class="key">Space</span> skok radialny,
+        <span class="key">Shift</span> boost,
+        <span class="key">R</span> reset.
+        <br />
+        W powietrzu ponowne <span class="key">A</span>/<span class="key">D</span> odpala kickflip.
+        Drugi <span class="key">Space</span> w ciągu 300 ms od pierwszego skoku robi double jump.
+        Kickflip po double jumpie odpala transfer tylko w ostatnich 500 ms wznoszenia, przed opadaniem.
+        Transfer ląduje 180° od miejsca wyskoku. Kamera czeka 1200 ms, potem goni cel 2x szybciej.
+      </div>
+
+      <div class="panel bar-wrap">
+        <div class="bar-label"><span>Boost</span><span id="boostText">100%</span></div>
+        <div class="bar"><div class="bar-fill" id="boostFill"></div></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="center-note" id="centerNote">RESET</div>
+
+  <script type="module" src="./js/main.js"></script>
+</body>
+</html>

@@ -1,0 +1,1194 @@
+<!doctype html>
+<html lang="pl">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Tunnel Drift — Three.js POC v6</title>
+  <style>
+    html, body {
+      margin: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: #02040a;
+      color: white;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    #game {
+      position: fixed;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+
+    .hud {
+      position: fixed;
+      inset: 0;
+      z-index: 10;
+      pointer-events: none;
+      text-shadow: 0 3px 14px rgba(0,0,0,.85);
+    }
+
+    .top {
+      position: absolute;
+      top: 22px;
+      left: 50%;
+      transform: translateX(-50%);
+      text-align: center;
+    }
+
+    .timer {
+      font-size: clamp(44px, 6vw, 86px);
+      line-height: .8;
+      font-weight: 950;
+      letter-spacing: -.06em;
+    }
+
+    .caption {
+      margin-top: 8px;
+      color: rgba(255,255,255,.72);
+      font-weight: 850;
+      letter-spacing: .18em;
+      font-size: 12px;
+    }
+
+    .left {
+      position: absolute;
+      top: 36px;
+      left: 34px;
+      display: grid;
+      gap: 16px;
+    }
+
+    .right {
+      position: absolute;
+      right: 34px;
+      top: 36px;
+      text-align: right;
+      display: grid;
+      gap: 16px;
+    }
+
+    .stat label {
+      display: block;
+      color: rgba(255,255,255,.68);
+      font-weight: 850;
+      font-size: 12px;
+      letter-spacing: .1em;
+      text-transform: uppercase;
+    }
+
+    .stat strong {
+      display: block;
+      margin-top: 2px;
+      font-size: 32px;
+      line-height: 1;
+      font-weight: 950;
+    }
+
+    .combo strong {
+      color: #ffd84e;
+      font-size: 50px;
+    }
+
+    .trick strong {
+      color: #6fe8ff;
+      font-size: 28px;
+    }
+
+    .boost {
+      position: absolute;
+      left: 34px;
+      bottom: 34px;
+      width: min(420px, 42vw);
+    }
+
+    .boost label {
+      display: block;
+      margin-bottom: 8px;
+      font-size: 13px;
+      font-weight: 900;
+      color: rgba(255,255,255,.76);
+      letter-spacing: .08em;
+    }
+
+    .bar {
+      height: 28px;
+      padding: 4px;
+      border-radius: 999px;
+      border: 2px solid rgba(72,210,255,.55);
+      background: rgba(0,20,38,.48);
+      box-shadow: 0 0 30px rgba(0,160,255,.16);
+    }
+
+    .bar span {
+      display: block;
+      height: 100%;
+      width: 100%;
+      border-radius: inherit;
+      background: linear-gradient(90deg, #00c8ff, #91f5ff);
+      box-shadow: 0 0 18px rgba(0,200,255,.62);
+      transform-origin: left center;
+      transform: scaleX(1);
+    }
+
+    .speed {
+      position: absolute;
+      right: 36px;
+      bottom: 32px;
+      width: 210px;
+      height: 210px;
+      border-radius: 999px;
+      display: grid;
+      place-items: center;
+      background:
+        conic-gradient(from 220deg, #00c8ff 0deg, #00c8ff var(--speedDeg, 160deg), rgba(255,255,255,.08) var(--speedDeg, 160deg), rgba(255,255,255,.08) 280deg, transparent 280deg),
+        radial-gradient(circle, rgba(3,8,18,.7) 0 58%, transparent 59%);
+      filter: drop-shadow(0 0 22px rgba(0,200,255,.2));
+    }
+
+    .speed::after {
+      content: "";
+      position: absolute;
+      inset: 21px;
+      border-radius: 999px;
+      border: 1px solid rgba(255,255,255,.12);
+    }
+
+    .speed strong {
+      font-size: 54px;
+      line-height: .8;
+      letter-spacing: -.06em;
+    }
+
+    .speed span {
+      display: block;
+      margin-top: 6px;
+      text-align: center;
+      font-weight: 900;
+      color: rgba(255,255,255,.82);
+    }
+
+    .objectives {
+      width: 250px;
+      padding: 15px 17px;
+      border-radius: 18px;
+      background: rgba(3,8,18,.42);
+      border: 1px solid rgba(255,255,255,.12);
+      backdrop-filter: blur(8px);
+      text-align: left;
+    }
+
+    .objectives h3 {
+      margin: 0 0 12px;
+      font-size: 13px;
+      color: rgba(255,255,255,.72);
+      letter-spacing: .09em;
+      text-transform: uppercase;
+    }
+
+    .objectives div {
+      margin-top: 8px;
+      color: rgba(255,255,255,.82);
+      font-weight: 800;
+    }
+
+    .debug {
+      position: absolute;
+      left: 50%;
+      bottom: 18px;
+      transform: translateX(-50%);
+      padding: 8px 12px;
+      border-radius: 999px;
+      border: 1px solid rgba(255,255,255,.12);
+      background: rgba(0,0,0,.32);
+      color: rgba(255,255,255,.72);
+      font-size: 12px;
+      backdrop-filter: blur(8px);
+      white-space: nowrap;
+    }
+
+    .message {
+      position: absolute;
+      left: 50%;
+      bottom: 12%;
+      transform: translateX(-50%);
+      color: rgba(255,255,255,.78);
+      font-weight: 900;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+      text-align: center;
+    }
+
+    .overlay {
+      position: fixed;
+      inset: 0;
+      z-index: 50;
+      display: none;
+      place-items: center;
+      background: rgba(0,0,0,.64);
+      backdrop-filter: blur(12px);
+    }
+
+    .overlay.open {
+      display: grid;
+    }
+
+    .panel {
+      width: min(590px, calc(100vw - 40px));
+      padding: 28px;
+      border-radius: 28px;
+      background: rgba(8,14,26,.9);
+      border: 1px solid rgba(255,255,255,.14);
+      box-shadow: 0 32px 100px rgba(0,0,0,.5);
+      text-align: center;
+    }
+
+    .panel h1 {
+      margin: 0;
+      font-size: 44px;
+      letter-spacing: -.05em;
+    }
+
+    .panel p {
+      color: rgba(255,255,255,.74);
+      line-height: 1.55;
+    }
+
+    .panel button {
+      margin-top: 14px;
+      border: 0;
+      border-radius: 15px;
+      padding: 14px 22px;
+      cursor: pointer;
+      color: #041016;
+      background: linear-gradient(180deg, #96f5ff, #00c8ff);
+      font-weight: 950;
+    }
+
+    @media (max-width: 760px) {
+      .left { left: 16px; top: 18px; gap: 10px; }
+      .right { right: 16px; top: 18px; }
+      .objectives { display: none; }
+      .boost { left: 16px; width: 48vw; }
+      .speed { right: 16px; width: 145px; height: 145px; }
+      .speed strong { font-size: 38px; }
+      .stat strong { font-size: 23px; }
+      .combo strong { font-size: 34px; }
+      .debug { display: none; }
+    }
+  </style>
+</head>
+<body>
+  <canvas id="game"></canvas>
+
+  <div class="hud">
+    <div class="top">
+      <div class="timer" id="timer">1:00</div>
+      <div class="caption">TIME REMAINING</div>
+    </div>
+
+    <div class="left">
+      <div class="stat"><label>Score</label><strong id="score">0</strong></div>
+      <div class="stat combo"><label>Combo</label><strong id="combo">x1</strong></div>
+      <div class="stat trick"><label>Trick</label><strong id="trick">READY</strong></div>
+    </div>
+
+    <div class="right">
+      <div class="objectives">
+        <h3>Objectives</h3>
+        <div id="objFinish">☆ reach 2000m</div>
+        <div id="objJump">☆ perform 3 jumps</div>
+        <div id="objObstacle">☆ avoid 12 obstacles</div>
+      </div>
+    </div>
+
+    <div class="boost">
+      <label>BOOST</label>
+      <div class="bar"><span id="boostBar"></span></div>
+    </div>
+
+    <div class="speed"><div><strong id="speed">0</strong><span>KM/H</span></div></div>
+    <div class="message" id="msg">A/D — steer wheels · SPACE — jump · SHIFT — boost</div>
+    <div class="debug">v6: θ bottom model · wheels → grip/friction → side velocity · camera angle lag</div>
+  </div>
+
+  <div class="overlay open" id="start">
+    <div class="panel">
+      <h1>Tunnel Drift POC v6</h1>
+      <p>Okrągły tunel. Auto siedzi na wewnętrznej powierzchni. Skręt obraca koła, grip/tarcie tworzy prędkość boczną po obwodzie. Kamera dogania kąt auta z opóźnieniem, więc tunel wydaje się obracać.</p>
+      <button id="startBtn">START</button>
+    </div>
+  </div>
+
+  <div class="overlay" id="gameOver">
+    <div class="panel">
+      <h1 id="endTitle">Run complete</h1>
+      <p id="endStats"></p>
+      <button id="restartBtn">RESTART</button>
+    </div>
+  </div>
+
+  <script type="module">
+    import * as THREE from "https://unpkg.com/three@0.161.0/build/three.module.js";
+
+    const canvas = document.getElementById("game");
+    const renderer = new THREE.WebGLRenderer({
+      canvas,
+      antialias: true,
+      powerPreference: "high-performance"
+    });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2.5));
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.18;
+    renderer.outputColorSpace = THREE.SRGBColorSpace;
+
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x02040a);
+    scene.fog = new THREE.FogExp2(0x020714, 0.018);
+
+    const camera = new THREE.PerspectiveCamera(76, window.innerWidth / window.innerHeight, 0.05, 420);
+    camera.position.set(0, 2.2, -10);
+
+    const clock = new THREE.Clock();
+
+    const ui = {
+      timer: document.getElementById("timer"),
+      score: document.getElementById("score"),
+      combo: document.getElementById("combo"),
+      trick: document.getElementById("trick"),
+      boost: document.getElementById("boostBar"),
+      speed: document.getElementById("speed"),
+      start: document.getElementById("start"),
+      gameOver: document.getElementById("gameOver"),
+      endTitle: document.getElementById("endTitle"),
+      endStats: document.getElementById("endStats"),
+      objFinish: document.getElementById("objFinish"),
+      objJump: document.getElementById("objJump"),
+      objObstacle: document.getElementById("objObstacle")
+    };
+
+    const CFG = {
+      R: 6.2,
+      tubeLength: 38,
+      segmentCount: 18,
+      laneCount: 12,
+
+      baseSpeed: 31,
+      boostSpeed: 60,
+      speedLerp: 5.0,
+
+      maxBoost: 1,
+      boostDrain: 0.72,
+      boostRegen: 0.24,
+
+      wheelSteerMax: 0.62,
+      wheelSteerRate: 11.0,
+      grip: 1.65,
+      lateralDamping: 1.75,
+      lateralMax: 2.45,
+
+      gravity: 11.0,
+      jumpImpulse: 5.2,
+      jumpMaxHeight: 2.35,
+
+      cameraLag: 3.8,
+      cameraPosLag: 5.8,
+      cameraUpLag: 5.2
+    };
+
+    // Coordinate system:
+    // z = forward down the tunnel
+    // theta = 0 is the bottom of the tube
+    // floor point: x = R * sin(theta), y = -R * cos(theta)
+    // local up = toward tunnel center = (-sin(theta), cos(theta), 0)
+    // local right = up × forward = (cos(theta), sin(theta), 0)
+    const forward = new THREE.Vector3(0, 0, 1);
+
+    function floorPoint(theta, height = 0) {
+      const r = CFG.R - 0.08 - height;
+      return new THREE.Vector3(Math.sin(theta) * r, -Math.cos(theta) * r, 0);
+    }
+
+    function upAt(theta) {
+      return new THREE.Vector3(-Math.sin(theta), Math.cos(theta), 0).normalize();
+    }
+
+    function rightAt(theta) {
+      return new THREE.Vector3(Math.cos(theta), Math.sin(theta), 0).normalize();
+    }
+
+    function laneAngle(lane) {
+      return (lane / CFG.laneCount) * Math.PI * 2;
+    }
+
+    function angleToLaneFloat(theta) {
+      return ((theta / (Math.PI * 2)) * CFG.laneCount + CFG.laneCount) % CFG.laneCount;
+    }
+
+    function wrapAngle(a) {
+      return Math.atan2(Math.sin(a), Math.cos(a));
+    }
+
+    function expFollow(current, target, speed, dt) {
+      return THREE.MathUtils.lerp(current, target, 1 - Math.exp(-speed * dt));
+    }
+
+    function expFollowAngle(current, target, speed, dt) {
+      const d = Math.atan2(Math.sin(target - current), Math.cos(target - current));
+      return current + d * (1 - Math.exp(-speed * dt));
+    }
+
+    const state = {
+      running: false,
+      ended: false,
+
+      timeLeft: 60,
+      distance: 0,
+      score: 0,
+      combo: 1,
+      comboTimer: 0,
+      trick: "READY",
+
+      theta: 0,
+      thetaVel: 0,
+      camTheta: 0,
+
+      wheelSteer: 0,
+      steerInput: 0,
+
+      height: 0,
+      radialVel: 0,
+      grounded: true,
+
+      boost: 1,
+      speed: CFG.baseSpeed,
+
+      jumps: 0,
+      avoided: 0,
+      hitCooldown: 0,
+      shake: 0
+    };
+
+    const keys = new Set();
+    window.addEventListener("keydown", (e) => {
+      keys.add(e.code);
+      if (["Space", "ShiftLeft", "ShiftRight", "ArrowLeft", "ArrowRight"].includes(e.code)) e.preventDefault();
+    }, { passive: false });
+    window.addEventListener("keyup", (e) => keys.delete(e.code));
+
+    const tunnelVertex = `
+      varying vec2 vUv;
+      varying vec3 vPos;
+      uniform float uTime;
+
+      void main() {
+        vUv = uv;
+        vec3 p = position;
+        float micro = sin(uv.y * 95.0 + uTime * 4.0) * 0.012;
+        p += normal * micro;
+        vPos = p;
+        gl_Position = projectionMatrix * modelViewMatrix * vec4(p, 1.0);
+      }
+    `;
+
+    const tunnelFragment = `
+      #ifdef GL_OES_standard_derivatives
+      #extension GL_OES_standard_derivatives : enable
+      #endif
+
+      varying vec2 vUv;
+      varying vec3 vPos;
+      uniform float uTime;
+
+      float aaLine(float v, float w) {
+        float f = abs(fract(v) - 0.5);
+        float aa = max(fwidth(v) * 1.2, 0.002);
+        return 1.0 - smoothstep(w, w + aa, f);
+      }
+
+      void main() {
+        float ring = aaLine(vUv.y * 22.0 - uTime * 1.2, 0.025);
+        float lane = aaLine(vUv.x * 12.0, 0.012);
+        float panel = aaLine(vUv.y * 68.0 + sin(vUv.x * 30.0), 0.009);
+        float chevron = smoothstep(0.98, 1.0, sin((vUv.y * 70.0 - uTime * 7.0) + abs(fract(vUv.x * 6.0) - 0.5) * 9.0));
+
+        vec3 base = mix(vec3(0.018, 0.035, 0.075), vec3(0.04, 0.10, 0.18), vUv.y);
+        vec3 blue = vec3(0.02, 0.74, 1.0);
+        vec3 orange = vec3(1.0, 0.42, 0.06);
+        vec3 magenta = vec3(1.0, 0.08, 0.72);
+
+        vec3 col = base;
+        col += blue * ring * 0.42;
+        col += blue * lane * 0.18;
+        col += orange * panel * 0.17;
+        col += magenta * chevron * 0.12;
+
+        float axialFog = smoothstep(0.0, 1.0, vUv.y);
+        col *= 0.82 + axialFog * 0.28;
+
+        gl_FragColor = vec4(col, 1.0);
+      }
+    `;
+
+    const tunnelMat = new THREE.ShaderMaterial({
+      side: THREE.BackSide,
+      depthWrite: false,
+      extensions: { derivatives: true },
+      uniforms: { uTime: { value: 0 } },
+      vertexShader: tunnelVertex,
+      fragmentShader: tunnelFragment
+    });
+
+    const tunnelGeo = new THREE.CylinderGeometry(CFG.R, CFG.R, CFG.tubeLength, 160, 8, true);
+    tunnelGeo.rotateX(Math.PI / 2);
+    tunnelGeo.computeVertexNormals();
+
+    const tunnelSegments = [];
+    for (let i = 0; i < CFG.segmentCount; i++) {
+      const mesh = new THREE.Mesh(tunnelGeo, tunnelMat);
+      mesh.position.z = i * CFG.tubeLength - CFG.tubeLength * 0.35;
+      mesh.renderOrder = -20;
+      scene.add(mesh);
+      tunnelSegments.push(mesh);
+    }
+
+    const glowMats = {
+      cyan: new THREE.MeshBasicMaterial({ color: 0x00d8ff, transparent: true, opacity: 0.72, blending: THREE.AdditiveBlending, depthWrite: false }),
+      orange: new THREE.MeshBasicMaterial({ color: 0xff8a2a, transparent: true, opacity: 0.72, blending: THREE.AdditiveBlending, depthWrite: false }),
+      red: new THREE.MeshBasicMaterial({ color: 0xff2048, transparent: true, opacity: 0.78, blending: THREE.AdditiveBlending, depthWrite: false }),
+      magenta: new THREE.MeshBasicMaterial({ color: 0xff2dff, transparent: true, opacity: 0.75, blending: THREE.AdditiveBlending, depthWrite: false })
+    };
+
+    const ambient = new THREE.AmbientLight(0x7c9cff, 0.46);
+    scene.add(ambient);
+
+    const sun = new THREE.DirectionalLight(0xffffff, 1.15);
+    sun.position.set(1.5, 8, -3);
+    scene.add(sun);
+
+    const followLight = new THREE.PointLight(0x7cecff, 2.2, 32);
+    scene.add(followLight);
+
+    function orientOnFloor(group, theta, z, height = 0) {
+      const pos = floorPoint(theta, height);
+      pos.z = z;
+      const r = rightAt(theta);
+      const u = upAt(theta);
+      const f = forward.clone();
+      const basis = new THREE.Matrix4().makeBasis(r, u, f);
+      group.position.copy(pos);
+      group.quaternion.setFromRotationMatrix(basis);
+    }
+
+    const car = new THREE.Group();
+    scene.add(car);
+
+    const bodyMat = new THREE.MeshStandardMaterial({
+      color: 0x00b94a,
+      metalness: 0.68,
+      roughness: 0.24,
+      emissive: 0x003e16,
+      emissiveIntensity: 0.28
+    });
+
+    const blackMat = new THREE.MeshStandardMaterial({ color: 0x04070a, metalness: 0.36, roughness: 0.58 });
+    const glassMat = new THREE.MeshStandardMaterial({
+      color: 0x6deaff,
+      transparent: true,
+      opacity: 0.45,
+      metalness: 0.08,
+      roughness: 0.04,
+      emissive: 0x0c3a45,
+      emissiveIntensity: 0.5
+    });
+    const tailMat = new THREE.MeshStandardMaterial({ color: 0xff3518, emissive: 0xff2400, emissiveIntensity: 2.7 });
+    const flameMat = new THREE.MeshBasicMaterial({ color: 0x32d8ff, transparent: true, opacity: 0.78, blending: THREE.AdditiveBlending, depthWrite: false });
+
+    const body = new THREE.Mesh(new THREE.BoxGeometry(1.55, 0.55, 2.75), bodyMat);
+    body.position.y = 0.34;
+    car.add(body);
+
+    const cabin = new THREE.Mesh(new THREE.BoxGeometry(1.05, 0.42, 1.05), glassMat);
+    cabin.position.set(0, 0.78, -0.18);
+    car.add(cabin);
+
+    const nose = new THREE.Mesh(new THREE.BoxGeometry(1.3, 0.22, 0.35), bodyMat);
+    nose.position.set(0, 0.27, 1.43);
+    car.add(nose);
+
+    const spoiler = new THREE.Mesh(new THREE.BoxGeometry(1.46, 0.08, 0.34), blackMat);
+    spoiler.position.set(0, 0.74, -1.44);
+    car.add(spoiler);
+
+    const frontWheelPivots = [];
+    const wheelPivots = [];
+    for (const x of [-0.86, 0.86]) {
+      for (const z of [-0.9, 0.9]) {
+        const pivot = new THREE.Group();
+        pivot.position.set(x, 0.18, z);
+        const wheel = new THREE.Mesh(new THREE.CylinderGeometry(0.28, 0.28, 0.22, 28), blackMat);
+        wheel.rotation.z = Math.PI / 2;
+        pivot.add(wheel);
+        car.add(pivot);
+        wheelPivots.push(pivot);
+        if (z > 0) frontWheelPivots.push(pivot);
+      }
+    }
+
+    for (const x of [-0.42, 0.42]) {
+      const tail = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.15, 0.06), tailMat);
+      tail.position.set(x, 0.42, -1.42);
+      car.add(tail);
+    }
+
+    const flameGeo = new THREE.ConeGeometry(0.16, 1.35, 18, 1, true);
+    flameGeo.rotateX(-Math.PI / 2);
+    const flame1 = new THREE.Mesh(flameGeo, flameMat);
+    const flame2 = new THREE.Mesh(flameGeo, flameMat);
+    flame1.position.set(-0.36, 0.28, -1.75);
+    flame2.position.set(0.36, 0.28, -1.75);
+    flame1.visible = flame2.visible = false;
+    car.add(flame1, flame2);
+
+    const carLight = new THREE.PointLight(0x00d8ff, 1.6, 12);
+    carLight.position.set(0, 0.55, -2.0);
+    car.add(carLight);
+
+    const laneMarks = [];
+    const markGeo = new THREE.PlaneGeometry(1.4, 0.12);
+    for (let z = 0; z < 520; z += 8) {
+      for (const lane of [0, 3, 6, 9]) {
+        const theta = laneAngle(lane);
+        const mark = new THREE.Mesh(markGeo, lane % 2 ? glowMats.orange : glowMats.cyan);
+        orientOnFloor(mark, theta, z, -0.02);
+        mark.rotation.x += Math.PI / 2;
+        scene.add(mark);
+        laneMarks.push(mark);
+      }
+    }
+
+    const obstacleMat = new THREE.MeshStandardMaterial({
+      color: 0xff9e22,
+      metalness: 0.38,
+      roughness: 0.32,
+      emissive: 0xff4a00,
+      emissiveIntensity: 0.45
+    });
+
+    const rampMat = new THREE.MeshStandardMaterial({
+      color: 0xffc532,
+      metalness: 0.42,
+      roughness: 0.25,
+      emissive: 0xff8a00,
+      emissiveIntensity: 0.36
+    });
+
+    const gapMat = new THREE.MeshBasicMaterial({
+      color: 0x050008,
+      transparent: true,
+      opacity: 0.72,
+      depthWrite: false
+    });
+
+    const coinMat = new THREE.MeshStandardMaterial({
+      color: 0xff35ff,
+      metalness: 0.3,
+      roughness: 0.16,
+      emissive: 0xff00ff,
+      emissiveIntensity: 1.45
+    });
+
+    function makeWall() {
+      const g = new THREE.Group();
+      const block = new THREE.Mesh(new THREE.BoxGeometry(1.45, 1.2, 1.1), obstacleMat);
+      block.position.y = 0.55;
+      g.add(block);
+      const light = new THREE.PointLight(0xff8a2a, 1.4, 6);
+      light.position.y = 0.8;
+      g.add(light);
+      g.userData.type = "wall";
+      scene.add(g);
+      return g;
+    }
+
+    function makeRamp() {
+      const g = new THREE.Group();
+      const ramp = new THREE.Mesh(new THREE.BoxGeometry(1.85, 0.28, 2.35), rampMat);
+      ramp.position.y = 0.14;
+      ramp.rotation.x = -0.32;
+      g.add(ramp);
+      const lip = new THREE.Mesh(new THREE.BoxGeometry(1.7, 0.08, 0.12), glowMats.cyan);
+      lip.position.set(0, 0.36, 0.82);
+      g.add(lip);
+      g.userData.type = "ramp";
+      scene.add(g);
+      return g;
+    }
+
+    function makeGap() {
+      const g = new THREE.Group();
+      const patch = new THREE.Mesh(new THREE.PlaneGeometry(2.05, 3.2), gapMat);
+      patch.position.y = 0.025;
+      patch.rotation.x = -Math.PI / 2;
+      g.add(patch);
+      const red = new THREE.Mesh(new THREE.PlaneGeometry(2.25, 0.11), glowMats.red);
+      red.position.y = 0.04;
+      red.position.z = -1.35;
+      red.rotation.x = -Math.PI / 2;
+      g.add(red);
+      const light = new THREE.PointLight(0xff2048, 1.4, 7);
+      light.position.y = 0.35;
+      g.add(light);
+      g.userData.type = "gap";
+      scene.add(g);
+      return g;
+    }
+
+    function makeOrb() {
+      const g = new THREE.Group();
+      const orb = new THREE.Mesh(new THREE.TorusGeometry(0.38, 0.08, 12, 32), coinMat);
+      orb.position.y = 0.85;
+      orb.rotation.x = Math.PI / 2;
+      g.add(orb);
+      const light = new THREE.PointLight(0xff35ff, 1.6, 6);
+      light.position.y = 0.85;
+      g.add(light);
+      g.userData.type = "orb";
+      scene.add(g);
+      return g;
+    }
+
+    const pools = {
+      wall: Array.from({ length: 18 }, makeWall),
+      ramp: Array.from({ length: 10 }, makeRamp),
+      gap: Array.from({ length: 10 }, makeGap),
+      orb: Array.from({ length: 12 }, makeOrb)
+    };
+
+    const active = [];
+
+    function resetObject(o) {
+      o.visible = false;
+      o.userData.active = false;
+      o.userData.hit = false;
+      o.userData.passed = false;
+    }
+
+    Object.values(pools).flat().forEach(resetObject);
+
+    function getPooled(type) {
+      return pools[type].find(o => !o.userData.active) || pools[type][0];
+    }
+
+    function spawn(type, theta, z) {
+      const o = getPooled(type);
+      o.visible = true;
+      o.userData.active = true;
+      o.userData.hit = false;
+      o.userData.passed = false;
+      o.userData.theta = theta;
+      o.userData.z = z;
+      orientOnFloor(o, theta, z, type === "orb" ? -0.03 : -0.02);
+      if (!active.includes(o)) active.push(o);
+      return o;
+    }
+
+    function seedObstacles() {
+      active.length = 0;
+      Object.values(pools).flat().forEach(resetObject);
+
+      let z = 34;
+      while (z < 420) {
+        const baseLane = Math.floor(Math.random() * CFG.laneCount);
+        const r = Math.random();
+        if (r < 0.42) {
+          spawn("wall", laneAngle(baseLane), z);
+          if (Math.random() < 0.35) spawn("wall", laneAngle((baseLane + 4) % CFG.laneCount), z + 2);
+        } else if (r < 0.66) {
+          spawn("ramp", laneAngle(baseLane), z);
+        } else if (r < 0.84) {
+          spawn("gap", laneAngle(baseLane), z);
+        } else {
+          spawn("orb", laneAngle(baseLane), z);
+        }
+        z += 18 + Math.random() * 12;
+      }
+    }
+
+    function recyclePassedObjects(dt) {
+      const dz = state.speed * dt;
+      for (const o of active) {
+        if (!o.userData.active) continue;
+        o.position.z -= dz;
+        o.userData.z = o.position.z;
+
+        if (o.userData.type === "orb") {
+          o.children[0].rotation.z += dt * 4;
+        }
+
+        if (o.position.z < -16) {
+          if (!o.userData.passed && o.userData.type === "wall") {
+            state.avoided++;
+            addScore(120, "AVOID +120");
+          }
+
+          const farthest = Math.max(...active.filter(x => x.userData.active && x !== o).map(x => x.position.z), 80);
+          const newZ = farthest + 18 + Math.random() * 14;
+          const newLane = Math.floor(Math.random() * CFG.laneCount);
+          const types = ["wall", "wall", "ramp", "gap", "orb"];
+          const nextType = types[Math.floor(Math.random() * types.length)];
+          resetObject(o);
+          spawn(nextType, laneAngle(newLane), newZ);
+        }
+      }
+
+      for (const mark of laneMarks) {
+        mark.position.z -= dz;
+        if (mark.position.z < -20) mark.position.z += 520;
+      }
+
+      for (const seg of tunnelSegments) {
+        seg.position.z -= dz;
+        if (seg.position.z < -CFG.tubeLength * 1.2) {
+          seg.position.z += CFG.tubeLength * CFG.segmentCount;
+        }
+      }
+    }
+
+    function addScore(points, trick) {
+      state.score += Math.round(points * state.combo);
+      if (trick) {
+        state.trick = trick;
+        state.comboTimer = 3.0;
+      }
+    }
+
+    function hitWall() {
+      if (state.hitCooldown > 0) return;
+      state.hitCooldown = 0.85;
+      state.combo = 1;
+      state.shake = 0.42;
+      state.speed = Math.max(CFG.baseSpeed * 0.72, state.speed * 0.68);
+      state.trick = "HIT";
+      state.score = Math.max(0, state.score - 300);
+    }
+
+    function failGap() {
+      state.running = false;
+      state.ended = true;
+      showEnd("Run failed", "Wpadłeś w gap bez skoku.");
+    }
+
+    function angularDistance(a, b) {
+      return Math.abs(Math.atan2(Math.sin(a - b), Math.cos(a - b)));
+    }
+
+    function updateInput(dt) {
+      const left = keys.has("KeyA") || keys.has("ArrowLeft");
+      const right = keys.has("KeyD") || keys.has("ArrowRight");
+      state.steerInput = (right ? 1 : 0) - (left ? 1 : 0);
+
+      const targetSteer = state.steerInput * CFG.wheelSteerMax;
+      state.wheelSteer = expFollow(state.wheelSteer, targetSteer, CFG.wheelSteerRate, dt);
+
+      if ((keys.has("Space")) && state.grounded) {
+        state.radialVel = CFG.jumpImpulse;
+        state.grounded = false;
+        state.jumps++;
+        state.combo = Math.min(9, state.combo + 1);
+        addScore(220, "JUMP +220");
+      }
+
+      const boosting = (keys.has("ShiftLeft") || keys.has("ShiftRight")) && state.boost > 0.02;
+      if (boosting) {
+        state.boost = Math.max(0, state.boost - CFG.boostDrain * dt);
+        state.speed = expFollow(state.speed, CFG.boostSpeed, CFG.speedLerp, dt);
+      } else {
+        state.boost = Math.min(CFG.maxBoost, state.boost + CFG.boostRegen * dt);
+        state.speed = expFollow(state.speed, CFG.baseSpeed, CFG.speedLerp * 0.55, dt);
+      }
+
+      flame1.visible = flame2.visible = boosting;
+      const flameScale = boosting ? 0.85 + Math.random() * 0.45 : 0.01;
+      flame1.scale.setScalar(flameScale);
+      flame2.scale.setScalar(flameScale);
+    }
+
+    function updatePhysics(dt) {
+      // Wheel angle + forward speed creates lateral acceleration through tire grip.
+      // That lateral speed changes theta, i.e. the car travels around the circular wall.
+      const angularAccel = Math.sin(state.wheelSteer) * (state.speed / CFG.baseSpeed) * CFG.grip;
+      state.thetaVel += angularAccel * dt;
+      state.thetaVel -= state.thetaVel * CFG.lateralDamping * dt;
+      state.thetaVel = THREE.MathUtils.clamp(state.thetaVel, -CFG.lateralMax, CFG.lateralMax);
+      state.theta = wrapAngle(state.theta + state.thetaVel * dt);
+
+      // Gravity acts outward from center to wall. Since height is inward height above floor,
+      // gravity decreases height and the tunnel surface clamps it at zero.
+      if (!state.grounded) {
+        state.radialVel -= CFG.gravity * dt;
+        state.height += state.radialVel * dt;
+
+        if (state.height <= 0) {
+          state.height = 0;
+          state.radialVel = 0;
+          state.grounded = true;
+          if (state.speed > CFG.baseSpeed * 1.28) addScore(420, "BOOST LANDING +420");
+        }
+
+        state.height = Math.min(CFG.jumpMaxHeight, state.height);
+      }
+    }
+
+    function updateCar(dt) {
+      orientOnFloor(car, state.theta, 0, state.height);
+
+      // Visual steering: front wheels rotate around local up axis.
+      for (const wheel of frontWheelPivots) {
+        wheel.rotation.y = -state.wheelSteer;
+      }
+
+      // Local body response. Roll is around local forward, yaw is around local up.
+      const bodyRoll = THREE.MathUtils.clamp(-state.thetaVel * 0.32, -0.38, 0.38);
+      const bodyYaw = -state.wheelSteer * 0.16;
+      car.rotateZ(bodyRoll);
+      car.rotateY(bodyYaw);
+
+      if (!state.grounded) {
+        car.rotateX(Math.sin((state.height / CFG.jumpMaxHeight) * Math.PI) * 0.12);
+      }
+
+      followLight.position.copy(car.position);
+      followLight.position.z += 2.0;
+    }
+
+    const cam = {
+      pos: new THREE.Vector3(),
+      target: new THREE.Vector3(),
+      up: new THREE.Vector3(0, 1, 0)
+    };
+
+    function updateCamera(dt) {
+      // Lagged angle creates the illusion of the tunnel rotating under the camera.
+      state.camTheta = expFollowAngle(state.camTheta, state.theta, CFG.cameraLag, dt);
+
+      const camUp = upAt(state.camTheta);
+      const camRight = rightAt(state.camTheta);
+      const carUp = upAt(state.theta);
+
+      const carPos = car.position.clone();
+      const desiredPos = carPos
+        .clone()
+        .add(camUp.clone().multiplyScalar(2.45))
+        .add(forward.clone().multiplyScalar(-8.6))
+        .add(camRight.clone().multiplyScalar(-0.18));
+
+      const desiredTarget = carPos
+        .clone()
+        .add(carUp.clone().multiplyScalar(0.7))
+        .add(forward.clone().multiplyScalar(16.5));
+
+      cam.pos.lerp(desiredPos, 1 - Math.exp(-CFG.cameraPosLag * dt));
+      cam.target.lerp(desiredTarget, 1 - Math.exp(-CFG.cameraPosLag * dt));
+      cam.up.lerp(camUp, 1 - Math.exp(-CFG.cameraUpLag * dt)).normalize();
+
+      camera.position.copy(cam.pos);
+      camera.up.copy(cam.up);
+      camera.lookAt(cam.target);
+
+      if (state.shake > 0) {
+        camera.position.add(camRight.clone().multiplyScalar((Math.random() - 0.5) * state.shake));
+        camera.position.add(camUp.clone().multiplyScalar((Math.random() - 0.5) * state.shake));
+        state.shake = Math.max(0, state.shake - dt * 1.9);
+      }
+    }
+
+    function updateCollisions() {
+      const laneWidth = (Math.PI * 2) / CFG.laneCount;
+
+      for (const o of active) {
+        if (!o.userData.active || o.userData.hit) continue;
+        if (Math.abs(o.position.z) > 1.55) continue;
+
+        const da = angularDistance(state.theta, o.userData.theta);
+        if (da > laneWidth * 0.62) continue;
+
+        o.userData.hit = true;
+
+        if (o.userData.type === "wall") {
+          if (!state.grounded) {
+            state.combo = Math.min(9, state.combo + 1);
+            addScore(520, "OBSTACLE JUMP +520");
+          } else {
+            hitWall();
+          }
+        }
+
+        if (o.userData.type === "ramp") {
+          if (state.grounded) {
+            state.radialVel = CFG.jumpImpulse * 1.12;
+            state.grounded = false;
+            state.jumps++;
+            state.combo = Math.min(9, state.combo + 1);
+            state.speed = Math.max(state.speed, CFG.baseSpeed * 1.38);
+            addScore(850, "RAMP BOOST +850");
+          }
+        }
+
+        if (o.userData.type === "gap") {
+          if (!state.grounded || state.height > 0.35) {
+            state.combo = Math.min(9, state.combo + 1);
+            addScore(1150, "GAP CLEAR +1150");
+          } else {
+            failGap();
+          }
+        }
+
+        if (o.userData.type === "orb") {
+          state.combo = Math.min(9, state.combo + 1);
+          state.boost = Math.min(1, state.boost + 0.24);
+          addScore(300, "ORB +300");
+          resetObject(o);
+        }
+      }
+    }
+
+    function updateHud(dt) {
+      state.timeLeft = Math.max(0, state.timeLeft - dt);
+      state.distance += state.speed * dt;
+
+      if (state.comboTimer > 0) {
+        state.comboTimer -= dt;
+      } else {
+        state.trick = "READY";
+        state.combo = Math.max(1, state.combo - dt * 0.24);
+      }
+
+      const m = Math.floor(state.timeLeft / 60);
+      const s = String(Math.floor(state.timeLeft % 60)).padStart(2, "0");
+      ui.timer.textContent = `${m}:${s}`;
+      ui.score.textContent = Math.floor(state.score).toLocaleString("en-US");
+      ui.combo.textContent = `x${Math.floor(state.combo)}`;
+      ui.trick.textContent = state.trick;
+      ui.boost.style.transform = `scaleX(${state.boost})`;
+      ui.speed.textContent = Math.round(state.speed * 5.4);
+
+      document.documentElement.style.setProperty("--speedDeg", `${THREE.MathUtils.clamp(state.speed * 4.2, 35, 280)}deg`);
+
+      ui.objFinish.textContent = `${state.distance >= 2000 ? "★" : "☆"} reach 2000m`;
+      ui.objJump.textContent = `${state.jumps >= 3 ? "★" : "☆"} perform 3 jumps`;
+      ui.objObstacle.textContent = `${state.avoided >= 12 ? "★" : "☆"} avoid 12 obstacles`;
+
+      if (state.timeLeft <= 0) {
+        state.running = false;
+        state.ended = true;
+        showEnd("Time over", "Skończył się czas.");
+      }
+
+      if (state.distance >= 2000) {
+        state.running = false;
+        state.ended = true;
+        showEnd("Objective complete", "Dobiłeś do 2000m.");
+      }
+    }
+
+    function showEnd(title, reason) {
+      ui.endTitle.textContent = title;
+      ui.endStats.textContent = `${reason} Score: ${Math.floor(state.score).toLocaleString("en-US")} · Distance: ${Math.floor(state.distance)}m · Jumps: ${state.jumps} · Avoided: ${state.avoided}`;
+      ui.gameOver.classList.add("open");
+    }
+
+    function resetGame() {
+      state.running = true;
+      state.ended = false;
+
+      state.timeLeft = 60;
+      state.distance = 0;
+      state.score = 0;
+      state.combo = 1;
+      state.comboTimer = 0;
+      state.trick = "READY";
+
+      state.theta = 0;
+      state.thetaVel = 0;
+      state.camTheta = 0;
+
+      state.wheelSteer = 0;
+      state.steerInput = 0;
+
+      state.height = 0;
+      state.radialVel = 0;
+      state.grounded = true;
+
+      state.boost = 1;
+      state.speed = CFG.baseSpeed;
+
+      state.jumps = 0;
+      state.avoided = 0;
+      state.hitCooldown = 0;
+      state.shake = 0;
+
+      cam.pos.set(0, 2.5, -10);
+      cam.target.set(0, 0, 16);
+      cam.up.set(0, 1, 0);
+
+      for (let i = 0; i < tunnelSegments.length; i++) {
+        tunnelSegments[i].position.z = i * CFG.tubeLength - CFG.tubeLength * 0.35;
+      }
+
+      seedObstacles();
+      orientOnFloor(car, state.theta, 0, 0);
+      updateCamera(1 / 60);
+
+      ui.start.classList.remove("open");
+      ui.gameOver.classList.remove("open");
+    }
+
+    document.getElementById("startBtn").addEventListener("click", resetGame);
+    document.getElementById("restartBtn").addEventListener("click", resetGame);
+
+    window.addEventListener("resize", () => {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2.5));
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+
+    seedObstacles();
+    orientOnFloor(car, 0, 0, 0);
+    updateCamera(1 / 60);
+
+    function frame() {
+      const dt = Math.min(clock.getDelta(), 0.033);
+      const t = clock.elapsedTime;
+
+      tunnelMat.uniforms.uTime.value = t;
+
+      if (state.running) {
+        state.hitCooldown = Math.max(0, state.hitCooldown - dt);
+
+        updateInput(dt);
+        updatePhysics(dt);
+        updateCar(dt);
+        updateCamera(dt);
+        recyclePassedObjects(dt);
+        updateCollisions();
+
+        state.score += dt * state.speed * state.combo * 2.0;
+        updateHud(dt);
+      } else {
+        updateCamera(dt);
+      }
+
+      renderer.render(scene, camera);
+      requestAnimationFrame(frame);
+    }
+
+    frame();
+  </script>
+</body>
+</html>

@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="pl">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Tunnel Rush</title>
+    <link rel="stylesheet" href="/src/style.css" />
+</head>
+
+<body>
+    <canvas id="game-canvas"></canvas>
+    <div id="flash"></div>
+    <div id="danger-warn"></div>
+
+    <div class="hud hud-tl">
+        <div class="lbl">score</div>
+        <div class="val-big" id="score">0</div>
+        <div id="trick-display" style="margin-top:8px;">
+            <div class="trick-name" id="trick-name"></div>
+            <div class="trick-pts" id="trick-pts"></div>
+        </div>
+    </div>
+
+    <div class="hud hud-tc">
+        <div class="val-big" id="time">1:00</div>
+        <div class="lbl">time remaining</div>
+    </div>
+
+    <div class="hud hud-tr">
+        <div class="lbl">distance</div>
+        <div class="val" id="dist">0 m</div>
+    </div>
+
+    <div class="hud hud-bl">
+        <div class="lbl">boost · shift</div>
+        <div class="boost-bar">
+            <div class="boost-fill" id="boost-fill" style="width:100%"></div>
+        </div>
+    </div>
+
+    <div class="hud hud-br">
+        <div class="spd-row"><span class="val" id="speed">0</span><span class="km">km/h</span></div>
+        <div class="lbl" id="mode-indicator" style="color:#ff8800; margin-top:4px;"></div>
+    </div>
+
+    <div id="overlay">
+        <div class="title">Tunnel rush</div>
+        <div style="font-size: 14px; opacity: 0.85; max-width: 520px; text-align: center; line-height: 1.6;">
+            Chromowana kula pędzi przez tunel. Trzymaj się jasnej strefy — ciemność to koniec.
+        </div>
+        <div class="hint-row">
+            <span><span class="kbd">←</span><span class="kbd">→</span> skręt</span>
+            <span><span class="kbd">space</span> skok</span>
+            <span><span class="kbd">shift</span> boost</span>
+        </div>
+        <button class="btn" id="start-btn">start</button>
+        <button class="btn" id="mode-btn"
+            style="background: rgba(255,255,255,0.12); color: #cceeff; border: 1px solid rgba(0,217,255,0.4);">CLASSIC
+            MODE</button>
+    </div>
+
+    <script type="module" src="/src/main.js"></script>
+</body>
+
+</html>
