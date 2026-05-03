@@ -51,7 +51,7 @@ export function applyDanger() {
   if (state.dangerTimer > 0 && state.gameRunning) {
     dangerEl.style.display = 'flex';
     const remaining = (DANGER_TIMEOUT - state.dangerTimer).toFixed(1);
-    dangerEl.textContent = '\u26a0 CZARNA STREFA! ' + remaining + 's';
+    dangerEl.textContent = '\u26a0 CZARNA DZIURA! ' + remaining + 's';
     const intensity = state.dangerTimer / DANGER_TIMEOUT;
     dangerEl.style.opacity = String(0.7 + 0.3 * Math.sin(Date.now() / (120 - 80 * intensity)));
   } else {

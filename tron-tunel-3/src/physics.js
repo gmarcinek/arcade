@@ -65,11 +65,12 @@ export function updatePhysics(dt, left, right, jumpPressed, boostHeld) {
 
   const rawSteer = (left ? 1 : 0) - (right ? 1 : 0);
   const hasInput = rawSteer !== 0;
+  const steerControl = state.grounded ? 1 : CFG.airControl;
 
   state.physicsForce = rawSteer;
   const lateralFriction = hasInput ? 0 : BALL_PHYS.inertiaDecay;
 
-  state.thetaVelocity += state.physicsForce * CFG.steerAcceleration * dt;
+  state.thetaVelocity += state.physicsForce * CFG.steerAcceleration * steerControl * dt;
   state.thetaVelocity  = THREE.MathUtils.clamp(
     state.thetaVelocity, -CFG.maxThetaVelocity, CFG.maxThetaVelocity
   );
