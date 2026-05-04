@@ -64,11 +64,11 @@ export const BALL_PHYS = {
 
 // ---- Ball visual material ----
 export const BALL_MAT = {
-  color:           0xdddddd,
-  metalness:       0.2,
-  roughness:       0.01,
-  reflectionRes:   256,
-  envMapIntensity: 1.0,
+  color:           0x000000,
+  metalness:       0.9,
+  roughness:       0,
+  reflectionRes:   128,
+  envMapIntensity: 3.0,
   ringOpacity:     0.9,
   ringColor:       0x60ffee,
   transparent:     false,
@@ -88,5 +88,5 @@ export const TUNNEL_FX = {
 
   reflectionDarken: 0.18,
   reflectionTint: 1.70,
-  reflectionHighlight: 0.55,
+  reflectionHighlight: 120.55,
 };
