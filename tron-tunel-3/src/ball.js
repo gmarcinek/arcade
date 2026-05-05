@@ -2,8 +2,8 @@ import * as THREE from 'three';
 import { BALL_MAT, BALL_PHYS, CFG, PROC_CFG, TUNNEL_R, CAR_OFF } from './config.js';
 import { input } from './input.js';
 import { state } from './state.js';
-import { emitBounce } from './sparks.js';
-import { AudioMetadataBus } from './audio/AudioMetadataBus.js';
+import { emitBounce, emitEdgeScratch, emitExplosionBurst } from './sparks.js';
+
 
 export function getBasis(theta) {
   return {
@@ -139,10 +139,12 @@ export function createBall(scene) {
   scene.add(cubeCamera);
   ballMat.envMap = cubeRenderTarget.texture;
 
-  const carLight  = new THREE.PointLight(0x80ffff, 2.5, 22);
-  const tailLight = new THREE.PointLight(0xff5020, 0.9, 14);
+  const carLight   = new THREE.PointLight(0x80ffff, 2.5, 22);
+  const tailLight  = new THREE.PointLight(0xff5020, 0.9, 14);
+  const headLight  = new THREE.PointLight(0xffffff, 0, 80);
   scene.add(carLight);
   scene.add(tailLight);
+  scene.add(headLight);
 
   // Force debug arrows (world-space, toggled by F key)
   const arrowInertia   = makeArrow(0x22ff66, scene);  // green   — lateral inertia (thetaVelocity)
@@ -167,11 +169,12 @@ export function createBall(scene) {
   scene.add(pivotAxes);
 
   return {
-    carGroup, ball, equator, cubeCamera, ballMat, carLight, tailLight,
+    carGroup, ball, equator, cubeCamera, ballMat, carLight, tailLight, headLight,
     ribbon, ribbonGeo, ribbonMat, ribbonHistory, ribbonPos, ribbonAlpha,
 
     // Wake state machine: 'idle' | 'active' | 'sputter' | 'fade'
     wakeMode:         'idle',
+    _edgeScratchCooldown: 0,
     ribbonIntensity:  0,
     activeGraceTime:  0,
     // Sputter sub-state
@@ -188,7 +191,7 @@ export function createBall(scene) {
 
 export function updateCarVisuals(dt, ballObjects, renderer, scene, proceduralFrame = null) {
   const {
-    carGroup, ball, equator, cubeCamera, carLight, tailLight, ballMat,
+    carGroup, ball, equator, cubeCamera, carLight, tailLight, headLight, ballMat,
     ribbonGeo, ribbonHistory, ribbonPos, ribbonAlpha,
   } = ballObjects;
 
@@ -394,20 +397,65 @@ export function updateCarVisuals(dt, ballObjects, renderer, scene, proceduralFra
     ribbonGeo.setDrawRange(0, 0);
   }
 
-  // ── Audio reactive modulation ──
-  const audioData = AudioMetadataBus.current;
-  if (audioData) {
-    ballMat.emissive.setRGB(
-      audioData.beatPulse * 0.15 + audioData.bassImpact * 0.05,
-      audioData.beatPulse * 0.35 + audioData.midWave    * 0.08,
-      audioData.beatPulse * 0.55 + audioData.high       * 0.12,
-    );
-    ballMat.emissiveIntensity = 0.8 + audioData.beatPulse * 2.5 + audioData.bassImpact * 1.2;
-    const beatScale = 1.0 + audioData.beatPulse * 0.08 + audioData.onsetPulse * 0.04;
-    ball.scale.setScalar(beatScale);
-    carLight.intensity = 2.5 + audioData.bassImpact * 4.0 + audioData.beatPulse * 3.5;
-    carLight.distance  = 22 + audioData.low * 18;
+  // ── Ball visuals: dark metallic always. Only heat and boost affect appearance ──
+  const heat = state.edgeHeat ?? 0;
+  const ep   = state.edgeProximity ?? 0;
+
+  if (heat > 0.01) {
+    // Heat colour ramp: dark red → orange → yellow-white
+    let eR, eG, eB;
+    if (heat < 0.35) {
+      const t = heat / 0.35;
+      eR = t * 0.55; eG = 0; eB = 0;
+    } else if (heat < 0.65) {
+      const t = (heat - 0.35) / 0.30;
+      eR = 0.55 + t * 0.45; eG = t * 0.45; eB = 0;
+    } else {
+      const t = (heat - 0.65) / 0.35;
+      eR = 1.0; eG = 0.45 + t * 0.45; eB = t * 0.35;
+    }
+    ballMat.emissive.setRGB(eR, eG, eB);
+    ballMat.emissiveIntensity = 0.8 + heat * heat * 14.0;
+
+    carLight.color.setRGB(1.0, 0.20 + (1.0 - heat) * 0.80, (1.0 - heat) * 0.90);
+    carLight.intensity = Math.max(2.0, heat * 10.0);
+    carLight.distance  = 22;
+
+    // Edge sparks
+    if (ep > 0.05 && ballObjects._edgeScratchCooldown <= 0) {
+      const tangent = proceduralFrame ? proceduralFrame.right : new THREE.Vector3(1, 0, 0);
+      emitEdgeScratch(carGroup.position, tangent, state.speed ?? state.sVelocity, ep);
+      ballObjects._edgeScratchCooldown = Math.max(0.015, 0.06 * (1.0 - heat * 0.7));
+      window.dispatchEvent(new CustomEvent('onEdgeScratch', {
+        detail: { heat, proximity: ep, position: carGroup.position.clone() }
+      }));
+    }
+
+    // Mini-burst explosions
+    if (heat > 0.3) {
+      if (ballObjects._miniBurstCooldown === undefined) ballObjects._miniBurstCooldown = 0.4 + Math.random() * 1.0;
+      if (ballObjects._miniBurstCooldown <= 0) {
+        const fwd = proceduralFrame ? proceduralFrame.forward : new THREE.Vector3(0, 0, 1);
+        emitBounce(carGroup.position, fwd.clone().negate(), state.speed ?? state.sVelocity, 8 + heat * 20);
+        ballObjects._miniBurstCooldown = 0.4 + Math.random() * 1.0;
+      }
+      ballObjects._miniBurstCooldown -= dt;
+    }
+  } else {
+    // Cold ball: pure black, no emissive
+    ballMat.emissive.setRGB(0, 0, 0);
+    ballMat.emissiveIntensity = 0;
+
+    // Boost: brighter cyan light; idle: dim cyan
+    carLight.color.setRGB(0.502, 1.0, 1.0);
+    carLight.intensity = state.boostActive ? 4.5 : 2.0;
+    carLight.distance  = state.boostActive ? 35 : 22;
   }
+
+  headLight.intensity = 0;
+
+  if (ballObjects._edgeScratchCooldown === undefined) ballObjects._edgeScratchCooldown = 0;
+  if (ballObjects._edgeScratchCooldown > 0) ballObjects._edgeScratchCooldown -= dt;
 
   // Live reflection — every 10 frames
   if (state.frameCount % 10 === 0) {

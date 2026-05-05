@@ -4,9 +4,9 @@ import { seededRng } from './math.js';
 // Spacing between stored RMF samples (meters)
 const SAMPLE_STEP = 5;
 // Max turn velocity (rad/step).
-const MAX_TURN_RATE = 0.020;
+const MAX_TURN_RATE = 0.030;
 // How fast turnYaw approaches its target per step (0–1 factor)
-const TURN_APPROACH = 0.04;
+const TURN_APPROACH = 0.08;  // faster approach = smoother-looking transitions, less visible knee
 
 /**
  * Creates a continuous procedural spline with Rotation Minimizing Frames.
@@ -26,12 +26,15 @@ export function createInfiniteSpline(seed) {
   let nor    = new THREE.Vector3(0, 1, 0);  // initial: +Y
   let bin    = new THREE.Vector3(1, 0, 0);  // initial: +X
 
-  // Hold-and-switch curve model: always non-zero curvature
-  let turnYaw        = 0;
-  let turnPitch      = 0;
-  let yawTarget      = (rng() > 0.5 ? 1 : -1) * (0.5 + rng() * 0.5) * MAX_TURN_RATE;
-  let pitchTarget    = (rng() - 0.5) * MAX_TURN_RATE * 0.3;
-  let yawHoldSteps   = Math.floor(40 + rng() * 40); // steps until next target pick
+  // Hold-and-switch curve model: fully randomized from seed
+  // Pre-burn rng a few times so spline start doesn't pattern on low-entropy seeds
+  for (let _w = 0; _w < 8; _w++) rng();
+  const startSign  = rng() > 0.5 ? 1 : -1;
+  let turnYaw      = startSign * (0.2 + rng() * 0.8) * MAX_TURN_RATE;  // start already turning
+  let turnPitch    = (rng() - 0.5) * MAX_TURN_RATE * 0.5;
+  let yawTarget    = startSign * (0.5 + rng() * 0.5) * MAX_TURN_RATE;
+  let pitchTarget  = (rng() - 0.5) * MAX_TURN_RATE * 0.35;
+  let yawHoldSteps = Math.floor(20 + rng() * 60); // 20–80 steps = 100–400m
 
   function pushSample() {
     samples.push({
@@ -48,11 +51,12 @@ export function createInfiniteSpline(seed) {
     // Hold-and-switch: steer toward current target, then pick new one
     yawHoldSteps--;
     if (yawHoldSteps <= 0) {
-      // New target: always non-zero, random sign, 50–100% of max
+      // New target: always non-zero, random sign, 20–100% of max for variety
       const sign = rng() > 0.5 ? 1 : -1;
-      yawTarget    = sign * (0.5 + rng() * 0.5) * MAX_TURN_RATE;
-      pitchTarget  = (rng() - 0.5) * MAX_TURN_RATE * 0.35;
-      yawHoldSteps = Math.floor(40 + rng() * 40);
+      const intensity = 0.20 + rng() * 0.80;  // varies 20%–100% instead of always 50–100%
+      yawTarget    = sign * intensity * MAX_TURN_RATE;
+      pitchTarget  = (rng() - 0.5) * MAX_TURN_RATE * 0.45;
+      yawHoldSteps = Math.floor(20 + rng() * 80);  // 20–100 steps = 100–500m
     }
     // Smooth approach toward target
     turnYaw   += (yawTarget   - turnYaw)   * TURN_APPROACH;

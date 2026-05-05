@@ -20,13 +20,13 @@ Added per-layer slow opacity cycling (8 sec period, spread via phase offsets) an
 - [x] Add uGlobalBright uniform in makeMaterial() JS uniforms
 - [x] Add uGlobalBright GLSL uniform declaration in fragment shader
 - [x] Apply uGlobalBright multiplier before col clamp in GLSL main()
-- [x] Update _evalOpacity() to apply per-layer gate (contact/floorEdge bypass)
-- [x] Compute and set uGlobalBright at end of _syncConfigUniforms()
+- [x] Update \_evalOpacity() to apply per-layer gate (contact/floorEdge bypass)
+- [x] Compute and set uGlobalBright at end of \_syncConfigUniforms()
 
 ## Files Modified
 
-| File | Action | Why |
-| ---- | ------ | --- |
+| File                             | Action   | Why                          |
+| -------------------------------- | -------- | ---------------------------- |
 | `src/procedural/infiniteMesh.js` | Modified | All 6 shader cycling changes |
 
 ## Verification

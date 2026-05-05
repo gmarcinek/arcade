@@ -1,5 +1,5 @@
 ﻿import * as THREE from 'three';
-import { BALL_PHYS, BASE_SPEED_START, DANGER_TIMEOUT } from './config.js';
+import { BALL_PHYS, BASE_SPEED_START, EDGE_HEAT_ZONE_M } from './config.js';
 import { generateDemoTrack, createDemoChunkManager } from './procedural/generateDemoTrack.js';
 import { DebugTrackRenderer } from './procedural/debugTrackRenderer.js';
 import { createInfiniteSpline } from './procedural/infiniteSpline.js';
@@ -9,13 +9,22 @@ import { initPlayerSurface, updatePlayerSurface } from './procedural/playerSurfa
 import { initPlayerSurfaceBasis, getPlayerFrame } from './procedural/playerSurfaceBasis.js';
 import { state } from './state.js';
 import { input, setupInput } from './input.js';
-import { createTunnel, getArcHalfAngle } from './tunnel.js';
+import { createTunnel } from './tunnel.js';
 import { createBall, updateCarVisuals, updateBallPositionFromFrame } from './ball.js';
-import { createSparks, updateSparks, clearSparks } from './sparks.js';
-import { updatePhysics } from './physics.js';
+import { createSparks, updateSparks, clearSparks, emitBounce, emitExplosionBurst, createDebris, emitDebrisExplosion, updateDebris } from './sparks.js';
 import { updateCamera } from './camera.js';
 import { updateHUD, applyFlash, applyDanger, endGame } from './ui.js';
 import { createAudioSystem, AudioMetadataBus } from './audio/index.js';
+
+function bitrev32(n) {
+  n = n >>> 0;
+  n = ((n & 0x55555555) << 1)  | ((n >>> 1)  & 0x55555555);
+  n = ((n & 0x33333333) << 2)  | ((n >>> 2)  & 0x33333333);
+  n = ((n & 0x0f0f0f0f) << 4)  | ((n >>> 4)  & 0x0f0f0f0f);
+  n = ((n & 0x00ff00ff) << 8)  | ((n >>> 8)  & 0x00ff00ff);
+  n = ((n << 16) | (n >>> 16)) >>> 0;
+  return n;
+}
 
 const PROCEDURAL_DEBUG = false;
 const PROCEDURAL_PLAYER = true;
@@ -73,6 +82,7 @@ audioSystem.bridge.register(tunnelMat);
 
 // ---- Sparks ----
 createSparks(scene);
+createDebris(scene);
 
 // ---- Procedural track ----
 const chunkManager = createDemoChunkManager(42);
@@ -84,19 +94,21 @@ if (PROCEDURAL_DEBUG) {
   debugRenderer.addToScene(scene);
 }
 
-// ---- Procedural tunnel mesh ----
-const tunnelMeshManager = PROCEDURAL_PLAYER ? null : null;
-// Hide old straight cylinder when in procedural mode
-if (PROCEDURAL_PLAYER) {
-  tunnel.visible = false;
-}
+// Hide straight cylinder tunnel — using procedural InfiniteMesh instead
+tunnel.visible = false;
 
 // ---- New continuous tunnel (replaces chunk system in PROCEDURAL_PLAYER mode) ----
 let infiniteSpline = null;
 let infiniteMeshObj = null;
 let crossSection = null;
+function resetSpline() {
+  infiniteSpline = createInfiniteSpline(bitrev32(Date.now()));
+  infiniteSpline.extend(800);
+  if (infiniteMeshObj) infiniteMeshObj.setSpline(infiniteSpline);
+}
+
 if (PROCEDURAL_PLAYER) {
-  infiniteSpline = createInfiniteSpline(Date.now() & 0xffffffff);
+  infiniteSpline = createInfiniteSpline(bitrev32(Date.now()));
   infiniteSpline.extend(800);
   crossSection = createCrossSection();
   infiniteMeshObj = new InfiniteMesh(scene, infiniteSpline, crossSection);
@@ -111,9 +123,6 @@ const FLYTHROUGH_SPEED = 55;
 
 // ---- Input ----
 setupInput();
-
-// ---- Danger / black field trigger ----
-let wasOnBlackField = false;
 
 // ---- Game flow ----
 function startGame() {
@@ -164,7 +173,6 @@ function startGame() {
   state.squashTimer = 0;
   state.frameCount = 0;
 
-  wasOnBlackField = false;
   resetTunnelOscillation();
 
   input.left = false;
@@ -201,16 +209,6 @@ function startGame() {
 }
 
 function tick(dt) {
-  if (!PROCEDURAL_PLAYER && state.gameRunning && !state.crashed) {
-    state.timeLeft -= dt;
-
-    if (state.timeLeft <= 0) {
-      state.timeLeft = 0;
-      endGame(false, startGame);
-      return;
-    }
-  }
-
   if (PROCEDURAL_PLAYER) {
     updatePlayerSurface(dt, input.left, input.right, input.jumpConsumed, input.boost);
     if (input.jumpConsumed) input.jumpConsumed = false;
@@ -219,8 +217,48 @@ function tick(dt) {
     // Set ball position FIRST so wake ribbon captures correct position
     updateBallPositionFromFrame(carGroup, frame);
     // Then visuals (ribbon uses carGroup.position + frame.right)
-    updateCarVisuals(dt, ballObjects, renderer, scene, frame);
+    updateCarVisuals(dt, ballObjects, renderer, scene, frame, audioSystem.isActive);
     updateSparks(dt);
+    updateDebris(dt);
+
+    // ── Out-of-bounds: immediate big explosion → 3 sec respawn ──
+    if (state.outOfBounds && state.outOfBoundsTimer >= 0.15 && !state._gameOverFired) {
+      state._gameOverFired = true;
+      state.respawning     = true;
+      state.respawnTimer   = 3.0;
+      state.edgeHeat       = 0;
+      ballObjects.carGroup.visible = false;
+
+      const inertiaDir = frame
+        ? frame.forward.clone()
+        : new THREE.Vector3(0, 0, 1);
+      // 2.5x speed multiplier for a much bigger explosion
+      const bigSpeed = (state.sVelocity ?? state.speed) * 2.5;
+      emitExplosionBurst(ballObjects.carGroup.position, inertiaDir, bigSpeed);
+      emitDebrisExplosion(ballObjects.carGroup.position, inertiaDir, bigSpeed);
+      window.dispatchEvent(new CustomEvent('onGameOver', {
+        detail: { position: ballObjects.carGroup.position.clone(), score: state.score }
+      }));
+    }
+
+    // ── Respawn countdown ──
+    if (state.respawning) {
+      state.respawnTimer -= dt;
+      if (state.respawnTimer <= 0) {
+        state.respawning     = false;
+        state._gameOverFired = false;
+        state.edgeHeat       = 0;
+        state.outOfBounds    = false;
+        state.outOfBoundsTimer = 0;
+        ballObjects._heatLerp          = 0;
+        ballObjects._miniBurstCooldown = 0;
+        // Recreate spline from scratch — old one was trimmed and has no data at s=0
+        resetSpline();
+        // Full game restart from scratch — audio stays as-is
+        startGame();
+        ballObjects.carGroup.visible = true;
+      }
+    }
 
     if (state.gameRunning && !state.crashed) {
       // No danger/game-over detection in procedural mode
@@ -233,61 +271,18 @@ function tick(dt) {
     updateCamera(dt, camera, carGroup, frame);
 
     if (infiniteMeshObj) {
+      if (crossSection) {
+        const arcSpan   = crossSection.getArcSpan(state.s);
+        const uHalf     = arcSpan * Math.PI;           // radians per half-arc
+        const totalArcM = 2.0 * uHalf * 8.5;          // metres (8.5 = hardcoded R in playerSurface)
+        const heatFrac  = totalArcM > 0.001 ? EDGE_HEAT_ZONE_M / totalArcM : 0;
+        infiniteMeshObj.setHeatZone(heatFrac, state.edgeHeat ?? 0);
+      }
       infiniteMeshObj.update(state.s, frame ? frame.position : new THREE.Vector3(), dt);
     }
 
     return;
   }
-
-  // ---- Legacy path ----
-  updatePhysics(
-    dt,
-    input.left,
-    input.right,
-    input.jumpConsumed,
-    input.boost
-  );
-
-  if (input.jumpConsumed) {
-    input.jumpConsumed = false;
-  }
-
-  updateCarVisuals(dt, ballObjects, renderer, scene);
-  updateSparks(dt);
-
-  if (state.gameRunning && !state.crashed) {
-    const tNorm = state.carTheta > Math.PI
-      ? state.carTheta - Math.PI * 2
-      : state.carTheta;
-
-    const arcH = getArcHalfAngle(state.carZ);
-
-    const isOnBlackField = Math.abs(tNorm) > arcH;
-
-    if (isOnBlackField && !wasOnBlackField) {
-      startTunnelOscillation();
-    }
-
-    if (isOnBlackField) {
-      state.dangerTimer += dt;
-
-      if (state.dangerTimer >= DANGER_TIMEOUT) {
-        endGame(true, startGame);
-        return;
-      }
-    } else {
-      state.dangerTimer = Math.max(0, state.dangerTimer - dt * 4);
-    }
-
-    wasOnBlackField = isOnBlackField;
-
-    state.score += state.speed * dt * 0.18;
-    updateHUD();
-  }
-
-  applyFlash(dt);
-  applyDanger();
-  updateCamera(dt, camera, carGroup);
 }
 
 // ---- Flythrough helpers ----
@@ -394,14 +389,6 @@ function loop(t) {
   }
 
   tunnelMat.uniforms.time.value = elapsedTime;
-  if (!PROCEDURAL_PLAYER) {
-    tunnelMat.uniforms.playerZ.value     = state.carZ;
-    tunnelMat.uniforms.playerTheta.value = state.carTheta;
-    tunnelMat.uniforms.playerLift.value  = Math.max(0, state.radialOffset);
-    tunnel.position.z = state.carZ;
-  }
-
-  if (!PROCEDURAL_PLAYER) updateTunnelOscillation(dt);
   renderer.render(scene, camera);
   requestAnimationFrame(loop);
 }

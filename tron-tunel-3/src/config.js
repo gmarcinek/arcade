@@ -35,20 +35,31 @@ export const CFG = {
 
   // ── Radial physics ──
   jumpImpulse:         15.5, // initial radial velocity from jump (m/s)
-  tunnelGravity:       32, // radial acceleration toward tube center when airborne (m/s²)
+  tunnelGravity:       36, // radial acceleration toward tube center when airborne (m/s²)
   maxRadialOffset:     10, // max distance from tube center (for crash)
 
   // ── Forward speed ──
-  baseSpeed:           20,
+  baseSpeed:           50,
   forwardSpeed:        70,
   boostSpeed:          95,
   acceleration:        0.2,
   speedForce:          10,
   speedFriction:       0.5,
-  boostDrain:          0.32,
-  boostRegen:          0.60,
+  boostDrain:          0.20,
+  boostRegen:          0.25,
   airControl:          1,
 };
+
+// ---- Edge heat zone (open surfaces) ----
+export const EDGE_HEAT_ZONE_M   = 4.0;   // metres from edge where heat starts (danger strip width)
+export const EDGE_HEAT_RATE     = 0.6;   // heat accumulated per second at full proximity
+export const EDGE_HEAT_COOL     = 0.18;  // heat lost per second when out of danger zone
+
+// ---- Boost-heat interaction ----
+export const BOOST_HEAT_RATE   = 0.20;  // heat/sec accumulated while boosting
+export const BOOST_HEAT_CUTOFF = 0.65;  // heat level that force-kills boost
+export const BOOST_HEAT_REARM  = 0.30;  // heat must drop below this before boost can re-arm
+export const BOOST_MIN_FUEL    = 0.95;  // fraction of boost fuel required to start boost
 
 // ---- Ball physics material ----
 export const BALL_PHYS = {

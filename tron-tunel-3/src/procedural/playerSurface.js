@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { CFG, BALL_PHYS, TUNNEL_R, PROC_CFG } from '../config.js';
+import { CFG, BALL_PHYS, TUNNEL_R, PROC_CFG, EDGE_HEAT_ZONE_M, EDGE_HEAT_RATE, EDGE_HEAT_COOL, BOOST_HEAT_RATE, BOOST_HEAT_CUTOFF, BOOST_HEAT_REARM, BOOST_MIN_FUEL } from '../config.js';
 import { state } from '../state.js';
 import { input } from '../input.js';
 
@@ -38,10 +38,24 @@ export function updatePlayerSurface(dt, left, right, jumpPressed, boostHeld) {
   if (!_spline) return;
 
   // Forward speed
-  if (boostHeld && state.boost > 0.02) {
+  // Boost arming: re-arms only when fuel >= BOOST_MIN_FUEL AND heat is low
+  if (!state.boostArmed && state.boost >= BOOST_MIN_FUEL && state.edgeHeat < BOOST_HEAT_REARM) {
+    state.boostArmed = true;
+  }
+  // Force-disarm when heat kills boost
+  if (state.edgeHeat >= BOOST_HEAT_CUTOFF) {
+    state.boostArmed = false;
+  }
+
+  const canBoost = boostHeld && state.boostArmed && state.boost > 0.02 && state.edgeHeat < BOOST_HEAT_CUTOFF;
+  if (canBoost) {
     state.sVelocity += (PROC_CFG.SPEED_BOOST - state.sVelocity) * CFG.acceleration * dt;
     state.boost = Math.max(0, state.boost - CFG.boostDrain * dt);
     state.boostActive = true;
+    // Boost accumulates heat — engine running hot
+    state.edgeHeat = Math.min(1, state.edgeHeat + BOOST_HEAT_RATE * dt);
+    // Disarm when fuel depleted
+    if (state.boost <= 0.02) state.boostArmed = false;
   } else {
     state.boost = Math.min(1, state.boost + CFG.boostRegen * dt);
     state.boostActive = false;
@@ -119,8 +133,49 @@ export function updatePlayerSurface(dt, left, right, jumpPressed, boostHeld) {
   state.uVelocity = THREE.MathUtils.clamp(state.uVelocity, -MAX_U_VEL, MAX_U_VEL);
 
   // 5. Integrate u — wrap only on closed shapes; open shapes let ball fly off edge freely
+  const isOpen   = _crossSection && _crossSection.getIsOpen(state.s);
+  // hasEdges: surface has real physical edges whenever arcSpan < 1.0 (independent of kappa)
+  const arcSpan  = _crossSection ? _crossSection.getArcSpan(state.s) : 1.0;
+  const hasEdges = arcSpan < 1.0;
   state.u += state.uVelocity * dt;
-  const isOpen = _crossSection && _crossSection.getIsOpen(state.s);
+
+  // ── Edge proximity + out-of-bounds detection (open surfaces only) ──
+  if (hasEdges && _crossSection) {
+    const uHalf   = arcSpan * Math.PI;
+    const uCenter = Math.PI;
+    const uMin    = uCenter - uHalf;
+    const uMax    = uCenter + uHalf;
+
+    // distance from nearest edge in radians → convert to metres
+    const distRad = Math.min(Math.abs(state.u - uMin), Math.abs(state.u - uMax));
+    const distM   = distRad * /* TUNNEL_R */ 8.5;
+
+    // edgeProximity: 0 safe (>EDGE_HEAT_ZONE_M), 1 at edge (<=0.05m)
+    state.edgeProximity = THREE.MathUtils.clamp(
+      (EDGE_HEAT_ZONE_M - distM) / (EDGE_HEAT_ZONE_M - 0.05), 0, 1
+    );
+
+    // Heat accumulates when in edge zone, cools when safe
+    if (state.edgeProximity > 0) {
+      state.edgeHeat = Math.min(1, state.edgeHeat + EDGE_HEAT_RATE * dt);
+    } else {
+      state.edgeHeat = Math.max(0, state.edgeHeat - EDGE_HEAT_COOL * dt);
+    }
+
+    // Out of bounds: u outside arc
+    state.outOfBounds = state.u < uMin - 0.05 || state.u > uMax + 0.05;
+    if (state.outOfBounds) {
+      state.outOfBoundsTimer += dt;
+    } else {
+      state.outOfBoundsTimer = 0;
+    }
+  } else {
+    state.edgeProximity  = 0;
+    state.edgeHeat       = Math.max(0, state.edgeHeat - EDGE_HEAT_COOL * dt);
+    state.outOfBounds    = false;
+    state.outOfBoundsTimer = 0;
+  }
+
   if (!isOpen) {
     const tw = Math.PI * 2;
     state.u = ((state.u % tw) + tw) % tw;

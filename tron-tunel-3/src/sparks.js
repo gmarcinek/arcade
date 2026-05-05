@@ -15,6 +15,19 @@ const _mat = new THREE.MeshBasicMaterial({
 
 let sparkMesh = null;
 
+const MAX_DEBRIS  = 40;
+const _cubeGeo    = new THREE.BoxGeometry(0.35, 0.35, 0.35);
+const _cubeMat    = new THREE.MeshBasicMaterial({
+  color:     0xff1100,
+  transparent: true,
+  depthWrite: false,
+  blending:  THREE.AdditiveBlending,
+});
+let cubeMesh = null;
+const _cubePool  = [];
+const _cubeHide  = new THREE.Matrix4().makeScale(0, 0, 0);
+const _cubeDummy = new THREE.Object3D();
+
 const _dummy    = new THREE.Object3D();
 const _col      = new THREE.Color();
 const _up       = new THREE.Vector3(0, 1, 0);
@@ -30,6 +43,114 @@ export function createSparks(scene) {
   for (let i = 0; i < MAX_SPARKS; i++) sparkMesh.setMatrixAt(i, _hidden);
   sparkMesh.instanceMatrix.needsUpdate = true;
   scene.add(sparkMesh);
+}
+
+export function createDebris(scene) {
+  cubeMesh = new THREE.InstancedMesh(_cubeGeo, _cubeMat, MAX_DEBRIS);
+  cubeMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+  cubeMesh.frustumCulled = false;
+  for (let i = 0; i < MAX_DEBRIS; i++) cubeMesh.setMatrixAt(i, _cubeHide);
+  cubeMesh.instanceMatrix.needsUpdate = true;
+  scene.add(cubeMesh);
+}
+
+export function emitDebrisExplosion(pos, inertiaDir, speed) {
+  _cubePool.length = 0;
+
+  // Build an orthonormal frame around inertiaDir so we can spread within a cone.
+  // Pick an arbitrary perpendicular axis.
+  const fwd = inertiaDir.clone().normalize();
+  const arb = Math.abs(fwd.y) < 0.9
+    ? new THREE.Vector3(0, 1, 0)
+    : new THREE.Vector3(1, 0, 0);
+  const right = new THREE.Vector3().crossVectors(fwd, arb).normalize();
+  const up    = new THREE.Vector3().crossVectors(right, fwd).normalize();
+
+  const ballSpeed  = speed ?? 20;
+  // Forward impulse: 3x–6x ball speed so every cube overtakes the ball
+  const fwdImpulse = ballSpeed * (3.0 + Math.random() * 3.0);
+
+  // Delta half-angle of the cone: wider outer cubes, tighter fast ones
+  const CONE_HALF = Math.PI * 0.28; // ~50° half-angle
+
+  for (let i = 0; i < MAX_DEBRIS; i++) {
+    // Mass: 0.2 (small/fast) → 1.0 (large/slow) — uniform distribution
+    const mass = 0.2 + (i / MAX_DEBRIS) * 0.8;
+
+    // Lighter pieces get more forward impulse (inverse mass), heavier spread wider
+    const forwardSpeed = fwdImpulse / mass;
+
+    // Cone spread angle: heavier → wider delta angle
+    const spreadAngle = CONE_HALF * Math.sqrt(mass);
+    const phi   = Math.random() * Math.PI * 2;         // azimuth around fwd axis
+    const theta = spreadAngle * (0.3 + Math.random() * 0.7); // radial offset within cone
+
+    // Lateral offset in right/up plane
+    const lr = Math.cos(phi) * Math.sin(theta);
+    const lu = Math.sin(phi) * Math.sin(theta);
+
+    const vel = new THREE.Vector3()
+      .addScaledVector(fwd,   forwardSpeed * Math.cos(theta))
+      .addScaledVector(right, forwardSpeed * lr)
+      .addScaledVector(up,    forwardSpeed * lu);
+
+    // Visual size proportional to mass (larger = more visible)
+    const size = 0.18 + mass * 0.55;
+
+    // Spin: lighter pieces spin faster
+    const spinScale = 30 / mass;
+
+    _cubePool.push({
+      x: pos.x, y: pos.y, z: pos.z,
+      vx: vel.x, vy: vel.y, vz: vel.z,
+      rx: Math.random() * 6.28, ry: Math.random() * 6.28, rz: Math.random() * 6.28,
+      wx: (Math.random() - 0.5) * spinScale,
+      wy: (Math.random() - 0.5) * spinScale,
+      wz: (Math.random() - 0.5) * spinScale,
+      mass,
+      size,
+      age:  0,
+      life: 0.5 + Math.random() * 0.9,
+    });
+  }
+}
+
+export function updateDebris(dt) {
+  if (!cubeMesh) return;
+  const n = _cubePool.length;
+  for (let i = n - 1; i >= 0; i--) {
+    const c = _cubePool[i];
+    c.age += dt;
+    if (c.age >= c.life) { _cubePool.splice(i, 1); continue; }
+    // Heavier pieces (larger mass) have more aerodynamic drag — they slow down faster
+    const dragRate = 0.3 + (c.mass ?? 0.5) * 1.2;
+    const drag = Math.exp(-dragRate * dt);
+    c.vx *= drag; c.vy *= drag; c.vz *= drag;
+    c.x += c.vx * dt; c.y += c.vy * dt; c.z += c.vz * dt;
+    c.rx += c.wx * dt; c.ry += c.wy * dt; c.rz += c.wz * dt;
+  }
+  for (let i = 0; i < MAX_DEBRIS; i++) {
+    if (i >= _cubePool.length) { cubeMesh.setMatrixAt(i, _cubeHide); continue; }
+    const c = _cubePool[i];
+    const t = c.age / c.life;
+    // Shrink: starts at full size, collapses toward 0
+    const sc = (c.size ?? 0.35) * Math.max(0, 1.0 - t * t * 1.1);
+    _cubeDummy.position.set(c.x, c.y, c.z);
+    _cubeDummy.rotation.set(c.rx, c.ry, c.rz);
+    _cubeDummy.scale.setScalar(sc);
+    _cubeDummy.updateMatrix();
+    cubeMesh.setMatrixAt(i, _cubeDummy.matrix);
+    // Colour: white-hot → orange → deep red as they cool
+    const cool = Math.min(1, t * 1.4);
+    const r = 1.0;
+    const g = Math.max(0, 0.85 - cool * 0.85);
+    const b = Math.max(0, 0.6  - cool * 0.6);
+    _col.setRGB(r, g, b);
+    cubeMesh.setColorAt(i, _col);
+  }
+  cubeMesh.count = Math.min(n, MAX_DEBRIS);
+  cubeMesh.instanceMatrix.needsUpdate = true;
+  if (cubeMesh.instanceColor) cubeMesh.instanceColor.needsUpdate = true;
 }
 
 export function clearSparks() {
@@ -58,6 +179,58 @@ export function emitBounce(pos, normalOut, speed, impact) {
       len:  0.06 + Math.random() * 0.30,
       // torque — spin around velocity axis (rifling)
       spin: (8 + Math.random() * 22) * (Math.random() < 0.5 ? 1 : -1),
+      angle: 0,
+    });
+  }
+  while (pool.length > MAX_SPARKS) pool.shift();
+}
+
+// Continuous edge-scrape sparks — called every frame while near edge.
+// intensity: 0..1 edge proximity. pos: world position. tangent: surface tangent dir.
+export function emitEdgeScratch(pos, tangent, speed, intensity) {
+  if (intensity <= 0) return;
+  const count = Math.floor(intensity * 6);
+  for (let i = 0; i < count; i++) {
+    const scatter = 1.2 + Math.random() * 2.5;
+    pool.push({
+      x: pos.x + (Math.random() - 0.5) * 0.3,
+      y: pos.y + (Math.random() - 0.5) * 0.3,
+      z: pos.z + (Math.random() - 0.5) * 0.3,
+      vx: tangent.x * scatter * (Math.random() < 0.5 ? 1 : -1) + (Math.random() - 0.5) * 1.5,
+      vy: tangent.y * scatter * (Math.random() < 0.5 ? 1 : -1) + (Math.random() - 0.5) * 1.5,
+      vz: speed * (0.2 + Math.random() * 0.5) + (Math.random() - 0.5) * 2,
+      age:  0,
+      life: 0.15 + Math.random() * 0.35,
+      len:  0.04 + Math.random() * 0.12,
+      spin: (10 + Math.random() * 18) * (Math.random() < 0.5 ? 1 : -1),
+      angle: 0,
+    });
+  }
+  while (pool.length > MAX_SPARKS) pool.shift();
+}
+
+// Massive burst on out-of-bounds explosion. inertiaDir: THREE.Vector3 normalised.
+export function emitExplosionBurst(pos, inertiaDir, speed) {
+  const count = Math.min(MAX_SPARKS - 10, 200);
+  const baseImpulse = (speed ?? 20) * 2.0;
+  for (let i = 0; i < count; i++) {
+    // Bias toward inertia direction with wide scatter
+    const biasMix = 0.3 + Math.random() * 0.5;
+    const randDir = new THREE.Vector3(
+      Math.random() - 0.5,
+      Math.random() - 0.5,
+      Math.random() - 0.5,
+    ).normalize();
+    const vel = new THREE.Vector3()
+      .addScaledVector(inertiaDir, biasMix * baseImpulse * (0.6 + Math.random() * 0.8))
+      .addScaledVector(randDir, (1 - biasMix) * baseImpulse * (0.3 + Math.random() * 0.6));
+    pool.push({
+      x: pos.x, y: pos.y, z: pos.z,
+      vx: vel.x, vy: vel.y, vz: vel.z,
+      age:  0,
+      life: 0.6 + Math.random() * 1.8,
+      len:  0.08 + Math.random() * 0.45,
+      spin: (5 + Math.random() * 25) * (Math.random() < 0.5 ? 1 : -1),
       angle: 0,
     });
   }

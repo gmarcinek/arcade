@@ -27,6 +27,7 @@ export const state = {
   timeElapsed:     0,
   boost:           1,
   boostActive:     false,
+  boostArmed:      false,  // true only when fuel >= BOOST_MIN_FUEL and heat is low
 
   // --- game ---
   score:           0,
@@ -48,6 +49,12 @@ export const state = {
   squashTimer:   0,
   frameCount:    0,
   bounceImpact:  0,   // set by physics on hard bounce; read+cleared by ball visuals
+  edgeProximity:   0,   // 0 = safe, 1 = on edge (open surface only)
+  edgeHeat:        0,   // accumulated heat 0..1 from time spent near edge
+  outOfBounds:     false,
+  outOfBoundsTimer: 0,
+  respawning:      false,
+  respawnTimer:    0,
   showForces:    false,  // debug: toggle with F key
 
   // --- obstacles ---

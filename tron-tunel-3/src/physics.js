@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { CFG, BALL_PHYS, BALL_R, TUNNEL_R, LANE_ANGLE } from './config.js';
+import { CFG, BALL_PHYS, BALL_R, TUNNEL_R } from './config.js';
 import { state } from './state.js';
 import { input } from './input.js';
 import { showTrick } from './ui.js';
@@ -64,13 +64,12 @@ export function updatePhysics(dt, left, right, jumpPressed, boostHeld) {
   state.totalDistance += dz;
   state.timeElapsed   += dt;
 
-  const rawSteer = (right ? 1 : 0) - (left ? 1 : 0);
+  const rawSteer = (left ? 1 : 0) - (right ? 1 : 0);
   state.physicsForce = rawSteer;
 
   // ── Rolling physics ──
   // Player applies torque to ball spin (like motorising the ball's own rotation).
   // Rolling friction then couples ball spin → tunnel position.
-  // Sign: rawSteer > 0 = right → increasing carTheta → ball moves right (matches getBasis convention)
   const driveControl = state.grounded ? 1.0 : CFG.airControl;
   state.ballOmega += rawSteer * CFG.driveTorque * driveControl * dt;
 
@@ -94,14 +93,8 @@ export function updatePhysics(dt, left, right, jumpPressed, boostHeld) {
     state.thetaVelocity *= Math.exp(-CFG.airLateralDecay * dt);
   }
 
-  // Lane-snap autopilot: soft pull toward nearest lane centre
-  // laneError is signed angle offset from nearest lane centre, normalised to [-1, 1]
-  if (CFG.tunnelAngularGravity > 0) {
-    const halfLane  = LANE_ANGLE * 0.5;
-    const local     = ((state.carTheta % LANE_ANGLE) + LANE_ANGLE) % LANE_ANGLE;
-    const laneError = local < halfLane ? local : local - LANE_ANGLE;
-    state.thetaVelocity -= CFG.tunnelAngularGravity * (laneError / halfLane) * dt;
-  }
+  // Pendulum gravity toward floor (optional difficulty parameter)
+  state.thetaVelocity -= CFG.tunnelAngularGravity * Math.sin(state.carTheta) * dt;
 
   // Hard velocity cap
   state.thetaVelocity = THREE.MathUtils.clamp(
