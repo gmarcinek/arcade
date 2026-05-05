@@ -119,13 +119,13 @@ export const PROC_CFG = {
   MAX_U_VELOCITY:        9,
 
   KAPPA_INTERVAL: 300,
-  KAPPA_MIN: -0.7,
-  KAPPA_MAX: +1.5,
+  KAPPA_MIN: -0.2,
+  KAPPA_MAX: +1.8,
 
   ARC_INTERVAL: 450,
-  ARC_MIN: 0.2,
+  ARC_MIN: 0.3,
   ARC_MAX: 1.0,
-  TWIST_INTERVAL: 400,
+  TWIST_INTERVAL: 300,
 
   // Camera look-ahead
   CAM_LOOKAHEAD_OFFSETS: [8, 18, 30],
