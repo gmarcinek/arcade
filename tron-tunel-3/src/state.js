@@ -45,7 +45,8 @@ export const state = {
   cameraHeightCurrent:     4.0,
 
   // --- visuals ---
-  ballSpinAngle: 0,
+  ballSpinAngle:   0,
+  ballHeatScale:   1.0,
   squashTimer:   0,
   frameCount:    0,
   bounceImpact:  0,   // set by physics on hard bounce; read+cleared by ball visuals

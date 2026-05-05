@@ -71,5 +71,52 @@ export function endGame(fell, onRestart) {
       <button class="btn" id="restart-btn" style="margin-top: 14px;">zagraj jeszcze</button>
     </div>
   `;
-  document.getElementById('restart-btn').addEventListener('click', onRestart);
+  const btn = document.getElementById('restart-btn');
+  btn.disabled = true;
+  let countdown = 2;
+  btn.textContent = 'zagraj jeszcze (' + countdown + ')';
+  const iv = setInterval(() => {
+    countdown--;
+    if (countdown <= 0) {
+      clearInterval(iv);
+      btn.disabled = false;
+      btn.textContent = 'zagraj jeszcze';
+    } else {
+      btn.textContent = 'zagraj jeszcze (' + countdown + ')';
+    }
+  }, 1000);
+  btn.addEventListener('click', onRestart);
+}
+
+const respawnOverlayEl = document.getElementById('respawn-overlay');
+let _respawnIv = null;
+
+export function showRespawnCountdown(totalSeconds) {
+  if (_respawnIv) clearInterval(_respawnIv);
+  respawnOverlayEl.classList.add('active');
+
+  let remaining = Math.ceil(totalSeconds);
+  _setRespawnNum(remaining);
+
+  _respawnIv = setInterval(() => {
+    remaining--;
+    if (remaining <= 0) {
+      clearInterval(_respawnIv);
+      _respawnIv = null;
+      // Flash "JEB" then hide
+      respawnOverlayEl.innerHTML = '<span class="respawn-bum">JEBUDU</span>';
+      setTimeout(() => {
+        respawnOverlayEl.classList.remove('active');
+        respawnOverlayEl.innerHTML = '';
+      }, 600);
+    } else {
+      _setRespawnNum(remaining);
+    }
+  }, 1000);
+}
+
+function _setRespawnNum(n) {
+  respawnOverlayEl.innerHTML =
+    '<span class="respawn-label">respawn</span>' +
+    '<span class="respawn-num">' + n + '</span>';
 }

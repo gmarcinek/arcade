@@ -13,7 +13,7 @@ import { createTunnel } from './tunnel.js';
 import { createBall, updateCarVisuals, updateBallPositionFromFrame } from './ball.js';
 import { createSparks, updateSparks, clearSparks, emitBounce, emitExplosionBurst, createDebris, emitDebrisExplosion, updateDebris } from './sparks.js';
 import { updateCamera } from './camera.js';
-import { updateHUD, applyFlash, applyDanger, endGame } from './ui.js';
+import { updateHUD, applyFlash, applyDanger, endGame, showRespawnCountdown } from './ui.js';
 import { createAudioSystem, AudioMetadataBus } from './audio/index.js';
 
 function bitrev32(n) {
@@ -154,7 +154,7 @@ function startGame() {
   state.boostActive = false;
 
   state.score = 0;
-  state.timeLeft = 60;
+  state.timeLeft = 120;
   state.timeElapsed = 0;
 
   state.flashAlpha = 0;
@@ -225,9 +225,10 @@ function tick(dt) {
     if (state.outOfBounds && state.outOfBoundsTimer >= 0.15 && !state._gameOverFired) {
       state._gameOverFired = true;
       state.respawning     = true;
-      state.respawnTimer   = 3.0;
+      state.respawnTimer   = 2.0;
       state.edgeHeat       = 0;
       ballObjects.carGroup.visible = false;
+      showRespawnCountdown(2);
 
       const inertiaDir = frame
         ? frame.forward.clone()
@@ -263,6 +264,13 @@ function tick(dt) {
     if (state.gameRunning && !state.crashed) {
       // No danger/game-over detection in procedural mode
       state.score += state.sVelocity * dt * 0.18;
+      state.timeLeft -= dt;
+      if (state.timeLeft <= 0) {
+        state.timeLeft = 0;
+        updateHUD();
+        endGame(false, startGame);
+        return;
+      }
       updateHUD();
     }
 

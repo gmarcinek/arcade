@@ -182,6 +182,9 @@ export function updatePlayerSurface(dt, left, right, jumpPressed, boostHeld) {
   }
 
   // Radial physics (jump/gravity/bounce — same as physics.js)
+  const effBallR = BALL_R * (state.ballHeatScale ?? 1.0);
+  // When grounded, lift the ball centre with the swelling radius so it hovers above the track
+  if (state.grounded) state.radialOffset = effBallR;
   if (state.jumpCooldown > 0) state.jumpCooldown -= dt;
   if (jumpPressed && state.jumpCooldown <= 0 && !state.crashed) {
     state.radialVelocity = Math.max(state.radialVelocity, 0) + CFG.jumpImpulse;
@@ -192,7 +195,7 @@ export function updatePlayerSurface(dt, left, right, jumpPressed, boostHeld) {
 
   if (!state.grounded) {
     state.radialVelocity -= CFG.tunnelGravity * dt;
-    if (state.radialVelocity < 0 && state.radialOffset < BALL_R + BALL_PHYS.surfaceDampRadius) {
+    if (state.radialVelocity < 0 && state.radialOffset < effBallR + BALL_PHYS.surfaceDampRadius) {
       state.radialVelocity *= Math.exp(-BALL_PHYS.surfaceDamp * dt);
     }
     state.radialOffset += state.radialVelocity * dt;
@@ -200,8 +203,8 @@ export function updatePlayerSurface(dt, left, right, jumpPressed, boostHeld) {
       state.radialOffset   = CFG.maxRadialOffset;
       state.radialVelocity = Math.min(0, state.radialVelocity);
     }
-    if (state.radialOffset <= BALL_R) {
-      state.radialOffset = BALL_R;
+    if (state.radialOffset <= effBallR) {
+      state.radialOffset = effBallR;
       state.squashTimer  = BALL_PHYS.squashDuration * state.materialDamp;
       if (!state.landingEvaluated) {
         state.grounded = true;

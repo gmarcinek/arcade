@@ -234,7 +234,13 @@ export function updateCarVisuals(dt, ballObjects, renderer, scene, proceduralFra
   const scaleXZ      = 1.0 + sq * BALL_PHYS.stretchAmount * state.materialDamp;
   const speedStretch = 1.0 + Math.max(0, (state.speed - CFG.baseSpeed) / CFG.baseSpeed)
                               * BALL_PHYS.speedStretch * state.materialDamp;
-  ball.scale.set(scaleXZ, scaleY, scaleXZ * speedStretch);
+  // Heat swell: lerp scale multiplier toward 1+heat (max 2×) and back
+  const heatScaleTarget = 1.0 + (state.edgeHeat ?? 0);
+  if (ballObjects._heatScale === undefined) ballObjects._heatScale = 1.0;
+  ballObjects._heatScale += (heatScaleTarget - ballObjects._heatScale) * (1.0 - Math.exp(-dt * 3.0));
+  const hs = ballObjects._heatScale;
+  state.ballHeatScale = hs;
+  ball.scale.set(scaleXZ * hs, scaleY * hs, scaleXZ * speedStretch * hs);
   equator.scale.copy(ball.scale);
 
   if (state.crashed) {
@@ -417,9 +423,19 @@ export function updateCarVisuals(dt, ballObjects, renderer, scene, proceduralFra
     ballMat.emissive.setRGB(eR, eG, eB);
     ballMat.emissiveIntensity = 0.8 + heat * heat * 14.0;
 
-    carLight.color.setRGB(1.0, 0.20 + (1.0 - heat) * 0.80, (1.0 - heat) * 0.90);
-    carLight.intensity = Math.max(2.0, heat * 10.0);
-    carLight.distance  = 22;
+    // Light color: deep red → orange → yellow-white at max heat
+    const lR = 1.0;
+    const lG = heat < 0.5 ? heat * 0.60 : 0.30 + (heat - 0.5) * 1.40;
+    const lB = heat < 0.7 ? 0.0        : (heat - 0.7) * 0.80;
+    carLight.color.setRGB(lR, Math.min(1, lG), Math.min(1, lB));
+    // Intensity: quadratic growth — dim at low heat, blazing at high heat
+    carLight.intensity = 1.5 + heat * heat * 28.0;
+    // Spread: 18m cold → 55m at full heat (matches swollen ball radius)
+    carLight.distance  = 18 + heat * 37;
+    // tailLight joins the heat glow — warm orange halo behind the ball
+    tailLight.color.setRGB(1.0, 0.20 + heat * 0.40, 0.0);
+    tailLight.intensity = 0.5 + heat * heat * 8.0;
+    tailLight.distance  = 10 + heat * 20;
 
     // Edge sparks
     if (ep > 0.05 && ballObjects._edgeScratchCooldown <= 0) {
@@ -450,6 +466,9 @@ export function updateCarVisuals(dt, ballObjects, renderer, scene, proceduralFra
     carLight.color.setRGB(0.502, 1.0, 1.0);
     carLight.intensity = state.boostActive ? 4.5 : 2.0;
     carLight.distance  = state.boostActive ? 35 : 22;
+    tailLight.color.setRGB(1.0, 0.31, 0.12);
+    tailLight.intensity = state.boostActive ? 2.1 : 0.7;
+    tailLight.distance  = state.boostActive ? 18 : 10;
   }
 
   headLight.intensity = 0;
