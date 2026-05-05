@@ -8,7 +8,7 @@ import {
 } from './config.js';
 import { state } from './state.js';
 import { input } from './input.js';
-import { PROC_CFG } from './procedural/proceduralConfig.js';
+import { PROC_CFG } from './config.js';
 
 // Constant-rate lerp — more predictable than exp lerp (from POC)
 function moveToward(current, target, step) {

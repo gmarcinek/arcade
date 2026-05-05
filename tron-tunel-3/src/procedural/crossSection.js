@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { PROC_CFG } from './proceduralConfig.js';
+import { PROC_CFG } from '../config.js';
 
 function smoothstep(e0, e1, x) {
   const t = Math.max(0, Math.min(1, (x - e0) / (e1 - e0)));

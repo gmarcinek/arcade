@@ -104,6 +104,10 @@ export function setupInput() {
     ) {
       input.jumpConsumed = true;
     }
+
+    if (e.code === 'KeyF') {
+      state.showForces = !state.showForces;
+    }
   }, { passive: false });
 
   window.addEventListener('keyup', (e) => {

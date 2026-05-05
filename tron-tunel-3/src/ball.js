@@ -1,5 +1,6 @@
 import * as THREE from 'three';
-import { BALL_MAT, BALL_PHYS, CFG, TUNNEL_R, CAR_OFF } from './config.js';
+import { BALL_MAT, BALL_PHYS, CFG, PROC_CFG, TUNNEL_R, CAR_OFF } from './config.js';
+import { input } from './input.js';
 import { state } from './state.js';
 import { emitBounce } from './sparks.js';
 
@@ -31,6 +32,35 @@ const BOOST_FUEL_GRACE  = 0.12;    // sec — filter 1-frame boostActive flicker
 function smoothstep(e0, e1, x) {
   const t = Math.max(0, Math.min(1, (x - e0) / (e1 - e0)));
   return t * t * (3 - 2 * t);
+}
+
+function makeArrow(color, scene) {
+  const a = new THREE.ArrowHelper(
+    new THREE.Vector3(1, 0, 0),
+    new THREE.Vector3(0, 0, 0),
+    1, color, 0.45, 0.22,
+  );
+  a.traverse(child => {
+    child.renderOrder = 999;
+    if (child.material) {
+      child.material.depthTest  = false;
+      child.material.depthWrite = false;
+      child.material.transparent = true;
+    }
+  });
+  a.renderOrder = 999;
+  a.visible = false;
+  scene.add(a);
+  return a;
+}
+
+function setArrow(arrow, pos, dir, len, show) {
+  const visible = show && len > 0.05;
+  arrow.visible = visible;
+  if (!visible) return;
+  arrow.position.copy(pos);
+  arrow.setDirection(dir.clone().normalize());
+  arrow.setLength(len, Math.min(0.45, len * 0.35), 0.22);
 }
 
 export function createBall(scene) {
@@ -113,6 +143,26 @@ export function createBall(scene) {
   scene.add(carLight);
   scene.add(tailLight);
 
+  // Force debug arrows (world-space, toggled by F key)
+  const arrowInertia   = makeArrow(0x22ff66, scene);  // green  — lateral inertia (thetaVelocity)
+  const arrowRadial    = makeArrow(0xff4422, scene);  // red    — radial velocity (gravity/bounce)
+  const arrowInput     = makeArrow(0x2288ff, scene);  // blue   — steering input force
+  const arrowResultant = makeArrow(0xffee00, scene);  // yellow — resultant
+
+  // Pivot axes — shows ball local frame (red=right, green=out, blue=forward)
+  const pivotAxes = new THREE.AxesHelper(2.5);
+  pivotAxes.traverse(child => {
+    child.renderOrder = 999;
+    if (child.material) {
+      child.material.depthTest   = false;
+      child.material.depthWrite  = false;
+      child.material.transparent = true;
+    }
+  });
+  pivotAxes.renderOrder = 999;
+  pivotAxes.visible = false;
+  scene.add(pivotAxes);
+
   return {
     carGroup, ball, equator, cubeCamera, ballMat, carLight, tailLight,
     ribbon, ribbonGeo, ribbonMat, ribbonHistory, ribbonPos, ribbonAlpha,
@@ -127,6 +177,8 @@ export function createBall(scene) {
     sputterPhase:     'gap',
     sputterPhaseEnd:  0,
     sputterAmp:       0,
+    // Debug arrows
+    arrowInertia, arrowRadial, arrowInput, arrowResultant, pivotAxes,
   };
 }
 
@@ -344,6 +396,58 @@ export function updateCarVisuals(dt, ballObjects, renderer, scene, proceduralFra
     carGroup.visible = false;
     cubeCamera.update(renderer, scene);
     carGroup.visible = true;
+  }
+
+  // ── Force debug visualization ──
+  if (ballObjects.arrowInertia !== undefined) {
+    const SCALE = 0.60;
+
+    // Ball local frame — proc mode has its own axes, classic uses cylindrical basis
+    const ballRight   = proceduralFrame ? proceduralFrame.right   : basis.right;
+    const ballOut     = proceduralFrame ? proceduralFrame.normal  : basis.surfaceOut;
+    const ballForward = proceduralFrame ? proceduralFrame.forward : basis.forward;
+
+    // Offset origin above ball surface so arrows aren't inside the mesh
+    const pos = carGroup.position.clone().addScaledVector(ballOut, 1.2);
+
+    // Pivot axes — orient to ball local frame and show when debug is on
+    if (ballObjects.pivotAxes) {
+      ballObjects.pivotAxes.position.copy(pos);
+      ballObjects.pivotAxes.quaternion.setFromRotationMatrix(
+        new THREE.Matrix4().makeBasis(ballRight, ballOut, ballForward)
+      );
+      ballObjects.pivotAxes.visible = state.showForces;
+    }
+
+    // Lateral inertia: proc mode uses uVelocity, classic uses thetaVelocity
+    const latVel = proceduralFrame ? state.uVelocity : state.thetaVelocity;
+    const latV   = latVel * TUNNEL_R;
+    const latDir = ballRight.clone().multiplyScalar(latV >= 0 ? 1 : -1);
+    setArrow(ballObjects.arrowInertia, pos, latDir, Math.abs(latV) * SCALE, state.showForces);
+
+    // Radial velocity: positive = away from wall (toward centre), negative = toward wall
+    const radV   = state.radialVelocity;
+    const radDir = ballOut.clone().multiplyScalar(radV >= 0 ? 1 : -1);
+    setArrow(ballObjects.arrowRadial, pos, radDir, Math.abs(radV) * SCALE, state.showForces);
+
+    // Steering input: read directly from input state, works in both modes
+    const rawSteer    = (input.left ? 1 : 0) - (input.right ? 1 : 0);
+    const steerAccel  = proceduralFrame ? PROC_CFG.STEER_ACCELERATION : CFG.steerAcceleration;
+    const inV         = rawSteer * steerAccel;
+    const hasSteer    = Math.abs(inV) > 0.01;
+    const steerLen    = hasSteer ? Math.abs(inV) * SCALE : Math.min(Math.abs(latVel) * SCALE, 1.5);
+    const steerSign   = (hasSteer ? inV : latVel) >= 0 ? 1 : -1;
+    const steerDir    = ballRight.clone().multiplyScalar(steerSign);
+    setArrow(ballObjects.arrowInput, pos, steerDir, steerLen,
+      state.showForces && (hasSteer || Math.abs(latVel) > 0.05));
+
+    // Resultant: lateral inertia + radial, in cross-section plane
+    const resultVec = new THREE.Vector3()
+      .addScaledVector(ballRight, latV   * SCALE)
+      .addScaledVector(ballOut,   radV   * SCALE);
+    const resultLen = resultVec.length();
+    const resultDir = resultLen > 0.05 ? resultVec.clone().normalize() : ballRight.clone();
+    setArrow(ballObjects.arrowResultant, pos, resultDir, resultLen, state.showForces);
   }
 }
 

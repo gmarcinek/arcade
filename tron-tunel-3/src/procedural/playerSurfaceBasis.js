@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { state } from '../state.js';
 import { TUNNEL_R } from '../config.js';
-import { PROC_CFG } from './proceduralConfig.js';
+import { PROC_CFG } from '../config.js';
 
 let _spline = null;
 let _crossSection = null;

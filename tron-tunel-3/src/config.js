@@ -3,15 +3,15 @@ export const TUNNEL_R   = 12;
 export const TUNNEL_LEN = 1200;
 export const LANE_COUNT = 120;
 export const LANE_ANGLE = (Math.PI * 2) / LANE_COUNT; // 0.05236 rad per lane
-export const CAR_OFF    = 0.32;
+export const CAR_OFF    = 0.32; //
 export const DANGER_TIMEOUT   = 145.0;
 export const BASE_SPEED_START = 32;
 
 // ---- Camera constants ----
-export const CAM_SPRING        = 52; //
-export const CAM_DAMP          = 13.5;
-export const CAM_MAX_VEL       = 4.4;
-export const CAM_FOV_NORMAL    = 66;
+export const CAM_SPRING        = 52; // spring stiffness (N/m) — higher = tighter spring, more rubber-banding; lower = looser spring, more floaty feel
+export const CAM_DAMP          = 13.5; // critically damped at ~13.5, lower for more floaty feel
+export const CAM_MAX_VEL       = 4.4; // max camera velocity (prevents extreme rubber-banding when player clips into wall)
+export const CAM_FOV_NORMAL    = 60;
 export const CAM_FOV_BOOST     = 110;
 export const CAM_FOV_ENTER_S   = 3.0;
 export const CAM_FOV_EXIT_S    = 3.0;
@@ -21,46 +21,41 @@ export const CAM_DIST_NORMAL   = 6;
 export const CAM_DIST_FORWARD  = 14;
 export const CAM_DIST_BACK     = 4;
 
-
-
 // ---- Physics config ----
 export const CFG = {
-  steerAcceleration:   5.5, // prędkosć zmiany kierunku (lane/s)
-  maxThetaVelocity:    3, // maksymalna prędkość kątowa (lane/s)
+  steerAcceleration:   1.5,
+  maxThetaVelocity:    3,
 
-  baseSpeed:           60,
+  baseSpeed:           20,
   forwardSpeed:        70,
-  minSpeed:            12,
   boostSpeed:          95,
-  acceleration:        5,
+  acceleration:        0.2,
   speedForce:          10,
-  speedFriction:       0.3, // siła hamowania przy braku gazu
-  groundedFriction:    0.4, // siła hamowania przy kontakcie z tunelem, w tym na ścianach
-  airFriction:         1.2, // siła hamowania w powietrzu, im większa, tym mniej "ślizgania" w powietrzu
-  airControl:          1, // jak bardzo sterowanie działa w powietrzu (0-1), 0 to brak kontroli, 1 to pełna kontrola jak na ziemi
+  speedFriction:       0.5,
+  groundedFriction:    0.01,
+  airFriction:         0.01,
+  airControl:          1,
   jumpImpulse:         15.5,
-  tunnelGravity:       36,
-  tunnelAngularGravity: 4.0,  // rad/s² — pulls ball toward tube floor (world gravity projected)
-  maxRadialOffset:     10, // maksymalne odsunięcie od ściany tunelu, powyżej tego punktu gracz jest "w powietrzu"
-  boostDrain:          0.32,
-  boostRegen:          0.60, // szybkość regeneracji boosta (1 to pełna regeneracja w 1 sekundę)
+  tunnelGravity:       32,// gravity toward tube floor (rad/s²)
+  tunnelAngularGravity: 0.0,  // rad/s² — pendulum restoring force toward tube floor (theta=0); tune per difficulty level
+  maxRadialOffset:     10, // max distance from tube center (for camera floor avoidance)
+  boostDrain:          0.32, // per second
+  boostRegen:          0.60, // per second
 };
 
 // ---- Ball physics material ----
 export const BALL_PHYS = {
-  restitution:       0.7, // sprężystość, czyli jak bardzo piłka odbija się od ściany (0-1), 1 to idealnie sprężysta, 0 to brak odbicia
+  restitution:       0.7,
+  inertiaDecay:      0.08,
 
-  inertiaDecay:      0.08, // jak szybko zanika bezwładność lateralna — niska wartość = momentum utrzymuje się długo, gracz musi walczyć z inercją
+  squashDuration:    0.05,
+  squashAmount:      0.15,
+  stretchAmount:     0.15,
+  speedStretch:      0.0,
 
-  squashDuration:    0.05, // czas trwania efektu squasha po uderzeniu o ścianę
-  squashAmount:      0.15, // jak bardzo piłka się spłaszcza przy uderzeniu o ścianę (0-1), 0.1 to 10% spłaszczenia
-  stretchAmount:     0.15, // jak bardzo piłka się rozciąga przy uderzeniu o ścianę (0-1), 0.1 to 10% rozciągnięcia
-  speedStretch:      0.0, // jak bardzo piłka się rozciąga przy dużej prędkości (0-1), 0.1 to 10% rozciągnięcia
-  steerLagK:         4.5, // jak szybko wizualna reprezentacja samochodu dogania aktualną pozycję fizyczną, im większa wartość, tym szybciej nadąża (w sekundach^-1)
-  
-  surfaceDamp:       1, // jak bardzo mikro-odbicia przy kontakcie ze ścianą są tłumione, im większa wartość, tym bardziej tłumione
-  surfaceDampRadius: 0.2, // promień od ściany, w którym zaczyna działać tłumienie mikro-odbicia, im większa wartość, tym dalej od ściany zaczyna działać tłumienie
-  bounceThreshold:   5, // minimalna prędkość, przy której piłka zaczyna się odbijać od ściany, poniżej tego punktu piłka jest uważana za "nieruchomą" i nie będzie się odbijać, im większa wartość, tym szybciej piłka przestaje się odbijać i zaczyna być uważana za nieruchomą
+  surfaceDamp:       1,
+  surfaceDampRadius: 0.2,
+  bounceThreshold:   5,
 };
 
 // ---- Ball visual material ----
@@ -90,4 +85,50 @@ export const TUNNEL_FX = {
   reflectionDarken: 0.18,
   reflectionTint: 1.70,
   reflectionHighlight: 120.55,
+};
+
+// ---- Procedural track config ----
+export const PROC_CFG = {
+  // Segment geometry
+  SEGMENT_LENGTH_MIN:    290,
+  SEGMENT_LENGTH_MAX:    310,
+  MAX_TURN_XZ:           0.524,
+  MAX_TURN_Y:            0.10,
+  CONTROL_POINTS_MIN:    1,
+  CONTROL_POINTS_MAX:    1,
+
+  // Safe track
+  SAFE_TRACK_SAMPLES:    200,
+
+  // Chunk streaming
+  LOOKAHEAD_SEGMENTS:    2,
+  TRAIL_SEGMENTS:        1,
+
+  // Speed (proc-specific)
+  SPEED_BASE:            60,
+  SPEED_MAX:             120,
+  SPEED_BOOST:           160,
+  STEER_ACCELERATION:    5,
+  MAX_U_VELOCITY:        9,
+
+  KAPPA_INTERVAL: 300,
+  KAPPA_MIN: -0.7,
+  KAPPA_MAX: +1.5,
+
+  ARC_INTERVAL: 450,
+  ARC_MIN: 0.2,
+  ARC_MAX: 1.0,
+  TWIST_INTERVAL: 400,
+
+  // Camera look-ahead
+  CAM_LOOKAHEAD_OFFSETS: [8, 18, 30],
+  CAM_LOOKAHEAD_WEIGHTS: [0.40, 0.35, 0.25],
+  CAM_LOOKAHEAD_TAU:     0.25,
+
+  // Camera position
+  CAM_HEIGHT:        3.5,
+  CAM_BACK_DIST:     10,
+  CAM_POS_TAU:       0.12,
+  CAM_UP_TAU:        0.05,
+  CAM_FLOOR_MIN:     1.5,
 };

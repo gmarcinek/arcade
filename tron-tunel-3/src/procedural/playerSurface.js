@@ -1,6 +1,5 @@
 import * as THREE from 'three';
-import { CFG, BALL_PHYS, TUNNEL_R } from '../config.js';
-import { PROC_CFG } from './proceduralConfig.js';
+import { CFG, BALL_PHYS, TUNNEL_R, PROC_CFG } from '../config.js';
 import { state } from '../state.js';
 import { input } from '../input.js';
 
