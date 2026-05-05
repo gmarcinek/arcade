@@ -61,7 +61,7 @@ export function applyDanger() {
 
 export function endGame(fell, onRestart) {
   state.gameRunning = false;
-  const reason = fell ? 'WYPADŁEŚ Z TUNELU' : 'koniec czasu';
+  const reason = fell ? 'WYPADŁEŚ Z CZARNEJ DZIURY' : 'koniec czasu';
   overlay.style.display = 'flex';
   overlay.innerHTML = `
     <div class="end-card">

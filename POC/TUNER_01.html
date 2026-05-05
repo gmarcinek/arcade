@@ -1,0 +1,1385 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>TRON·BALL Music Lab — Sample + Tune Editor</title>
+<style>
+  :root {
+    --bg: #050207;
+    --panel: rgba(14, 8, 18, 0.78);
+    --panel2: rgba(24, 12, 30, 0.68);
+    --line: rgba(255, 159, 64, 0.28);
+    --line2: rgba(255, 255, 255, 0.08);
+    --text: #ffd7a6;
+    --muted: #8b6b4d;
+    --orange: #ff7a18;
+    --orange2: #ffb45f;
+    --yellow: #fff04c;
+    --cyan: #27d7ff;
+    --magenta: #ff2d92;
+    --green: #72ff89;
+    --danger: #ff4058;
+    --shadow: 0 18px 60px rgba(0,0,0,0.45);
+  }
+  * { box-sizing: border-box; }
+  html, body { width: 100%; min-height: 100%; margin: 0; background: var(--bg); color: var(--text); font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+  body {
+    overflow-x: hidden;
+    background:
+      radial-gradient(circle at 20% 5%, rgba(255, 122, 24, 0.18), transparent 32%),
+      radial-gradient(circle at 84% 18%, rgba(39, 215, 255, 0.12), transparent 30%),
+      radial-gradient(circle at 60% 90%, rgba(255, 45, 146, 0.10), transparent 34%),
+      linear-gradient(180deg, #050207, #08040d 55%, #030105);
+  }
+  button, input, select, textarea { font: inherit; }
+  button { cursor: pointer; }
+  .app { max-width: 1480px; margin: 0 auto; padding: 22px; }
+  header { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 18px; }
+  h1 { margin: 0; font-size: 23px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--orange2); }
+  .subtitle { margin-top: 7px; color: var(--muted); font-size: 12px; letter-spacing: 0.08em; line-height: 1.5; }
+  .top-actions { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+  .tabs { display: flex; gap: 8px; margin: 14px 0 18px; border-bottom: 1px solid var(--line2); padding-bottom: 10px; }
+  .tab { border: 1px solid var(--line); background: rgba(255, 122, 24, 0.05); color: var(--text); padding: 10px 14px; border-radius: 999px; letter-spacing: 0.08em; text-transform: uppercase; font-size: 11px; }
+  .tab.active { color: #120804; background: linear-gradient(135deg, var(--orange), var(--orange2)); box-shadow: 0 0 26px rgba(255, 122, 24, 0.25); }
+  .grid { display: grid; grid-template-columns: 310px minmax(0, 1fr); gap: 14px; align-items: start; }
+  .grid.wide { grid-template-columns: minmax(0, 1fr); }
+  .panel { background: var(--panel); border: 1px solid var(--line); box-shadow: var(--shadow); border-radius: 18px; overflow: hidden; backdrop-filter: blur(10px); }
+  .panel.pad { padding: 14px; }
+  .panel-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 13px 14px; border-bottom: 1px solid var(--line2); background: rgba(255, 255, 255, 0.025); }
+  .panel-title { font-size: 11px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--orange2); }
+  .panel-body { padding: 14px; }
+  .sample-list { display: flex; flex-direction: column; gap: 7px; max-height: 68vh; overflow: auto; padding-right: 2px; }
+  .sample-item { display: grid; grid-template-columns: 1fr auto; gap: 8px; align-items: center; padding: 10px; border: 1px solid var(--line2); background: rgba(255,255,255,0.025); border-radius: 12px; }
+  .sample-item.active { border-color: rgba(255, 122, 24, 0.9); background: rgba(255, 122, 24, 0.09); }
+  .sample-name { font-size: 13px; color: var(--text); overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+  .sample-meta { margin-top: 4px; color: var(--muted); font-size: 11px; }
+  .btn { border: 1px solid var(--line); background: rgba(255, 122, 24, 0.06); color: var(--orange2); padding: 9px 11px; border-radius: 11px; font-size: 12px; }
+  .btn:hover { border-color: var(--orange); background: rgba(255, 122, 24, 0.13); }
+  .btn.primary { color: #120804; border-color: transparent; background: linear-gradient(135deg, var(--orange), var(--orange2)); }
+  .btn.cyan { color: var(--cyan); border-color: rgba(39,215,255,0.45); background: rgba(39,215,255,0.06); }
+  .btn.yellow { color: var(--yellow); border-color: rgba(255,240,76,0.45); background: rgba(255,240,76,0.06); }
+  .btn.danger { color: var(--danger); border-color: rgba(255,64,88,0.45); background: rgba(255,64,88,0.06); }
+  .btn.small { padding: 6px 8px; font-size: 11px; border-radius: 9px; }
+  .row { display: flex; gap: 9px; align-items: center; flex-wrap: wrap; }
+  .form-grid { display: grid; grid-template-columns: repeat(4, minmax(150px, 1fr)); gap: 12px; }
+  .form-grid.two { grid-template-columns: repeat(2, minmax(180px, 1fr)); }
+  .field { display: flex; flex-direction: column; gap: 6px; }
+  label { color: var(--muted); font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; }
+  input[type="text"], input[type="number"], select, textarea {
+    width: 100%; border: 1px solid var(--line2); background: rgba(0,0,0,0.28); color: var(--text); border-radius: 12px; padding: 10px 11px; outline: none;
+  }
+  textarea { min-height: 74px; resize: vertical; font-family: "JetBrains Mono", Consolas, monospace; font-size: 12px; line-height: 1.45; }
+  input[type="range"] { width: 100%; accent-color: var(--orange); }
+  .slider-read { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+  .num { color: var(--cyan); font-size: 12px; font-variant-numeric: tabular-nums; }
+  .hint { color: var(--muted); font-size: 12px; line-height: 1.55; }
+  .curve-wrap { position: relative; border: 1px solid var(--line2); border-radius: 18px; background: linear-gradient(180deg, rgba(255,255,255,0.035), rgba(0,0,0,0.14)); overflow: hidden; }
+  #curveCanvas { display: block; width: 100%; height: 330px; cursor: crosshair; }
+  .curve-tabs { position: absolute; top: 10px; left: 10px; display: flex; gap: 6px; flex-wrap: wrap; z-index: 2; }
+  .curve-tab { border: 1px solid var(--line2); background: rgba(5,2,7,0.70); color: var(--muted); border-radius: 999px; padding: 6px 9px; font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; }
+  .curve-tab.active { color: #150904; background: var(--orange2); border-color: transparent; }
+  .curve-readout { position: absolute; right: 12px; bottom: 10px; font: 11px "JetBrains Mono", Consolas, monospace; color: var(--muted); background: rgba(0,0,0,0.35); border: 1px solid var(--line2); border-radius: 999px; padding: 6px 10px; }
+  .scope { width: 100%; height: 118px; display: block; border: 1px solid var(--line2); background: rgba(0,0,0,0.22); border-radius: 14px; }
+  .section { margin-top: 14px; }
+  .section:first-child { margin-top: 0; }
+  .section-title { margin: 0 0 10px; font-size: 12px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--orange2); }
+  .hidden { display: none !important; }
+  .layers { display: flex; flex-direction: column; gap: 10px; }
+  .layer { border: 1px solid var(--line2); background: rgba(255,255,255,0.025); border-radius: 16px; overflow: hidden; }
+  .layer-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 12px; border-bottom: 1px solid var(--line2); }
+  .layer-title { color: var(--orange2); font-size: 12px; letter-spacing: 0.1em; text-transform: uppercase; }
+  .layer-grid { display: grid; grid-template-columns: 1.2fr 0.9fr repeat(4, 0.7fr); gap: 10px; padding: 12px; }
+  .layer-grid.bottom { grid-template-columns: 1.2fr repeat(5, 0.7fr); padding-top: 0; }
+  .timeline { height: 170px; border: 1px solid var(--line2); border-radius: 16px; background: rgba(0,0,0,0.24); overflow: hidden; position: relative; }
+  #timelineCanvas { display: block; width: 100%; height: 100%; }
+  .toast { position: fixed; right: 18px; bottom: 18px; z-index: 100; display: flex; flex-direction: column; gap: 8px; max-width: 420px; }
+  .toast .msg { border: 1px solid var(--line); background: rgba(9,4,12,0.92); color: var(--text); border-radius: 14px; padding: 11px 13px; box-shadow: var(--shadow); font-size: 12px; line-height: 1.45; }
+  .pill { border: 1px solid var(--line2); color: var(--muted); padding: 5px 8px; border-radius: 999px; font-size: 11px; }
+  .meter { height: 8px; border: 1px solid var(--line2); border-radius: 99px; overflow: hidden; background: rgba(0,0,0,0.35); }
+  .meter > div { height: 100%; width: 0%; background: linear-gradient(90deg, var(--orange), var(--yellow), var(--cyan)); box-shadow: 0 0 16px rgba(255, 122, 24, 0.65); }
+  .modal-back { position: fixed; inset: 0; background: rgba(0,0,0,0.72); z-index: 80; display: grid; place-items: center; padding: 18px; }
+  .modal { width: min(780px, 96vw); max-height: 90vh; overflow: auto; background: rgba(12,6,16,0.96); border: 1px solid var(--line); border-radius: 18px; box-shadow: var(--shadow); }
+  .modal pre { margin: 0; white-space: pre-wrap; color: var(--text); font: 12px/1.55 "JetBrains Mono", Consolas, monospace; }
+  @media (max-width: 950px) {
+    .grid { grid-template-columns: 1fr; }
+    .form-grid, .form-grid.two, .layer-grid, .layer-grid.bottom { grid-template-columns: 1fr 1fr; }
+    header { flex-direction: column; }
+    .top-actions { justify-content: flex-start; }
+  }
+  @media (max-width: 620px) {
+    .app { padding: 14px; }
+    .form-grid, .form-grid.two, .layer-grid, .layer-grid.bottom { grid-template-columns: 1fr; }
+    h1 { font-size: 18px; }
+  }
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <div>
+      <h1>TRON·BALL Music Lab</h1>
+      <div class="subtitle">Generator sampli → biblioteka localStorage → warstwy tune/drone/pulse → eksport WAV/MP3.</div>
+    </div>
+    <div class="top-actions">
+      <button class="btn" id="btnExportProject">EXPORT JSON</button>
+      <button class="btn" id="btnImportProject">IMPORT JSON</button>
+      <button class="btn danger" id="btnFactoryReset">RESET DEFAULTS</button>
+    </div>
+  </header>
+
+  <div class="tabs">
+    <button class="tab active" data-view="sampleView">SAMPLE LAB</button>
+    <button class="tab" data-view="composerView">TUNE COMPOSER</button>
+  </div>
+
+  <section id="sampleView">
+    <div class="grid">
+      <aside class="panel">
+        <div class="panel-head">
+          <div class="panel-title">Sample configs</div>
+          <button class="btn small primary" id="btnNewSample">NEW</button>
+        </div>
+        <div class="panel-body">
+          <div class="sample-list" id="sampleList"></div>
+        </div>
+      </aside>
+
+      <main class="panel">
+        <div class="panel-head">
+          <div class="panel-title">Generator sampla</div>
+          <div class="row">
+            <button class="btn cyan" id="btnPreviewSample">PREVIEW</button>
+            <button class="btn primary" id="btnSaveSample">SAVE CONFIG</button>
+            <button class="btn" id="btnDuplicateSample">DUPLICATE</button>
+            <button class="btn danger" id="btnDeleteSample">DELETE</button>
+          </div>
+        </div>
+        <div class="panel-body">
+          <div class="section">
+            <div class="form-grid">
+              <div class="field">
+                <label>Nazwa</label>
+                <input type="text" id="sName" />
+              </div>
+              <div class="field">
+                <label>Przebieg</label>
+                <select id="sOsc">
+                  <option value="sine">sine</option>
+                  <option value="triangle">triangle</option>
+                  <option value="sawtooth">sawtooth</option>
+                  <option value="square">square</option>
+                </select>
+              </div>
+              <div class="field">
+                <div class="slider-read"><label>Wysokość tonu</label><span class="num" id="vFreq"></span></div>
+                <input type="range" id="sFreq" min="35" max="2200" step="1" />
+              </div>
+              <div class="field">
+                <div class="slider-read"><label>Długość</label><span class="num" id="vDuration"></span></div>
+                <input type="range" id="sDuration" min="0.08" max="8" step="0.01" />
+              </div>
+            </div>
+          </div>
+
+          <div class="section">
+            <div class="form-grid">
+              <div class="field">
+                <div class="slider-read"><label>Volume</label><span class="num" id="vVolume"></span></div>
+                <input type="range" id="sVolume" min="0" max="1" step="0.01" />
+              </div>
+              <div class="field">
+                <div class="slider-read"><label>Pitch curve depth</label><span class="num" id="vPitchDepth"></span></div>
+                <input type="range" id="sPitchDepth" min="0" max="48" step="1" />
+              </div>
+              <div class="field">
+                <div class="slider-read"><label>Filter base</label><span class="num" id="vFilter"></span></div>
+                <input type="range" id="sFilter" min="80" max="16000" step="10" />
+              </div>
+              <div class="field">
+                <div class="slider-read"><label>Filter Q</label><span class="num" id="vQ"></span></div>
+                <input type="range" id="sQ" min="0.1" max="20" step="0.1" />
+              </div>
+            </div>
+          </div>
+
+          <div class="section">
+            <div class="form-grid">
+              <div class="field">
+                <div class="slider-read"><label>Drive</label><span class="num" id="vDrive"></span></div>
+                <input type="range" id="sDrive" min="0" max="1" step="0.01" />
+              </div>
+              <div class="field">
+                <div class="slider-read"><label>Noise</label><span class="num" id="vNoise"></span></div>
+                <input type="range" id="sNoise" min="0" max="1" step="0.01" />
+              </div>
+              <div class="field">
+                <div class="slider-read"><label>FM / wobble</label><span class="num" id="vFm"></span></div>
+                <input type="range" id="sFm" min="0" max="1" step="0.01" />
+              </div>
+              <div class="field">
+                <div class="slider-read"><label>Pan depth</label><span class="num" id="vPanDepth"></span></div>
+                <input type="range" id="sPanDepth" min="0" max="1" step="0.01" />
+              </div>
+            </div>
+          </div>
+
+          <div class="section">
+            <h3 class="section-title">Curve editor</h3>
+            <div class="curve-wrap">
+              <div class="curve-tabs">
+                <button class="curve-tab active" data-curve="pitchCurve">PITCH</button>
+                <button class="curve-tab" data-curve="volumeCurve">VOLUME</button>
+                <button class="curve-tab" data-curve="filterCurve">FILTER</button>
+                <button class="curve-tab" data-curve="panCurve">PAN</button>
+              </div>
+              <canvas id="curveCanvas" width="980" height="330"></canvas>
+              <div class="curve-readout" id="curveReadout">click/drag · double click add · right click delete</div>
+            </div>
+            <div class="hint" style="margin-top:8px">
+              Krzywa działa jak edytor levels: X to czas sampla, Y to parametr. Dla pitch środek oznacza bazową wysokość; góra podbija, dół obniża. Volume idzie od ciszy do maksimum. Filter zmienia odcięcie filtra. Pan przesuwa dźwięk lewo/prawo.
+            </div>
+          </div>
+
+          <div class="section">
+            <h3 class="section-title">Preview waveform</h3>
+            <canvas class="scope" id="scopeCanvas" width="1000" height="118"></canvas>
+          </div>
+        </div>
+      </main>
+    </div>
+  </section>
+
+  <section id="composerView" class="hidden">
+    <div class="grid wide">
+      <main class="panel">
+        <div class="panel-head">
+          <div class="panel-title">Tune / drone / pulse composer</div>
+          <div class="row">
+            <button class="btn" id="btnAddLayer">ADD LAYER</button>
+            <button class="btn cyan" id="btnPlayProject">PLAY</button>
+            <button class="btn danger" id="btnStopProject">STOP</button>
+            <button class="btn yellow" id="btnExportWav">EXPORT WAV</button>
+            <button class="btn primary" id="btnExportMp3">EXPORT MP3</button>
+          </div>
+        </div>
+        <div class="panel-body">
+          <div class="section">
+            <div class="form-grid">
+              <div class="field">
+                <label>Nazwa kawałka</label>
+                <input type="text" id="pName" />
+              </div>
+              <div class="field">
+                <div class="slider-read"><label>BPM</label><span class="num" id="vBpm"></span></div>
+                <input type="range" id="pBpm" min="45" max="220" step="1" />
+              </div>
+              <div class="field">
+                <div class="slider-read"><label>Długość w taktach</label><span class="num" id="vBars"></span></div>
+                <input type="range" id="pBars" min="4" max="128" step="1" />
+              </div>
+              <div class="field">
+                <div class="slider-read"><label>Master</label><span class="num" id="vMaster"></span></div>
+                <input type="range" id="pMaster" min="0" max="1" step="0.01" />
+              </div>
+            </div>
+          </div>
+
+          <div class="section">
+            <h3 class="section-title">Arrangement map</h3>
+            <div class="timeline"><canvas id="timelineCanvas" width="1280" height="170"></canvas></div>
+            <div class="hint" style="margin-top:8px">
+              Pattern: <b>x</b> = hit, <b>X</b> = accent, <b>-</b> = pauza, cyfry <b>0–9</b> = nuty skali minorowej jako pitch-offset. Mode <b>drone</b> trzyma dźwięk przez długość loopa. Mode <b>pulse</b> odpala sample rytmicznie. Mode <b>tune</b> traktuje cyfry jako melodię.
+            </div>
+          </div>
+
+          <div class="section">
+            <div class="row" style="justify-content:space-between; margin-bottom:10px">
+              <h3 class="section-title" style="margin:0">Layers</h3>
+              <div class="row">
+                <span class="pill" id="projectStats">—</span>
+                <span class="pill">localStorage autosave</span>
+              </div>
+            </div>
+            <div class="layers" id="layers"></div>
+          </div>
+
+          <div class="section">
+            <div class="meter"><div id="renderMeter"></div></div>
+            <div class="hint" style="margin-top:8px">
+              MP3 wymaga załadowania biblioteki lamejs z CDN. Jeśli strona jest offline albo CDN nie dojdzie, działa eksport WAV. Sam projekt i sample są zwykłym JSON-em w localStorage.
+            </div>
+          </div>
+        </div>
+      </main>
+    </div>
+  </section>
+</div>
+
+<input type="file" id="importFile" accept="application/json" class="hidden" />
+
+<div class="modal-back hidden" id="addLayerModal">
+  <div class="modal">
+    <div class="panel-head">
+      <div class="panel-title">Add layer</div>
+      <button class="btn small" id="btnCloseAddLayer">CLOSE</button>
+    </div>
+    <div class="panel-body">
+      <div class="form-grid two">
+        <div class="field">
+          <label>Sample config</label>
+          <select id="addLayerSample"></select>
+        </div>
+        <div class="field">
+          <label>Mode</label>
+          <select id="addLayerMode">
+            <option value="pulse">pulse · rytmiczne odpalenia</option>
+            <option value="tune">tune · cyfry jako melodia</option>
+            <option value="drone">drone · długi ciągły dźwięk</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Nazwa warstwy</label>
+          <input type="text" id="addLayerName" placeholder="np. Bass pulse / Lead tune / Drone bed" />
+        </div>
+        <div class="field">
+          <label>Pattern startowy</label>
+          <input type="text" id="addLayerPattern" />
+        </div>
+        <div class="field">
+          <label>Start bar</label>
+          <input type="number" id="addLayerStart" min="0" step="0.25" value="0" />
+        </div>
+        <div class="field">
+          <label>Loop bars</label>
+          <input type="number" id="addLayerLoop" min="0.25" step="0.25" value="2" />
+        </div>
+        <div class="field">
+          <label>Rounds</label>
+          <input type="number" id="addLayerRounds" min="1" step="1" value="16" />
+        </div>
+        <div class="field">
+          <label>Velocity</label>
+          <input type="number" id="addLayerVelocity" min="0" max="1.5" step="0.01" value="0.82" />
+        </div>
+      </div>
+      <div class="hint" style="margin-top:12px">
+        Wybierasz sample z biblioteki configów zapisanych w localStorage. Ręczne wpisywanie zostaje tylko w nazwie warstwy; identyfikator sampla jest brany z listy, więc nie trzeba zgadywać nazw ani ID.
+      </div>
+      <div class="row" style="justify-content:flex-end; margin-top:16px">
+        <button class="btn" id="btnCancelAddLayer">CANCEL</button>
+        <button class="btn primary" id="btnConfirmAddLayer">ADD SELECTED SAMPLE</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/lamejs@1.2.1/lame.min.js"></script>
+<script>
+'use strict';
+
+const SAMPLE_STORE = 'tronball.musiclab.samples.v1';
+const PROJECT_STORE = 'tronball.musiclab.project.v1';
+const SCALE_MINOR = [0, 2, 3, 5, 7, 8, 10, 12, 14, 15];
+const SAMPLE_RATE = 44100;
+
+let audioCtx = null;
+let liveNodes = [];
+let samples = [];
+let currentId = null;
+let activeCurve = 'pitchCurve';
+let draggingPoint = -1;
+let hoverPoint = -1;
+let lastPreviewBuffer = null;
+let project = null;
+
+function uid(prefix) {
+  return prefix + '_' + Math.random().toString(36).slice(2, 10) + '_' + Date.now().toString(36);
+}
+function clamp(v, a, b) { return Math.max(a, Math.min(b, v)); }
+function lerp(a, b, t) { return a + (b - a) * t; }
+function smooth(t) { return t * t * (3 - 2 * t); }
+function deepClone(o) { return JSON.parse(JSON.stringify(o)); }
+function nowName(prefix) { return prefix + ' ' + new Date().toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit', second: '2-digit' }); }
+
+function defaultSample(name = 'Pulse sample') {
+  return {
+    id: uid('sample'),
+    name,
+    osc: 'sawtooth',
+    baseFreq: 144,
+    duration: 0.72,
+    volume: 0.55,
+    pitchDepth: 18,
+    filterFreq: 5200,
+    filterQ: 1.2,
+    drive: 0.16,
+    noise: 0.05,
+    fm: 0.08,
+    panDepth: 0.18,
+    pitchCurve: [[0,0.50],[0.18,0.72],[0.55,0.47],[1,0.42]],
+    volumeCurve: [[0,0.00],[0.05,1.00],[0.42,0.72],[0.82,0.36],[1,0.00]],
+    filterCurve: [[0,0.90],[0.36,0.76],[0.75,0.38],[1,0.18]],
+    panCurve: [[0,0.50],[0.33,0.60],[0.66,0.40],[1,0.50]],
+  };
+}
+
+function defaultDroneSample() {
+  const s = defaultSample('Warm drone');
+  s.osc = 'triangle';
+  s.baseFreq = 72;
+  s.duration = 4.0;
+  s.volume = 0.42;
+  s.pitchDepth = 7;
+  s.filterFreq = 1600;
+  s.filterQ = 3.2;
+  s.drive = 0.08;
+  s.noise = 0.02;
+  s.fm = 0.22;
+  s.panDepth = 0.28;
+  s.pitchCurve = [[0,0.48],[0.28,0.52],[0.58,0.44],[1,0.51]];
+  s.volumeCurve = [[0,0.00],[0.12,0.72],[0.82,0.66],[1,0.00]];
+  s.filterCurve = [[0,0.35],[0.45,0.55],[1,0.32]];
+  s.panCurve = [[0,0.35],[0.5,0.65],[1,0.40]];
+  return s;
+}
+
+function defaultProject() {
+  return {
+    name: 'TRON pulse sketch',
+    bpm: 124,
+    bars: 32,
+    master: 0.85,
+    layers: []
+  };
+}
+
+function defaultLayer(sampleId, mode = 'pulse') {
+  return {
+    id: uid('layer'),
+    name: mode.toUpperCase(),
+    sampleId,
+    mode,
+    enabled: true,
+    startBar: 0,
+    loopBars: mode === 'drone' ? 8 : 2,
+    rounds: mode === 'drone' ? 4 : 16,
+    pattern: mode === 'tune' ? '0--2--3--5--7---' : mode === 'drone' ? 'x' : 'x---x---x-x---x-',
+    velocity: mode === 'drone' ? 0.50 : 0.82,
+    pitch: 0,
+    roundPitch: mode === 'tune' ? 1 : 0,
+    roundVolume: mode === 'drone' ? -0.015 : 0,
+    drift: mode === 'drone' ? 0.22 : 0.04
+  };
+}
+
+function loadState() {
+  try { samples = JSON.parse(localStorage.getItem(SAMPLE_STORE) || '[]'); } catch { samples = []; }
+  if (!Array.isArray(samples) || samples.length === 0) {
+    const a = defaultSample('Yellow ribbon pulse');
+    const b = defaultDroneSample();
+    const c = defaultSample('Kick blip');
+    c.osc = 'sine'; c.baseFreq = 58; c.duration = 0.34; c.pitchDepth = 28; c.volume = 0.8; c.drive = 0.28; c.noise = 0.12;
+    c.pitchCurve = [[0,0.92],[0.16,0.48],[1,0.22]];
+    c.volumeCurve = [[0,0],[0.02,1],[0.25,0.48],[1,0]];
+    c.filterCurve = [[0,0.75],[1,0.18]];
+    samples = [a, b, c];
+    saveSamples();
+  }
+  try { project = JSON.parse(localStorage.getItem(PROJECT_STORE) || 'null'); } catch { project = null; }
+  if (!project || !Array.isArray(project.layers)) {
+    project = defaultProject();
+    project.layers.push(defaultLayer(samples[1].id, 'drone'));
+    project.layers.push(defaultLayer(samples[2].id, 'pulse'));
+    project.layers.push(defaultLayer(samples[0].id, 'tune'));
+    saveProject();
+  }
+  currentId = samples[0].id;
+}
+function saveSamples() { localStorage.setItem(SAMPLE_STORE, JSON.stringify(samples)); }
+function saveProject() { localStorage.setItem(PROJECT_STORE, JSON.stringify(project)); drawTimeline(); }
+function currentSample() { return samples.find(s => s.id === currentId) || samples[0]; }
+function findSample(id) { return samples.find(s => s.id === id) || samples[0]; }
+
+function toast(msg) {
+  const root = document.getElementById('toast');
+  const el = document.createElement('div');
+  el.className = 'msg';
+  el.textContent = msg;
+  root.appendChild(el);
+  setTimeout(() => { el.style.opacity = '0'; el.style.transform = 'translateY(6px)'; }, 2800);
+  setTimeout(() => el.remove(), 3400);
+}
+
+function ensureAudio() {
+  if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: SAMPLE_RATE });
+  if (audioCtx.state === 'suspended') audioCtx.resume();
+  return audioCtx;
+}
+
+// ------------------------------
+// Curve model
+// ------------------------------
+function sortedCurve(points) {
+  return points.slice().sort((a, b) => a[0] - b[0]).map(p => [clamp(+p[0],0,1), clamp(+p[1],0,1)]);
+}
+function evalCurve(points, x) {
+  const p = sortedCurve(points);
+  if (!p.length) return 0.5;
+  if (x <= p[0][0]) return p[0][1];
+  if (x >= p[p.length - 1][0]) return p[p.length - 1][1];
+  for (let i = 0; i < p.length - 1; i++) {
+    const a = p[i], b = p[i + 1];
+    if (x >= a[0] && x <= b[0]) {
+      const t = smooth((x - a[0]) / Math.max(0.0001, b[0] - a[0]));
+      return lerp(a[1], b[1], t);
+    }
+  }
+  return p[p.length - 1][1];
+}
+function setCurvePoint(cfg, curveName, idx, x, y) {
+  const points = cfg[curveName];
+  const isEnd = idx === 0 || idx === points.length - 1;
+  points[idx][0] = isEnd ? points[idx][0] : clamp(x, 0, 1);
+  points[idx][1] = clamp(y, 0, 1);
+  cfg[curveName] = sortedCurve(points);
+}
+
+// ------------------------------
+// Audio synthesis
+// ------------------------------
+function makeDistortionCurve(amount) {
+  const n = 2048;
+  const curve = new Float32Array(n);
+  const k = amount * 520;
+  for (let i = 0; i < n; i++) {
+    const x = (i * 2) / n - 1;
+    curve[i] = ((3 + k) * x * 20 * Math.PI / 180) / (Math.PI + k * Math.abs(x));
+  }
+  return curve;
+}
+function scheduleParam(param, t0, dur, points, mapper, steps = 96) {
+  for (let i = 0; i <= steps; i++) {
+    const n = i / steps;
+    const v = mapper(evalCurve(points, n), n);
+    const t = t0 + n * dur;
+    if (i === 0) param.setValueAtTime(v, t);
+    else param.linearRampToValueAtTime(v, t);
+  }
+}
+function createNoiseBuffer(ctx, duration) {
+  const len = Math.max(1, Math.ceil(duration * ctx.sampleRate));
+  const buf = ctx.createBuffer(1, len, ctx.sampleRate);
+  const d = buf.getChannelData(0);
+  for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * 0.65;
+  return buf;
+}
+function renderVoice(ctx, destination, cfg, start, opt = {}) {
+  const duration = Math.max(0.03, opt.duration || cfg.duration || 0.5);
+  const pitchShift = opt.pitch || 0;
+  const velocity = opt.velocity == null ? 1 : opt.velocity;
+  const drift = opt.drift || 0;
+  const forceDrone = !!opt.drone;
+
+  const out = ctx.createGain();
+  out.gain.setValueAtTime(0.0001, start);
+  const pan = ctx.createStereoPanner ? ctx.createStereoPanner() : null;
+  const filter = ctx.createBiquadFilter();
+  const drive = ctx.createWaveShaper();
+  const preGain = ctx.createGain();
+
+  filter.type = 'lowpass';
+  filter.Q.setValueAtTime(cfg.filterQ || 1, start);
+  drive.curve = makeDistortionCurve(cfg.drive || 0);
+  drive.oversample = '4x';
+  preGain.gain.setValueAtTime(0.72, start);
+
+  const osc = ctx.createOscillator();
+  osc.type = cfg.osc || 'sine';
+  const base = Math.max(10, cfg.baseFreq || 220) * Math.pow(2, pitchShift / 12);
+  const pitchDepth = cfg.pitchDepth || 0;
+  scheduleParam(osc.frequency, start, duration, cfg.pitchCurve, (y, n) => {
+    const curveSemis = (y - 0.5) * 2 * pitchDepth;
+    const driftSemis = Math.sin(n * Math.PI * 2) * drift * 2;
+    const fmSemis = Math.sin((start + n * duration) * (5.2 + (cfg.fm || 0) * 18)) * (cfg.fm || 0) * 2.5;
+    return clamp(base * Math.pow(2, (curveSemis + driftSemis + fmSemis) / 12), 8, 18000);
+  }, 128);
+
+  scheduleParam(filter.frequency, start, duration, cfg.filterCurve, (y) => {
+    const low = 80;
+    const high = Math.max(low + 10, cfg.filterFreq || 8000);
+    return low * Math.pow(high / low, clamp(y,0,1));
+  }, 96);
+
+  scheduleParam(out.gain, start, duration, cfg.volumeCurve, (y) => {
+    const keep = forceDrone ? Math.max(0.10, y) : y;
+    return clamp((cfg.volume || 0.5) * velocity * keep, 0.0001, 1.4);
+  }, 128);
+  out.gain.linearRampToValueAtTime(0.0001, start + duration + 0.015);
+
+  if (pan) {
+    scheduleParam(pan.pan, start, duration, cfg.panCurve, (y) => (y - 0.5) * 2 * (cfg.panDepth || 0), 64);
+  }
+
+  osc.connect(preGain);
+  preGain.connect(drive);
+  drive.connect(filter);
+  if (pan) { filter.connect(pan); pan.connect(out); }
+  else { filter.connect(out); }
+
+  if ((cfg.noise || 0) > 0.001) {
+    const noise = ctx.createBufferSource();
+    const ng = ctx.createGain();
+    noise.buffer = createNoiseBuffer(ctx, duration);
+    ng.gain.setValueAtTime((cfg.noise || 0) * velocity * 0.22, start);
+    ng.gain.exponentialRampToValueAtTime(0.0001, start + duration);
+    noise.connect(ng);
+    ng.connect(filter);
+    noise.start(start);
+    noise.stop(start + duration + 0.02);
+  }
+
+  out.connect(destination);
+  osc.start(start);
+  osc.stop(start + duration + 0.02);
+  return out;
+}
+
+function renderProjectInto(ctx, destination, proj) {
+  const barSec = 4 * 60 / proj.bpm;
+  const totalSec = proj.bars * barSec;
+  const master = ctx.createGain();
+  master.gain.value = proj.master == null ? 0.85 : proj.master;
+  master.connect(destination);
+
+  for (const layer of proj.layers) {
+    if (!layer.enabled) continue;
+    const cfg = findSample(layer.sampleId);
+    if (!cfg) continue;
+    const loopSec = Math.max(0.125, layer.loopBars * barSec);
+    const startSec = Math.max(0, layer.startBar * barSec);
+    const rounds = Math.max(1, Math.floor(layer.rounds || 1));
+    const pattern = String(layer.pattern || 'x').replace(/\s+/g, '') || 'x';
+
+    for (let r = 0; r < rounds; r++) {
+      const roundStart = startSec + r * loopSec;
+      if (roundStart >= totalSec) break;
+      const roundPitch = (layer.pitch || 0) + r * (layer.roundPitch || 0);
+      const roundVel = clamp((layer.velocity == null ? 1 : layer.velocity) + r * (layer.roundVolume || 0), 0, 1.4);
+      const roundDrift = (layer.drift || 0) * (1 + r * 0.025);
+
+      if (layer.mode === 'drone') {
+        const dur = Math.min(loopSec, totalSec - roundStart);
+        renderVoice(ctx, master, cfg, roundStart, {
+          duration: dur,
+          pitch: roundPitch,
+          velocity: roundVel,
+          drift: roundDrift,
+          drone: true
+        });
+        continue;
+      }
+
+      const stepSec = loopSec / pattern.length;
+      for (let i = 0; i < pattern.length; i++) {
+        const ch = pattern[i];
+        if (ch === '-' || ch === '_' || ch === '.') continue;
+        const t = roundStart + i * stepSec;
+        if (t >= totalSec) continue;
+        let localPitch = roundPitch;
+        let vel = roundVel;
+        if (ch === 'X') vel *= 1.25;
+        if (/\d/.test(ch) && layer.mode === 'tune') localPitch += SCALE_MINOR[parseInt(ch,10)] || 0;
+        renderVoice(ctx, master, cfg, t, {
+          pitch: localPitch,
+          velocity: vel,
+          drift: roundDrift
+        });
+      }
+    }
+  }
+  return totalSec;
+}
+
+async function renderPreviewBuffer(cfg) {
+  const ctx = new OfflineAudioContext(2, Math.ceil((cfg.duration + 0.06) * SAMPLE_RATE), SAMPLE_RATE);
+  renderVoice(ctx, ctx.destination, cfg, 0.02);
+  return await ctx.startRendering();
+}
+async function playSample() {
+  const cfg = readSampleForm();
+  const ctx = ensureAudio();
+  renderVoice(ctx, ctx.destination, cfg, ctx.currentTime + 0.04);
+  lastPreviewBuffer = await renderPreviewBuffer(cfg);
+  drawScope();
+}
+async function playProject() {
+  stopProject();
+  const ctx = ensureAudio();
+  const dest = ctx.destination;
+  renderProjectInto(ctx, dest, project);
+  toast('Odtwarzam projekt z aktualnych warstw.');
+}
+function stopProject() {
+  if (audioCtx) {
+    try { audioCtx.close(); } catch {}
+    audioCtx = null;
+  }
+}
+async function renderProjectBuffer() {
+  const barSec = 4 * 60 / project.bpm;
+  const totalSec = project.bars * barSec;
+  const ctx = new OfflineAudioContext(2, Math.ceil((totalSec + 0.2) * SAMPLE_RATE), SAMPLE_RATE);
+  renderProjectInto(ctx, ctx.destination, project);
+  setMeter(12);
+  const buf = await ctx.startRendering();
+  setMeter(70);
+  return buf;
+}
+
+// ------------------------------
+// Export codecs
+// ------------------------------
+function audioBufferToWav(buffer) {
+  const numChannels = buffer.numberOfChannels;
+  const sampleRate = buffer.sampleRate;
+  const length = buffer.length * numChannels * 2 + 44;
+  const ab = new ArrayBuffer(length);
+  const view = new DataView(ab);
+  function writeStr(offset, str) { for (let i = 0; i < str.length; i++) view.setUint8(offset + i, str.charCodeAt(i)); }
+  let pos = 0;
+  writeStr(pos, 'RIFF'); pos += 4;
+  view.setUint32(pos, length - 8, true); pos += 4;
+  writeStr(pos, 'WAVE'); pos += 4;
+  writeStr(pos, 'fmt '); pos += 4;
+  view.setUint32(pos, 16, true); pos += 4;
+  view.setUint16(pos, 1, true); pos += 2;
+  view.setUint16(pos, numChannels, true); pos += 2;
+  view.setUint32(pos, sampleRate, true); pos += 4;
+  view.setUint32(pos, sampleRate * numChannels * 2, true); pos += 4;
+  view.setUint16(pos, numChannels * 2, true); pos += 2;
+  view.setUint16(pos, 16, true); pos += 2;
+  writeStr(pos, 'data'); pos += 4;
+  view.setUint32(pos, length - pos - 4, true); pos += 4;
+  for (let i = 0; i < buffer.length; i++) {
+    for (let ch = 0; ch < numChannels; ch++) {
+      const s = clamp(buffer.getChannelData(ch)[i], -1, 1);
+      view.setInt16(pos, s < 0 ? s * 0x8000 : s * 0x7fff, true);
+      pos += 2;
+    }
+  }
+  return new Blob([ab], { type: 'audio/wav' });
+}
+function floatTo16BitPcm(float32) {
+  const out = new Int16Array(float32.length);
+  for (let i = 0; i < float32.length; i++) {
+    const s = clamp(float32[i], -1, 1);
+    out[i] = s < 0 ? s * 0x8000 : s * 0x7fff;
+  }
+  return out;
+}
+function audioBufferToMp3(buffer, kbps = 192) {
+  if (!window.lamejs || !window.lamejs.Mp3Encoder) {
+    throw new Error('lamejs nie jest dostępne. MP3 wymaga połączenia z CDN albo lokalnego dołączenia lame.min.js.');
+  }
+  const left = floatTo16BitPcm(buffer.getChannelData(0));
+  const right = buffer.numberOfChannels > 1 ? floatTo16BitPcm(buffer.getChannelData(1)) : left;
+  const encoder = new lamejs.Mp3Encoder(2, buffer.sampleRate, kbps);
+  const block = 1152;
+  const chunks = [];
+  for (let i = 0; i < left.length; i += block) {
+    const l = left.subarray(i, i + block);
+    const r = right.subarray(i, i + block);
+    const mp3 = encoder.encodeBuffer(l, r);
+    if (mp3.length) chunks.push(mp3);
+  }
+  const end = encoder.flush();
+  if (end.length) chunks.push(end);
+  return new Blob(chunks, { type: 'audio/mpeg' });
+}
+function downloadBlob(blob, filename) {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+}
+function safeFilename(s, ext) {
+  return String(s || 'tronball-track').toLowerCase().replace(/[^a-z0-9ąćęłńóśźż_-]+/gi, '-').replace(/-+/g, '-').replace(/^-|-$/g, '') + ext;
+}
+async function exportWav() {
+  try {
+    const buf = await renderProjectBuffer();
+    const blob = audioBufferToWav(buf);
+    setMeter(100);
+    downloadBlob(blob, safeFilename(project.name, '.wav'));
+    toast('WAV wyeksportowany.');
+    setTimeout(() => setMeter(0), 700);
+  } catch (e) { toast('Błąd eksportu WAV: ' + e.message); setMeter(0); }
+}
+async function exportMp3() {
+  try {
+    const buf = await renderProjectBuffer();
+    setMeter(82);
+    const blob = audioBufferToMp3(buf, 192);
+    setMeter(100);
+    downloadBlob(blob, safeFilename(project.name, '.mp3'));
+    toast('MP3 wyeksportowany.');
+    setTimeout(() => setMeter(0), 700);
+  } catch (e) { toast('Błąd eksportu MP3: ' + e.message); setMeter(0); }
+}
+function setMeter(v) { document.getElementById('renderMeter').style.width = clamp(v, 0, 100) + '%'; }
+
+// ------------------------------
+// UI: sample form
+// ------------------------------
+const sampleBindings = [
+  ['sName','name','text', v => v], ['sOsc','osc','select', v => v],
+  ['sFreq','baseFreq','number', v => +v], ['sDuration','duration','number', v => +v],
+  ['sVolume','volume','number', v => +v], ['sPitchDepth','pitchDepth','number', v => +v],
+  ['sFilter','filterFreq','number', v => +v], ['sQ','filterQ','number', v => +v],
+  ['sDrive','drive','number', v => +v], ['sNoise','noise','number', v => +v],
+  ['sFm','fm','number', v => +v], ['sPanDepth','panDepth','number', v => +v],
+];
+function bindSampleInputs() {
+  for (const [id] of sampleBindings) {
+    document.getElementById(id).addEventListener('input', () => {
+      const cfg = readSampleForm();
+      Object.assign(currentSample(), cfg);
+      updateSampleReadouts();
+      saveSamples();
+      renderSampleList();
+      drawCurve();
+      drawScope();
+    });
+  }
+}
+function loadSampleForm(cfg) {
+  document.getElementById('sName').value = cfg.name;
+  document.getElementById('sOsc').value = cfg.osc;
+  document.getElementById('sFreq').value = cfg.baseFreq;
+  document.getElementById('sDuration').value = cfg.duration;
+  document.getElementById('sVolume').value = cfg.volume;
+  document.getElementById('sPitchDepth').value = cfg.pitchDepth;
+  document.getElementById('sFilter').value = cfg.filterFreq;
+  document.getElementById('sQ').value = cfg.filterQ;
+  document.getElementById('sDrive').value = cfg.drive;
+  document.getElementById('sNoise').value = cfg.noise;
+  document.getElementById('sFm').value = cfg.fm;
+  document.getElementById('sPanDepth').value = cfg.panDepth;
+  updateSampleReadouts();
+  drawCurve();
+  renderSampleList();
+  drawScope();
+}
+function readSampleForm() {
+  const base = deepClone(currentSample());
+  for (const [id, key, type, parse] of sampleBindings) base[key] = parse(document.getElementById(id).value);
+  return base;
+}
+function updateSampleReadouts() {
+  document.getElementById('vFreq').textContent = (+document.getElementById('sFreq').value).toFixed(0) + ' Hz';
+  document.getElementById('vDuration').textContent = (+document.getElementById('sDuration').value).toFixed(2) + ' s';
+  document.getElementById('vVolume').textContent = (+document.getElementById('sVolume').value).toFixed(2);
+  document.getElementById('vPitchDepth').textContent = (+document.getElementById('sPitchDepth').value).toFixed(0) + ' st';
+  document.getElementById('vFilter').textContent = (+document.getElementById('sFilter').value).toFixed(0) + ' Hz';
+  document.getElementById('vQ').textContent = (+document.getElementById('sQ').value).toFixed(1);
+  document.getElementById('vDrive').textContent = (+document.getElementById('sDrive').value).toFixed(2);
+  document.getElementById('vNoise').textContent = (+document.getElementById('sNoise').value).toFixed(2);
+  document.getElementById('vFm').textContent = (+document.getElementById('sFm').value).toFixed(2);
+  document.getElementById('vPanDepth').textContent = (+document.getElementById('sPanDepth').value).toFixed(2);
+}
+function renderSampleList() {
+  refreshAddLayerSampleSelect(currentId);
+  const root = document.getElementById('sampleList');
+  root.innerHTML = '';
+  for (const s of samples) {
+    const el = document.createElement('div');
+    el.className = 'sample-item' + (s.id === currentId ? ' active' : '');
+    el.innerHTML = `<div><div class="sample-name"></div><div class="sample-meta"></div></div><button class="btn small cyan">LOAD</button>`;
+    el.querySelector('.sample-name').textContent = s.name;
+    el.querySelector('.sample-meta').textContent = `${s.osc} · ${Math.round(s.baseFreq)}Hz · ${(+s.duration).toFixed(2)}s`;
+    el.querySelector('button').addEventListener('click', () => { currentId = s.id; loadSampleForm(s); });
+    root.appendChild(el);
+  }
+}
+function newSample() {
+  const s = defaultSample(nowName('Sample'));
+  samples.unshift(s);
+  currentId = s.id;
+  saveSamples();
+  loadSampleForm(s);
+  renderLayerEditor();
+  toast('Dodano nowy config sampla.');
+}
+function saveCurrentSample() {
+  const cfg = readSampleForm();
+  const idx = samples.findIndex(s => s.id === currentId);
+  if (idx >= 0) samples[idx] = cfg;
+  saveSamples();
+  renderSampleList();
+  renderLayerEditor();
+  toast('Sample config zapisany w localStorage.');
+}
+function duplicateSample() {
+  const s = deepClone(readSampleForm());
+  s.id = uid('sample');
+  s.name += ' copy';
+  samples.unshift(s);
+  currentId = s.id;
+  saveSamples();
+  loadSampleForm(s);
+  renderLayerEditor();
+}
+function deleteSample() {
+  if (samples.length <= 1) { toast('Zostawiam minimum jeden sample.'); return; }
+  const idx = samples.findIndex(s => s.id === currentId);
+  if (idx >= 0) samples.splice(idx, 1);
+  currentId = samples[0].id;
+  saveSamples();
+  loadSampleForm(samples[0]);
+  renderLayerEditor();
+}
+
+// ------------------------------
+// Canvas: curve + scope + timeline
+// ------------------------------
+const curveCanvas = document.getElementById('curveCanvas');
+const curveCtx = curveCanvas.getContext('2d');
+function resizeCanvases() {
+  for (const canvas of [curveCanvas, document.getElementById('scopeCanvas'), document.getElementById('timelineCanvas')]) {
+    const rect = canvas.getBoundingClientRect();
+    const dpr = Math.min(devicePixelRatio || 1, 2);
+    canvas.width = Math.max(320, Math.floor(rect.width * dpr));
+    canvas.height = Math.max(100, Math.floor(rect.height * dpr));
+  }
+  drawCurve(); drawScope(); drawTimeline();
+}
+function curveToCanvas(p) {
+  const pad = 28;
+  return [pad + p[0] * (curveCanvas.width - pad * 2), pad + (1 - p[1]) * (curveCanvas.height - pad * 2)];
+}
+function canvasToCurve(x, y) {
+  const pad = 28;
+  return [clamp((x - pad) / (curveCanvas.width - pad * 2), 0, 1), clamp(1 - (y - pad) / (curveCanvas.height - pad * 2), 0, 1)];
+}
+function pointerPos(e, canvas) {
+  const rect = canvas.getBoundingClientRect();
+  const sx = canvas.width / rect.width;
+  const sy = canvas.height / rect.height;
+  return [(e.clientX - rect.left) * sx, (e.clientY - rect.top) * sy];
+}
+function drawCurve() {
+  const cfg = currentSample();
+  if (!cfg) return;
+  const ctx = curveCtx, w = curveCanvas.width, h = curveCanvas.height;
+  ctx.clearRect(0,0,w,h);
+  ctx.fillStyle = '#07030a'; ctx.fillRect(0,0,w,h);
+  const pad = 28;
+  ctx.strokeStyle = 'rgba(255,255,255,0.07)'; ctx.lineWidth = 1;
+  for (let i = 0; i <= 10; i++) {
+    const x = pad + i * (w - pad*2) / 10;
+    const y = pad + i * (h - pad*2) / 10;
+    ctx.beginPath(); ctx.moveTo(x,pad); ctx.lineTo(x,h-pad); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(pad,y); ctx.lineTo(w-pad,y); ctx.stroke();
+  }
+  ctx.strokeStyle = 'rgba(255,122,24,0.35)'; ctx.lineWidth = 1;
+  ctx.strokeRect(pad, pad, w-pad*2, h-pad*2);
+
+  const points = sortedCurve(cfg[activeCurve]);
+  const grad = ctx.createLinearGradient(pad,0,w-pad,0);
+  grad.addColorStop(0, '#ff7a18'); grad.addColorStop(0.5, '#fff04c'); grad.addColorStop(1, '#27d7ff');
+  ctx.strokeStyle = grad; ctx.lineWidth = 4; ctx.shadowColor = 'rgba(255,122,24,0.55)'; ctx.shadowBlur = 12;
+  ctx.beginPath();
+  for (let i = 0; i <= 240; i++) {
+    const n = i / 240;
+    const yv = evalCurve(points, n);
+    const x = pad + n * (w - pad*2);
+    const y = pad + (1 - yv) * (h - pad*2);
+    if (i === 0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+  }
+  ctx.stroke(); ctx.shadowBlur = 0;
+
+  points.forEach((p, i) => {
+    const [x,y] = curveToCanvas(p);
+    ctx.fillStyle = i === hoverPoint ? '#ffffff' : (i === 0 || i === points.length-1 ? '#ffb45f' : '#fff04c');
+    ctx.strokeStyle = '#050207'; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.arc(x,y, i === hoverPoint ? 8 : 6, 0, Math.PI*2); ctx.fill(); ctx.stroke();
+  });
+
+  ctx.fillStyle = 'rgba(255,215,166,0.6)'; ctx.font = `${Math.max(11, Math.floor(w/95))}px JetBrains Mono, monospace`;
+  const label = activeCurve.replace('Curve','').toUpperCase();
+  ctx.fillText(label, pad, h - 8);
+}
+function nearestPoint(e) {
+  const cfg = currentSample();
+  const points = sortedCurve(cfg[activeCurve]);
+  const [mx,my] = pointerPos(e, curveCanvas);
+  let best = -1, bd = 9999;
+  points.forEach((p, i) => {
+    const [x,y] = curveToCanvas(p);
+    const d = Math.hypot(mx-x, my-y);
+    if (d < bd) { bd = d; best = i; }
+  });
+  return bd < 18 ? best : -1;
+}
+curveCanvas.addEventListener('mousedown', e => {
+  const idx = nearestPoint(e);
+  if (idx >= 0) draggingPoint = idx;
+});
+curveCanvas.addEventListener('mousemove', e => {
+  const cfg = currentSample();
+  if (!cfg) return;
+  if (draggingPoint >= 0) {
+    const [x,y] = pointerPos(e, curveCanvas);
+    const p = canvasToCurve(x,y);
+    setCurvePoint(cfg, activeCurve, draggingPoint, p[0], p[1]);
+    saveSamples(); drawCurve(); drawScope();
+  } else {
+    hoverPoint = nearestPoint(e);
+    const [x,y] = pointerPos(e, curveCanvas);
+    const p = canvasToCurve(x,y);
+    document.getElementById('curveReadout').textContent = `x ${p[0].toFixed(2)} · y ${p[1].toFixed(2)}`;
+    drawCurve();
+  }
+});
+window.addEventListener('mouseup', () => { draggingPoint = -1; });
+curveCanvas.addEventListener('dblclick', e => {
+  const cfg = currentSample();
+  const [x,y] = pointerPos(e, curveCanvas);
+  const p = canvasToCurve(x,y);
+  cfg[activeCurve].push(p);
+  cfg[activeCurve] = sortedCurve(cfg[activeCurve]);
+  saveSamples(); drawCurve(); drawScope();
+});
+curveCanvas.addEventListener('contextmenu', e => {
+  e.preventDefault();
+  const cfg = currentSample();
+  const idx = nearestPoint(e);
+  if (idx > 0 && idx < cfg[activeCurve].length - 1) {
+    cfg[activeCurve].splice(idx,1);
+    saveSamples(); drawCurve(); drawScope();
+  }
+});
+function drawScope() {
+  const canvas = document.getElementById('scopeCanvas');
+  const ctx = canvas.getContext('2d');
+  const w = canvas.width, h = canvas.height;
+  ctx.clearRect(0,0,w,h);
+  ctx.fillStyle = '#050207'; ctx.fillRect(0,0,w,h);
+  ctx.strokeStyle = 'rgba(255,255,255,0.07)'; ctx.lineWidth = 1;
+  for (let i=1; i<6; i++) { const y=i*h/6; ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(w,y); ctx.stroke(); }
+  if (!lastPreviewBuffer) {
+    ctx.fillStyle = 'rgba(255,215,166,0.45)'; ctx.font = '13px JetBrains Mono, monospace';
+    ctx.fillText('preview sample, żeby zobaczyć waveform', 16, h/2);
+    return;
+  }
+  const data = lastPreviewBuffer.getChannelData(0);
+  ctx.strokeStyle = '#fff04c'; ctx.lineWidth = 2; ctx.shadowColor = 'rgba(255,240,76,0.45)'; ctx.shadowBlur = 10;
+  ctx.beginPath();
+  for (let x=0; x<w; x++) {
+    const i = Math.floor(x / w * data.length);
+    const y = h*0.5 - data[i] * h*0.42;
+    if (x===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+  }
+  ctx.stroke(); ctx.shadowBlur = 0;
+}
+function drawTimeline() {
+  const canvas = document.getElementById('timelineCanvas');
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  const w = canvas.width, h = canvas.height;
+  ctx.clearRect(0,0,w,h);
+  ctx.fillStyle = '#050207'; ctx.fillRect(0,0,w,h);
+  const bars = Math.max(1, project?.bars || 32);
+  const layerCount = Math.max(1, project?.layers.length || 1);
+  ctx.strokeStyle = 'rgba(255,255,255,0.06)'; ctx.lineWidth = 1;
+  for (let b=0; b<=bars; b++) {
+    const x = b / bars * w;
+    ctx.globalAlpha = b % 4 === 0 ? 1 : 0.45;
+    ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,h); ctx.stroke();
+  }
+  ctx.globalAlpha = 1;
+  const rowH = h / layerCount;
+  project.layers.forEach((layer, idx) => {
+    const y = idx * rowH;
+    ctx.fillStyle = idx % 2 ? 'rgba(255,255,255,0.025)' : 'rgba(255,122,24,0.025)';
+    ctx.fillRect(0,y,w,rowH);
+    const start = clamp(layer.startBar / bars, 0, 1) * w;
+    const len = clamp((layer.loopBars * layer.rounds) / bars, 0, 1) * w;
+    const color = layer.mode === 'drone' ? '#27d7ff' : layer.mode === 'tune' ? '#fff04c' : '#ff7a18';
+    ctx.fillStyle = color;
+    ctx.globalAlpha = layer.enabled ? 0.22 : 0.07;
+    ctx.fillRect(start, y + 8, Math.max(2, len), rowH - 16);
+    ctx.globalAlpha = 1;
+    ctx.strokeStyle = color; ctx.lineWidth = 1;
+    ctx.strokeRect(start, y + 8, Math.max(2, len), rowH - 16);
+    ctx.fillStyle = 'rgba(255,215,166,0.75)'; ctx.font = `${Math.max(10, Math.floor(rowH*0.24))}px JetBrains Mono, monospace`;
+    ctx.fillText(layer.name || layer.mode, 10, y + Math.min(rowH - 8, 22));
+  });
+}
+
+// ------------------------------
+// UI: composer
+// ------------------------------
+function bindProjectInputs() {
+  const ids = ['pName','pBpm','pBars','pMaster'];
+  ids.forEach(id => document.getElementById(id).addEventListener('input', () => {
+    project.name = document.getElementById('pName').value;
+    project.bpm = +document.getElementById('pBpm').value;
+    project.bars = +document.getElementById('pBars').value;
+    project.master = +document.getElementById('pMaster').value;
+    updateProjectReadouts(); saveProject(); renderLayerEditor();
+  }));
+}
+function loadProjectForm() {
+  document.getElementById('pName').value = project.name;
+  document.getElementById('pBpm').value = project.bpm;
+  document.getElementById('pBars').value = project.bars;
+  document.getElementById('pMaster').value = project.master;
+  updateProjectReadouts();
+  renderLayerEditor();
+  drawTimeline();
+}
+function updateProjectReadouts() {
+  document.getElementById('vBpm').textContent = project.bpm;
+  document.getElementById('vBars').textContent = project.bars;
+  document.getElementById('vMaster').textContent = (+project.master).toFixed(2);
+  const sec = project.bars * 4 * 60 / project.bpm;
+  document.getElementById('projectStats').textContent = `${project.layers.length} layers · ${sec.toFixed(1)} s`;
+}
+function sampleLabel(s) {
+  if (!s) return '—';
+  return `${s.name} · ${s.osc} · ${Math.round(s.baseFreq)}Hz · ${(+s.duration).toFixed(2)}s`;
+}
+function sampleOptions(selectedId) {
+  return samples.map(s => `<option value="${s.id}" ${s.id === selectedId ? 'selected' : ''}>${escapeHtml(sampleLabel(s))}</option>`).join('');
+}
+function escapeHtml(s) { return String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+function renderLayerEditor() {
+  const root = document.getElementById('layers');
+  root.innerHTML = '';
+  project.layers.forEach((layer, idx) => {
+    const el = document.createElement('div');
+    el.className = 'layer';
+    el.innerHTML = `
+      <div class="layer-head">
+        <div class="row">
+          <button class="btn small ${layer.enabled ? 'primary' : ''}" data-act="toggle">${layer.enabled ? 'ON' : 'OFF'}</button>
+          <div class="layer-title">${idx+1}. ${escapeHtml(layer.name || layer.mode)}</div>
+        </div>
+        <div class="row">
+          <button class="btn small" data-act="up">UP</button>
+          <button class="btn small" data-act="down">DOWN</button>
+          <button class="btn small danger" data-act="delete">DELETE</button>
+        </div>
+      </div>
+      <div class="layer-grid">
+        <div class="field"><label>Nazwa</label><input data-k="name" type="text" value="${escapeHtml(layer.name || '')}"></div>
+        <div class="field"><label>Sample</label><select data-k="sampleId">${sampleOptions(layer.sampleId)}</select></div>
+        <div class="field"><label>Mode</label><select data-k="mode"><option value="pulse">pulse</option><option value="tune">tune</option><option value="drone">drone</option></select></div>
+        <div class="field"><label>Start bar</label><input data-k="startBar" type="number" min="0" step="0.25" value="${layer.startBar}"></div>
+        <div class="field"><label>Loop bars</label><input data-k="loopBars" type="number" min="0.25" step="0.25" value="${layer.loopBars}"></div>
+        <div class="field"><label>Rounds</label><input data-k="rounds" type="number" min="1" step="1" value="${layer.rounds}"></div>
+      </div>
+      <div class="layer-grid bottom">
+        <div class="field"><label>Pattern</label><input data-k="pattern" type="text" value="${escapeHtml(layer.pattern)}"></div>
+        <div class="field"><label>Velocity</label><input data-k="velocity" type="number" min="0" max="1.5" step="0.01" value="${layer.velocity}"></div>
+        <div class="field"><label>Pitch</label><input data-k="pitch" type="number" step="1" value="${layer.pitch}"></div>
+        <div class="field"><label>Round pitch</label><input data-k="roundPitch" type="number" step="0.25" value="${layer.roundPitch}"></div>
+        <div class="field"><label>Round volume</label><input data-k="roundVolume" type="number" step="0.005" value="${layer.roundVolume}"></div>
+        <div class="field"><label>Drift</label><input data-k="drift" type="number" min="0" step="0.01" value="${layer.drift}"></div>
+      </div>`;
+    el.querySelector('[data-k="mode"]').value = layer.mode;
+    el.querySelectorAll('input, select').forEach(inp => {
+      inp.addEventListener('input', () => {
+        const k = inp.dataset.k;
+        const numeric = ['startBar','loopBars','rounds','velocity','pitch','roundPitch','roundVolume','drift'];
+        layer[k] = numeric.includes(k) ? +inp.value : inp.value;
+        saveProject(); updateProjectReadouts(); drawTimeline();
+      });
+    });
+    el.querySelector('[data-act="toggle"]').addEventListener('click', () => { layer.enabled = !layer.enabled; saveProject(); renderLayerEditor(); });
+    el.querySelector('[data-act="delete"]').addEventListener('click', () => { project.layers.splice(idx,1); saveProject(); renderLayerEditor(); updateProjectReadouts(); });
+    el.querySelector('[data-act="up"]').addEventListener('click', () => { if (idx>0) { [project.layers[idx-1],project.layers[idx]]=[project.layers[idx],project.layers[idx-1]]; saveProject(); renderLayerEditor(); } });
+    el.querySelector('[data-act="down"]').addEventListener('click', () => { if (idx<project.layers.length-1) { [project.layers[idx+1],project.layers[idx]]=[project.layers[idx],project.layers[idx+1]]; saveProject(); renderLayerEditor(); } });
+    root.appendChild(el);
+  });
+}
+function defaultPatternForMode(mode) {
+  if (mode === 'tune') return '0--2--3--5--7---';
+  if (mode === 'drone') return 'x';
+  return 'x---x---x-x---x-';
+}
+function defaultLoopForMode(mode) { return mode === 'drone' ? 8 : 2; }
+function defaultRoundsForMode(mode) { return mode === 'drone' ? 4 : 16; }
+function defaultVelocityForMode(mode) { return mode === 'drone' ? 0.50 : 0.82; }
+function refreshAddLayerSampleSelect(selectedId) {
+  const sel = document.getElementById('addLayerSample');
+  if (!sel) return;
+  sel.innerHTML = sampleOptions(selectedId || samples[0]?.id);
+}
+function syncAddLayerDefaultsFromMode() {
+  const mode = document.getElementById('addLayerMode').value;
+  const sample = findSample(document.getElementById('addLayerSample').value);
+  document.getElementById('addLayerPattern').value = defaultPatternForMode(mode);
+  document.getElementById('addLayerLoop').value = defaultLoopForMode(mode);
+  document.getElementById('addLayerRounds').value = defaultRoundsForMode(mode);
+  document.getElementById('addLayerVelocity').value = defaultVelocityForMode(mode).toFixed(2);
+  if (!document.getElementById('addLayerName').value.trim()) {
+    const stem = mode === 'drone' ? 'Drone' : mode === 'tune' ? 'Tune' : 'Pulse';
+    document.getElementById('addLayerName').value = `${stem} · ${sample?.name || 'sample'}`;
+  }
+}
+function openAddLayerModal() {
+  if (!samples.length) { toast('Najpierw utwórz przynajmniej jeden sample.'); return; }
+  const mode = project.layers.length % 3 === 0 ? 'drone' : project.layers.length % 3 === 1 ? 'pulse' : 'tune';
+  refreshAddLayerSampleSelect(currentId || samples[0].id);
+  document.getElementById('addLayerMode').value = mode;
+  document.getElementById('addLayerName').value = '';
+  document.getElementById('addLayerStart').value = 0;
+  syncAddLayerDefaultsFromMode();
+  document.getElementById('addLayerModal').classList.remove('hidden');
+}
+function closeAddLayerModal() {
+  document.getElementById('addLayerModal').classList.add('hidden');
+}
+function addLayerFromModal() {
+  const sampleId = document.getElementById('addLayerSample').value;
+  const mode = document.getElementById('addLayerMode').value;
+  const layer = defaultLayer(sampleId, mode);
+  layer.name = document.getElementById('addLayerName').value.trim() || `${mode.toUpperCase()} · ${findSample(sampleId)?.name || 'sample'}`;
+  layer.pattern = document.getElementById('addLayerPattern').value.trim() || defaultPatternForMode(mode);
+  layer.startBar = +document.getElementById('addLayerStart').value || 0;
+  layer.loopBars = Math.max(0.25, +document.getElementById('addLayerLoop').value || defaultLoopForMode(mode));
+  layer.rounds = Math.max(1, Math.floor(+document.getElementById('addLayerRounds').value || defaultRoundsForMode(mode)));
+  layer.velocity = clamp(+document.getElementById('addLayerVelocity').value || defaultVelocityForMode(mode), 0, 1.5);
+  project.layers.push(layer);
+  saveProject();
+  renderLayerEditor();
+  updateProjectReadouts();
+  closeAddLayerModal();
+  toast('Dodano warstwę z wybranym samplem: ' + (findSample(sampleId)?.name || sampleId));
+}
+function addLayer() {
+  openAddLayerModal();
+}
+
+// ------------------------------
+// Project import/export
+// ------------------------------
+function exportJson() {
+  const payload = { version: 1, exportedAt: new Date().toISOString(), samples, project };
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+  downloadBlob(blob, safeFilename(project.name || 'musiclab-project', '.json'));
+}
+function importJsonFile(file) {
+  const reader = new FileReader();
+  reader.onload = () => {
+    try {
+      const data = JSON.parse(reader.result);
+      if (!Array.isArray(data.samples) || !data.project) throw new Error('To nie wygląda jak eksport Music Lab.');
+      samples = data.samples;
+      project = data.project;
+      currentId = samples[0]?.id || null;
+      saveSamples(); saveProject();
+      loadSampleForm(currentSample()); loadProjectForm();
+      toast('Projekt zaimportowany.');
+    } catch (e) { toast('Import nieudany: ' + e.message); }
+  };
+  reader.readAsText(file);
+}
+function rebuildDefaultState() {
+  const a = defaultSample('Yellow ribbon pulse');
+  const b = defaultDroneSample();
+  const c = defaultSample('Kick blip');
+  c.osc = 'sine'; c.baseFreq = 58; c.duration = 0.34; c.pitchDepth = 28; c.volume = 0.8; c.drive = 0.28; c.noise = 0.12;
+  c.pitchCurve = [[0,0.92],[0.16,0.48],[1,0.22]];
+  c.volumeCurve = [[0,0],[0.02,1],[0.25,0.48],[1,0]];
+  c.filterCurve = [[0,0.75],[1,0.18]];
+  samples = [a, b, c];
+  project = defaultProject();
+  project.layers.push(defaultLayer(b.id, 'drone'));
+  project.layers.push(defaultLayer(c.id, 'pulse'));
+  project.layers.push(defaultLayer(a.id, 'tune'));
+  currentId = a.id;
+  saveSamples();
+  saveProject();
+}
+function factoryReset() {
+  if (!confirm('Przywrócić domyślne sample, projekt, warstwy i ustawienia? Aktualne dane w localStorage zostaną nadpisane.')) return;
+  stopProject();
+  rebuildDefaultState();
+  loadSampleForm(currentSample());
+  loadProjectForm();
+  refreshAddLayerSampleSelect(currentId);
+  toast('Przywrócono domyślne sample, projekt i warstwy.');
+}
+
+// ------------------------------
+// Wiring
+// ------------------------------
+function init() {
+  loadState();
+  bindSampleInputs();
+  bindProjectInputs();
+  loadSampleForm(currentSample());
+  loadProjectForm();
+  resizeCanvases();
+
+  document.querySelectorAll('.tab').forEach(btn => btn.addEventListener('click', () => {
+    document.querySelectorAll('.tab').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById('sampleView').classList.toggle('hidden', btn.dataset.view !== 'sampleView');
+    document.getElementById('composerView').classList.toggle('hidden', btn.dataset.view !== 'composerView');
+    setTimeout(resizeCanvases, 40);
+  }));
+  document.querySelectorAll('.curve-tab').forEach(btn => btn.addEventListener('click', () => {
+    document.querySelectorAll('.curve-tab').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    activeCurve = btn.dataset.curve;
+    drawCurve();
+  }));
+
+  document.getElementById('btnNewSample').addEventListener('click', newSample);
+  document.getElementById('btnPreviewSample').addEventListener('click', playSample);
+  document.getElementById('btnSaveSample').addEventListener('click', saveCurrentSample);
+  document.getElementById('btnDuplicateSample').addEventListener('click', duplicateSample);
+  document.getElementById('btnDeleteSample').addEventListener('click', deleteSample);
+  document.getElementById('btnAddLayer').addEventListener('click', addLayer);
+  document.getElementById('btnCloseAddLayer').addEventListener('click', closeAddLayerModal);
+  document.getElementById('btnCancelAddLayer').addEventListener('click', closeAddLayerModal);
+  document.getElementById('btnConfirmAddLayer').addEventListener('click', addLayerFromModal);
+  document.getElementById('addLayerMode').addEventListener('change', () => {
+    document.getElementById('addLayerName').value = '';
+    syncAddLayerDefaultsFromMode();
+  });
+  document.getElementById('addLayerSample').addEventListener('change', () => {
+    document.getElementById('addLayerName').value = '';
+    syncAddLayerDefaultsFromMode();
+  });
+  document.getElementById('addLayerModal').addEventListener('click', e => { if (e.target.id === 'addLayerModal') closeAddLayerModal(); });
+  document.getElementById('btnPlayProject').addEventListener('click', playProject);
+  document.getElementById('btnStopProject').addEventListener('click', stopProject);
+  document.getElementById('btnExportWav').addEventListener('click', exportWav);
+  document.getElementById('btnExportMp3').addEventListener('click', exportMp3);
+  document.getElementById('btnExportProject').addEventListener('click', exportJson);
+  document.getElementById('btnImportProject').addEventListener('click', () => document.getElementById('importFile').click());
+  document.getElementById('importFile').addEventListener('change', e => { if (e.target.files[0]) importJsonFile(e.target.files[0]); e.target.value=''; });
+  document.getElementById('btnFactoryReset').addEventListener('click', factoryReset);
+
+  window.addEventListener('resize', resizeCanvases);
+  window.addEventListener('keydown', e => {
+    if (e.target.matches('input, textarea, select')) return;
+    if (e.code === 'Space') { e.preventDefault(); playSample(); }
+    if (e.key === 'Escape') stopProject();
+  });
+}
+
+init();
+</script>
+</body>
+</html>

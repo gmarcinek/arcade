@@ -1,0 +1,1194 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TRON·BALL — Audio Visualizer v2</title>
+<style>
+  :root {
+    --bg: #050208;
+    --orange: #ff6a00;
+    --orange-soft: #ffaa55;
+    --cyan: #00d4ff;
+    --cyan-soft: #6ae2ff;
+    --magenta: #ff2a8a;
+    --dim: #553311;
+    --dim2: #2a1a08;
+    --panel-bg: rgba(5, 2, 8, 0.55);
+    --panel-border: rgba(255, 106, 0, 0.35);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    width: 100%; height: 100%;
+    background: var(--bg); color: var(--orange);
+    font-family: 'JetBrains Mono', 'Courier New', monospace;
+    overflow: hidden;
+    user-select: none;
+  }
+  #canvas-host { position: fixed; inset: 0; z-index: 1; }
+
+  /* ---------- HUD ---------- */
+  #hud {
+    position: fixed; inset: 0; z-index: 10;
+    pointer-events: none;
+    display: flex; flex-direction: column; justify-content: space-between;
+    padding: 22px;
+  }
+  #hud .row { display: flex; justify-content: space-between; align-items: flex-start; gap: 14px; }
+
+  .panel {
+    background: var(--panel-bg);
+    border: 1px solid var(--panel-border);
+    backdrop-filter: blur(6px);
+    padding: 12px 14px;
+    pointer-events: auto;
+  }
+  .label {
+    font-size: 9px; letter-spacing: 0.25em;
+    text-transform: uppercase; color: var(--dim);
+    margin-bottom: 4px;
+  }
+  .label.inline { display: inline; margin-bottom: 0; }
+  .value { font-size: 18px; color: var(--orange); }
+
+  #eq { display: flex; gap: 6px; align-items: flex-end; height: 56px; }
+  .bar-col { width: 22px; display: flex; flex-direction: column; align-items: center; height: 100%; }
+  .bar-track { width: 100%; flex: 1; background: rgba(255, 106, 0, 0.08); position: relative; }
+  .bar-fill {
+    position: absolute; bottom: 0; left: 0; width: 100%;
+    background: linear-gradient(to top, var(--orange) 0%, var(--orange-soft) 60%, var(--cyan) 100%);
+    box-shadow: 0 0 8px var(--orange);
+    transition: height 0.05s linear;
+  }
+  .bar-label { font-size: 8px; color: var(--dim); margin-top: 4px; letter-spacing: 0.2em; }
+
+  /* ---------- START SCREEN ---------- */
+  #start-screen {
+    position: fixed; inset: 0; z-index: 100;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    background: radial-gradient(ellipse at center, rgba(15,8,20,0.85), rgba(0,0,0,1));
+    gap: 28px; padding: 24px; text-align: center;
+  }
+  #start-screen.hidden { display: none; }
+  h1 {
+    font-size: 30px; letter-spacing: 0.32em; font-weight: 700;
+    background: linear-gradient(90deg, var(--orange), var(--cyan));
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+  }
+  .sub { color: var(--dim); letter-spacing: 0.22em; font-size: 10px; }
+
+  button.primary, button.secondary, button.ghost {
+    background: transparent; cursor: pointer; font-family: inherit;
+    text-transform: uppercase; letter-spacing: 0.22em;
+    transition: all 0.18s; pointer-events: auto;
+  }
+  button.primary {
+    border: 2px solid var(--orange); color: var(--orange);
+    padding: 16px 32px; font-size: 13px;
+  }
+  button.primary:hover { background: var(--orange); color: var(--bg); box-shadow: 0 0 30px var(--orange); }
+  button.secondary {
+    border: 1px solid var(--cyan); color: var(--cyan);
+    padding: 10px 18px; font-size: 10px;
+  }
+  button.secondary:hover { background: var(--cyan); color: var(--bg); box-shadow: 0 0 16px var(--cyan); }
+  button.ghost {
+    border: 1px solid var(--dim); color: var(--orange-soft);
+    padding: 8px 14px; font-size: 10px;
+  }
+  button.ghost:hover { border-color: var(--orange); color: var(--orange); }
+
+  .controls { display: flex; gap: 12px; flex-wrap: wrap; justify-content: center; }
+  #info {
+    font-size: 10px; color: var(--orange-soft);
+    max-width: 540px; line-height: 1.7; opacity: 0.7;
+  }
+  #info b { color: var(--orange); }
+  #info kbd {
+    border: 1px solid var(--dim); padding: 1px 5px; font-size: 9px;
+    color: var(--orange); border-radius: 2px;
+  }
+
+  #beat-light {
+    width: 12px; height: 12px; border-radius: 50%;
+    background: var(--dim2); display: inline-block; margin-right: 8px;
+    transition: background 0.04s, box-shadow 0.04s;
+    vertical-align: middle;
+  }
+  #beat-light.on { background: var(--orange); box-shadow: 0 0 14px var(--orange); }
+
+  #error {
+    position: fixed; bottom: 22px; left: 22px; right: 22px;
+    background: rgba(60, 5, 15, 0.92); border: 1px solid #ff2a4a;
+    color: #ffaaaa; padding: 12px 14px; font-size: 11px;
+    z-index: 50; display: none; line-height: 1.5;
+    pointer-events: auto;
+  }
+  #error.show { display: block; }
+
+  input[type="file"] { display: none; }
+  .stat-line { display: flex; gap: 18px; align-items: center; flex-wrap: wrap; }
+
+  /* ---------- SETTINGS PANEL ---------- */
+  #gear {
+    position: fixed; top: 22px; right: 22px; z-index: 20;
+    width: 36px; height: 36px;
+    background: var(--panel-bg); border: 1px solid var(--panel-border);
+    color: var(--orange); cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    backdrop-filter: blur(6px);
+    pointer-events: auto;
+    font-size: 18px;
+    transition: all 0.2s;
+  }
+  #gear:hover { color: var(--cyan); border-color: var(--cyan); }
+
+  #settings-panel {
+    position: fixed; top: 0; right: 0; bottom: 0;
+    width: 340px; max-width: 90vw;
+    background: rgba(8, 4, 12, 0.92);
+    border-left: 1px solid var(--panel-border);
+    backdrop-filter: blur(10px);
+    z-index: 30; padding: 24px 22px;
+    transform: translateX(100%);
+    transition: transform 0.25s ease;
+    overflow-y: auto;
+    pointer-events: auto;
+  }
+  #settings-panel.open { transform: translateX(0); }
+  #settings-panel h2 {
+    font-size: 11px; letter-spacing: 0.3em; color: var(--orange);
+    margin-bottom: 18px; text-transform: uppercase;
+  }
+  #settings-panel h3 {
+    font-size: 9px; letter-spacing: 0.25em; color: var(--dim);
+    margin: 18px 0 8px; text-transform: uppercase;
+  }
+  .setting-row {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 6px 0; gap: 10px; font-size: 11px; color: var(--orange-soft);
+  }
+  .setting-row label { flex: 1; }
+  .setting-row input[type="range"] {
+    flex: 1.4; -webkit-appearance: none; appearance: none;
+    height: 3px; background: rgba(255,106,0,0.2); outline: none; border-radius: 2px;
+  }
+  .setting-row input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none; appearance: none;
+    width: 12px; height: 12px; border-radius: 50%;
+    background: var(--orange); cursor: pointer;
+    box-shadow: 0 0 8px var(--orange);
+  }
+  .setting-row input[type="range"]::-moz-range-thumb {
+    width: 12px; height: 12px; border-radius: 50%;
+    background: var(--orange); cursor: pointer; border: none;
+    box-shadow: 0 0 8px var(--orange);
+  }
+  .setting-row .num {
+    min-width: 38px; text-align: right; color: var(--cyan); font-size: 10px;
+  }
+  /* toggle switch */
+  .toggle {
+    position: relative; width: 32px; height: 16px;
+    background: rgba(255,106,0,0.15);
+    border: 1px solid var(--dim);
+    cursor: pointer; transition: all 0.18s;
+    flex-shrink: 0;
+  }
+  .toggle::after {
+    content: ''; position: absolute; top: 1px; left: 1px;
+    width: 12px; height: 12px;
+    background: var(--dim); transition: all 0.18s;
+  }
+  .toggle.on { background: rgba(255,106,0,0.3); border-color: var(--orange); }
+  .toggle.on::after { left: 17px; background: var(--orange); box-shadow: 0 0 6px var(--orange); }
+
+  #settings-panel hr {
+    border: none; border-top: 1px solid var(--dim2); margin: 14px 0;
+  }
+  .settings-actions { display: flex; gap: 8px; margin-top: 18px; }
+  .settings-actions button { flex: 1; }
+
+  /* boost segments at bottom-left, like the game screenshot */
+  .corner-tag {
+    font-size: 8px; letter-spacing: 0.3em; color: var(--dim);
+  }
+</style>
+</head>
+<body>
+
+<div id="canvas-host"></div>
+
+<div id="start-screen">
+  <h1>TRON · BALL · AUDIO</h1>
+  <div class="sub">SYSTEM AUDIO METADATA VISUALIZER · v2</div>
+  <div id="info">
+    Capture system audio (e.g. a browser tab playing music) and watch the tunnel react in real time.
+    The neon boundary is a scrolling waveform of the music's history. Tiles flash on bass hits,
+    cyan strips pulse, lava-lamp colors shift with chroma. Audio stays local — only metadata
+    drives the visuals.
+    <br><br>
+    <b>For tab capture:</b> click START, choose a tab playing audio, tick "Share tab audio".
+    If <code>getDisplayMedia</code> is blocked (common in iframes), use LOAD AUDIO FILE instead.
+    <br><br>
+    Keys in-session: <kbd>S</kbd> settings · <kbd>Esc</kbd> stop · drag &amp; drop audio anywhere
+  </div>
+  <div class="controls">
+    <button class="primary" id="btn-start">START CAPTURE</button>
+    <button class="secondary" id="btn-file">LOAD AUDIO FILE</button>
+    <input type="file" id="file-input" accept="audio/*">
+  </div>
+</div>
+
+<div id="hud">
+  <div class="row">
+    <div class="panel">
+      <div class="label">BANDS · LOW / MID / HIGH</div>
+      <div id="eq">
+        <div class="bar-col">
+          <div class="bar-track"><div class="bar-fill" id="bar-low" style="height:0%"></div></div>
+          <div class="bar-label">LOW</div>
+        </div>
+        <div class="bar-col">
+          <div class="bar-track"><div class="bar-fill" id="bar-mid" style="height:0%"></div></div>
+          <div class="bar-label">MID</div>
+        </div>
+        <div class="bar-col">
+          <div class="bar-track"><div class="bar-fill" id="bar-high" style="height:0%"></div></div>
+          <div class="bar-label">HIGH</div>
+        </div>
+      </div>
+    </div>
+    <div class="panel" style="text-align:right; min-width: 130px;">
+      <div class="label">BPM</div>
+      <div class="value" id="bpm-val">—</div>
+      <div class="label" style="margin-top:8px">RMS</div>
+      <div class="value" id="rms-val">0.00</div>
+    </div>
+  </div>
+
+  <div class="row">
+    <div class="panel">
+      <div class="stat-line">
+        <span><span id="beat-light"></span><span class="label inline">BEAT</span></span>
+        <span><span class="label inline">ONSETS</span> <span id="onset-count" style="color:var(--orange); margin-left:6px">0</span></span>
+        <span><span class="label inline">SOURCE</span> <span id="src-label" style="color:var(--cyan); margin-left:6px">—</span></span>
+        <span><span class="label inline">SPD</span> <span id="speed-val" style="color:var(--cyan); margin-left:6px">0</span></span>
+      </div>
+    </div>
+    <div class="panel">
+      <button class="secondary" id="btn-stop">STOP</button>
+    </div>
+  </div>
+</div>
+
+<div id="gear" title="Settings (S)">⚙</div>
+
+<div id="settings-panel">
+  <h2>SETTINGS</h2>
+
+  <h3>Audio Sensitivity</h3>
+  <div class="setting-row">
+    <label>Low gain</label>
+    <input type="range" min="0.3" max="3" step="0.05" id="s-sensLow">
+    <span class="num" id="s-sensLow-v"></span>
+  </div>
+  <div class="setting-row">
+    <label>Mid gain</label>
+    <input type="range" min="0.3" max="3" step="0.05" id="s-sensMid">
+    <span class="num" id="s-sensMid-v"></span>
+  </div>
+  <div class="setting-row">
+    <label>High gain</label>
+    <input type="range" min="0.3" max="3" step="0.05" id="s-sensHigh">
+    <span class="num" id="s-sensHigh-v"></span>
+  </div>
+
+  <h3>Camera</h3>
+  <div class="setting-row">
+    <label>Speed multiplier</label>
+    <input type="range" min="0.3" max="3" step="0.05" id="s-camSpeed">
+    <span class="num" id="s-camSpeed-v"></span>
+  </div>
+  <div class="setting-row">
+    <label>FOV</label>
+    <input type="range" min="50" max="100" step="1" id="s-fov">
+    <span class="num" id="s-fov-v"></span>
+  </div>
+  <div class="setting-row">
+    <label>Onset shake</label>
+    <div class="toggle" id="s-shake"></div>
+  </div>
+
+  <h3>Visual Layers</h3>
+  <div class="setting-row">
+    <label>Audio-driven boundary</label>
+    <div class="toggle" id="s-audioBoundary"></div>
+  </div>
+  <div class="setting-row">
+    <label>Lava lamp</label>
+    <div class="toggle" id="s-lava"></div>
+  </div>
+  <div class="setting-row">
+    <label>Amber tile panels</label>
+    <div class="toggle" id="s-tiles"></div>
+  </div>
+  <div class="setting-row">
+    <label>Cyan running strips</label>
+    <div class="toggle" id="s-strips"></div>
+  </div>
+  <div class="setting-row">
+    <label>Floor chevrons</label>
+    <div class="toggle" id="s-chevrons"></div>
+  </div>
+  <div class="setting-row">
+    <label>Ring seams</label>
+    <div class="toggle" id="s-rings"></div>
+  </div>
+
+  <h3>Tunnel</h3>
+  <div class="setting-row">
+    <label>Boundary audio depth</label>
+    <input type="range" min="0" max="1" step="0.02" id="s-boundDepth">
+    <span class="num" id="s-boundDepth-v"></span>
+  </div>
+  <div class="setting-row">
+    <label>Lava intensity</label>
+    <input type="range" min="0" max="2" step="0.05" id="s-lavaInt">
+    <span class="num" id="s-lavaInt-v"></span>
+  </div>
+
+  <hr>
+  <div class="settings-actions">
+    <button class="ghost" id="btn-reset">RESET</button>
+    <button class="ghost" id="btn-close-settings">CLOSE</button>
+  </div>
+  <p style="margin-top: 16px; font-size: 9px; color: var(--dim); line-height: 1.6">
+    All settings persist in localStorage. Run from <code>file://</code> or any local server
+    to keep them between sessions.
+  </p>
+</div>
+
+<div id="error"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+'use strict';
+
+// ============================================================
+// SETTINGS · localStorage
+// ============================================================
+const SETTINGS_KEY = 'tronball-audio-viz-v2';
+const DEFAULT_SETTINGS = {
+  sensLow: 1.0,
+  sensMid: 1.0,
+  sensHigh: 1.0,
+  camSpeed: 1.0,
+  fov: 72,
+  shake: true,
+  audioBoundary: true,
+  lava: true,
+  tiles: true,
+  strips: true,
+  chevrons: true,
+  rings: true,
+  boundDepth: 0.55,
+  lavaInt: 1.0,
+};
+
+function loadSettings() {
+  try {
+    const raw = localStorage.getItem(SETTINGS_KEY);
+    if (!raw) return { ...DEFAULT_SETTINGS };
+    return { ...DEFAULT_SETTINGS, ...JSON.parse(raw) };
+  } catch (e) {
+    return { ...DEFAULT_SETTINGS };
+  }
+}
+function saveSettings() {
+  try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings)); }
+  catch (e) { console.warn('Failed to save settings:', e); }
+}
+let settings = loadSettings();
+
+// ============================================================
+// AUDIO ANALYSIS LAYER
+// ============================================================
+let audioCtx = null;
+let analyser = null;
+let source = null;
+let mediaStream = null;
+let audioElement = null;
+let prevSpectrum = null;
+
+const fluxHistory = [];
+let beatTimes = [];
+let lastBeatTime = 0;
+let lastOnsetT = 0;
+let onsetCount = 0;
+let bpm = 0;
+
+// Smoothed values (single source of truth equivalent)
+let smLow = 0, smMid = 0, smHigh = 0, smRms = 0;
+let beatPulse = 0;
+let onsetPulse = 0;
+let sourceLabel = '—';
+let chromaR = 0.55, chromaG = 0.2, chromaB = 0.5; // smoothed chroma tint
+
+let freqBuf, timeBuf;
+
+async function startDisplayCapture() {
+  hideError();
+  try {
+    mediaStream = await navigator.mediaDevices.getDisplayMedia({
+      video: true,
+      audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false }
+    });
+    const audioTracks = mediaStream.getAudioTracks();
+    if (audioTracks.length === 0) {
+      mediaStream.getTracks().forEach(t => t.stop());
+      mediaStream = null;
+      throw new Error('No audio track. When sharing, pick a TAB and tick "Share tab audio".');
+    }
+    mediaStream.getVideoTracks().forEach(t => t.stop());
+
+    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    if (audioCtx.state === 'suspended') await audioCtx.resume();
+
+    source = audioCtx.createMediaStreamSource(mediaStream);
+    analyser = audioCtx.createAnalyser();
+    analyser.fftSize = 2048;
+    analyser.smoothingTimeConstant = 0.5;
+    source.connect(analyser);
+    // INTENTIONALLY no connect to destination → no feedback loop
+
+    sourceLabel = 'SYSTEM';
+    onCaptureStarted();
+  } catch (err) {
+    showError(
+      'Display capture failed: ' + err.message +
+      ' · This often happens in embedded iframes (Permissions Policy). ' +
+      'Use LOAD AUDIO FILE — works everywhere.'
+    );
+  }
+}
+
+async function loadFile(file) {
+  hideError();
+  if (audioElement) {
+    audioElement.pause();
+    audioElement.src = '';
+  }
+  audioElement = new Audio();
+  audioElement.src = URL.createObjectURL(file);
+  audioElement.loop = true;
+  audioElement.volume = 0.85;
+  audioElement.crossOrigin = 'anonymous';
+
+  if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  if (audioCtx.state === 'suspended') await audioCtx.resume();
+
+  source = audioCtx.createMediaElementSource(audioElement);
+  analyser = audioCtx.createAnalyser();
+  analyser.fftSize = 2048;
+  analyser.smoothingTimeConstant = 0.5;
+  source.connect(analyser);
+  source.connect(audioCtx.destination); // we want to hear the file
+
+  await audioElement.play();
+  sourceLabel = 'FILE · ' + (file.name.length > 18 ? file.name.slice(0, 15) + '…' : file.name);
+  onCaptureStarted();
+}
+
+function stopAll() {
+  if (mediaStream) { mediaStream.getTracks().forEach(t => t.stop()); mediaStream = null; }
+  if (audioElement) {
+    audioElement.pause();
+    try { URL.revokeObjectURL(audioElement.src); } catch (e) {}
+    audioElement.src = '';
+    audioElement = null;
+  }
+  if (source)   { try { source.disconnect();   } catch (e) {} source = null; }
+  if (analyser) { try { analyser.disconnect(); } catch (e) {} analyser = null; }
+  if (audioCtx && audioCtx.state !== 'closed') {
+    try { audioCtx.close(); } catch (e) {}
+  }
+  audioCtx = null;
+  prevSpectrum = null;
+  fluxHistory.length = 0;
+  beatTimes = [];
+  bpm = 0;
+  onsetCount = 0;
+  sourceLabel = '—';
+  showStartScreen();
+}
+
+function analyzeFrame(dt) {
+  if (!analyser) {
+    smLow *= 0.94; smMid *= 0.94; smHigh *= 0.94; smRms *= 0.94;
+    beatPulse *= 0.85; onsetPulse *= 0.82;
+    return { low: smLow, mid: smMid, high: smHigh, rms: smRms,
+             beatPulse, onsetPulse, isOnset: false, chroma: [0,0,0] };
+  }
+
+  if (!freqBuf || freqBuf.length !== analyser.frequencyBinCount) {
+    freqBuf = new Uint8Array(analyser.frequencyBinCount);
+    timeBuf = new Uint8Array(analyser.fftSize);
+  }
+  analyser.getByteFrequencyData(freqBuf);
+  analyser.getByteTimeDomainData(timeBuf);
+
+  const sr = audioCtx.sampleRate;
+  const binHz = sr / analyser.fftSize;
+
+  // Bands with sensitivity scaling
+  let low = 0, lowN = 0, mid = 0, midN = 0, high = 0, highN = 0;
+  // Chroma: 12 pitch classes
+  const chroma = new Float32Array(12);
+  const A4 = 440;
+  for (let i = 1; i < freqBuf.length; i++) {
+    const hz = i * binHz;
+    const v = freqBuf[i] / 255;
+    if (hz < 200) { low += v; lowN++; }
+    else if (hz < 2000) { mid += v; midN++; }
+    else if (hz < 12000) { high += v; highN++; }
+    // chroma — only reasonable range
+    if (hz > 80 && hz < 5000) {
+      const midi = 12 * Math.log2(hz / A4) + 69;
+      const pc = ((Math.round(midi) % 12) + 12) % 12;
+      chroma[pc] += v;
+    }
+  }
+  low  = (lowN  ? low  / lowN  : 0) * settings.sensLow;
+  mid  = (midN  ? mid  / midN  : 0) * settings.sensMid;
+  high = (highN ? high / highN : 0) * settings.sensHigh;
+
+  // Normalize chroma → 3-axis tint (project 12 onto 3 spectral colors)
+  let cR = 0, cG = 0, cB = 0, cTot = 0;
+  for (let i = 0; i < 12; i++) {
+    const w = chroma[i];
+    cTot += w;
+    // 12 classes mapped around hue circle
+    const h = i / 12;
+    cR += w * (0.5 + 0.5 * Math.cos(2 * Math.PI * h));
+    cG += w * (0.5 + 0.5 * Math.cos(2 * Math.PI * h - 2.094));
+    cB += w * (0.5 + 0.5 * Math.cos(2 * Math.PI * h - 4.188));
+  }
+  if (cTot > 0.0001) { cR /= cTot; cG /= cTot; cB /= cTot; }
+
+  // RMS from time domain
+  let rms = 0;
+  for (let i = 0; i < timeBuf.length; i++) {
+    const s = (timeBuf[i] - 128) / 128;
+    rms += s * s;
+  }
+  rms = Math.sqrt(rms / timeBuf.length);
+
+  // Spectral flux for onset detection
+  let flux = 0;
+  if (prevSpectrum) {
+    for (let i = 0; i < freqBuf.length; i++) {
+      const d = freqBuf[i] - prevSpectrum[i];
+      if (d > 0) flux += d;
+    }
+  }
+  if (!prevSpectrum) prevSpectrum = new Uint8Array(freqBuf.length);
+  prevSpectrum.set(freqBuf);
+
+  fluxHistory.push(flux);
+  if (fluxHistory.length > 43) fluxHistory.shift();
+  let mean = 0;
+  for (let i = 0; i < fluxHistory.length; i++) mean += fluxHistory[i];
+  mean /= fluxHistory.length;
+  let variance = 0;
+  for (let i = 0; i < fluxHistory.length; i++) {
+    const d = fluxHistory[i] - mean;
+    variance += d * d;
+  }
+  variance /= fluxHistory.length;
+  const std = Math.sqrt(variance);
+
+  const now = audioCtx.currentTime;
+  let isOnset = false;
+  if (flux > mean + std * 1.5 && flux > 800 && now - lastOnsetT > 0.07) {
+    isOnset = true;
+    lastOnsetT = now;
+    onsetCount++;
+    onsetPulse = 1.0;
+
+    if (low > 0.22 && now - lastBeatTime > 0.25) {
+      beatTimes.push(now);
+      if (beatTimes.length > 16) beatTimes.shift();
+      lastBeatTime = now;
+      beatPulse = 1.0;
+
+      if (beatTimes.length >= 4) {
+        const intervals = [];
+        for (let i = 1; i < beatTimes.length; i++) {
+          intervals.push(beatTimes[i] - beatTimes[i - 1]);
+        }
+        intervals.sort((a, b) => a - b);
+        const median = intervals[Math.floor(intervals.length / 2)];
+        if (median > 0.2 && median < 1.2) {
+          const newBpm = 60 / median;
+          bpm = bpm === 0 ? newBpm : (bpm * 0.7 + newBpm * 0.3);
+        }
+      }
+    }
+  }
+
+  // Smooth bands
+  const a = 0.32;
+  smLow  = smLow  * (1 - a) + low  * a;
+  smMid  = smMid  * (1 - a) + mid  * a;
+  smHigh = smHigh * (1 - a) + high * a;
+  smRms  = smRms * 0.7 + rms * 0.3;
+
+  // Smooth chroma tint
+  const ca = 0.08;
+  chromaR = chromaR * (1 - ca) + cR * ca;
+  chromaG = chromaG * (1 - ca) + cG * ca;
+  chromaB = chromaB * (1 - ca) + cB * ca;
+
+  beatPulse *= 0.88;
+  onsetPulse *= 0.85;
+
+  return { low: smLow, mid: smMid, high: smHigh, rms: smRms,
+           beatPulse, onsetPulse, isOnset,
+           chroma: [chromaR, chromaG, chromaB] };
+}
+
+// ============================================================
+// THREE.JS — TUNNEL (shadery wzorowane na grze)
+// ============================================================
+const host = document.getElementById('canvas-host');
+const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.setClearColor(0x040106, 1);
+host.appendChild(renderer.domElement);
+
+const scene = new THREE.Scene();
+scene.fog = new THREE.Fog(0x040106, 60, 320);
+
+const camera = new THREE.PerspectiveCamera(settings.fov, window.innerWidth / window.innerHeight, 0.1, 600);
+camera.position.set(0, -3, 0);
+
+const TUNNEL_R = 12;
+const TUNNEL_LEN = 600;
+const tunnelGeo = new THREE.CylinderGeometry(TUNNEL_R, TUNNEL_R, TUNNEL_LEN, 96, 220, true);
+tunnelGeo.rotateX(Math.PI / 2);
+
+// Audio history texture — encodes recent low/mid energy to drive the boundary scroll
+const HISTORY_LEN = 256;
+const historyData = new Uint8Array(HISTORY_LEN * 4); // RGBA so we have multiple channels
+const historyTex = new THREE.DataTexture(historyData, HISTORY_LEN, 1, THREE.RGBAFormat, THREE.UnsignedByteType);
+historyTex.wrapS = THREE.RepeatWrapping;
+historyTex.wrapT = THREE.ClampToEdgeWrapping;
+historyTex.minFilter = THREE.LinearFilter;
+historyTex.magFilter = THREE.LinearFilter;
+historyTex.needsUpdate = true;
+let historyWriteIdx = 0;
+const HIST_METERS_PER_SAMPLE = 1.5; // every sample = 1.5m of tunnel
+
+const tunnelMat = new THREE.ShaderMaterial({
+  side: THREE.BackSide,
+  uniforms: {
+    time:               { value: 0 },
+    uPlayerZ:           { value: 0 },
+    uHistory:           { value: historyTex },
+    uHistoryWriteIdx:   { value: 0 },
+    uHistoryLen:        { value: HISTORY_LEN },
+    uHistMps:           { value: HIST_METERS_PER_SAMPLE },
+    uBass:              { value: 0 },
+    uMid:               { value: 0 },
+    uTreble:            { value: 0 },
+    uOnsetPulse:        { value: 0 },
+    uBeatPulse:         { value: 0 },
+    uMusicEnergy:       { value: 0 },
+    uChromaTint:        { value: new THREE.Vector3(0.55, 0.2, 0.5) },
+    // toggles
+    uAudioBoundary:     { value: settings.audioBoundary ? 1 : 0 },
+    uLava:              { value: settings.lava ? 1 : 0 },
+    uTiles:             { value: settings.tiles ? 1 : 0 },
+    uStrips:            { value: settings.strips ? 1 : 0 },
+    uChevrons:          { value: settings.chevrons ? 1 : 0 },
+    uRings:             { value: settings.rings ? 1 : 0 },
+    // depths
+    uBoundDepth:        { value: settings.boundDepth },
+    uLavaInt:           { value: settings.lavaInt },
+  },
+  vertexShader: `
+    varying vec3 vWorld;
+    void main() {
+      vec4 wp = modelMatrix * vec4(position, 1.0);
+      vWorld = wp.xyz;
+      gl_Position = projectionMatrix * viewMatrix * wp;
+    }
+  `,
+  fragmentShader: `
+    precision highp float;
+
+    uniform float time;
+    uniform float uPlayerZ;
+    uniform sampler2D uHistory;
+    uniform float uHistoryWriteIdx;
+    uniform float uHistoryLen;
+    uniform float uHistMps;
+    uniform float uBass, uMid, uTreble;
+    uniform float uOnsetPulse, uBeatPulse;
+    uniform float uMusicEnergy;
+    uniform vec3  uChromaTint;
+    uniform float uAudioBoundary, uLava, uTiles, uStrips, uChevrons, uRings;
+    uniform float uBoundDepth, uLavaInt;
+
+    varying vec3 vWorld;
+
+    // ---------- helper: sample audio history at given world Z ----------
+    // Encodes scrolling waveform that the camera flies through.
+    vec4 historyAt(float z) {
+      float worldDist = uPlayerZ - z; // positive ahead of camera (z is more negative)
+      float idxF = uHistoryWriteIdx + worldDist / uHistMps;
+      float u = mod(idxF, uHistoryLen) / uHistoryLen;
+      return texture2D(uHistory, vec2(u, 0.5));
+    }
+
+    // ---------- arc half-angle: base + audio modulation (R channel of history) ----------
+    float arcHalfAtZ(float z) {
+      float slow = sin(z * 0.0085);
+      float med  = sin(z * 0.034) * 0.42;
+      float t = clamp((slow + med + 1.42) / 2.84, 0.0, 1.0);
+
+      // Inject audio: scrolling waveform of recent low+mid energy
+      float audio = historyAt(z).r; // 0..1
+      float audioMod = (audio - 0.5) * uBoundDepth * uAudioBoundary;
+      t = clamp(t + audioMod, 0.05, 0.95);
+
+      // Beat boost: boundary swells overall on each beat
+      t = clamp(t + uBeatPulse * 0.08 * uAudioBoundary, 0.05, 0.95);
+
+      return (4.0 + t * 56.0) * 0.05236;
+    }
+
+    void main() {
+      float angle    = atan(vWorld.x, -vWorld.y);
+      float absAngle = abs(angle);
+      float arcH     = arcHalfAtZ(vWorld.z);
+      float inSafe   = step(absAngle, arcH);
+      float edgeDist = abs(absAngle - arcH);
+
+      // Depth fade
+      float dz        = abs(vWorld.z - uPlayerZ);
+      float depthFade = 0.55 + 0.45 * exp(-dz * 0.0095);
+
+      // Cyan element breathing — never sync
+      float cyanGrid  = pow(max(0.0, sin(time * 0.53 + 0.0)), 2.2);
+      float cyanRing  = pow(max(0.0, sin(time * 0.41 + 1.9)), 2.2);
+      float cyanStrip = pow(max(0.0, sin(time * 0.67 + 0.7)), 2.2);
+      float cyanTile2 = pow(max(0.0, sin(time * 0.31 + 3.1)), 2.2);
+      float cyanChev  = pow(max(0.0, sin(time * 0.47 + 5.4)), 2.2);
+
+      // Base colour
+      vec3 col = mix(
+        vec3(0.008, 0.002, 0.001),
+        vec3(0.004, 0.007, 0.015),
+        inSafe
+      );
+
+      float sheen = pow(max(0.0, 1.0 - absAngle * 1.6), 4.0);
+      col += sheen * vec3(0.005, 0.012, 0.022) * inSafe;
+      col *= depthFade;
+
+      // ===========================================================
+      // LAVA LAMP — chroma-tinted, mid-driven intensity
+      // ===========================================================
+      if (uLava > 0.5) {
+        float lv1 =
+            sin(angle * 1.45 + vWorld.z * 0.085 + time * 0.20) * 0.42
+          + sin(angle * 2.30 - vWorld.z * 0.061 + time * 0.13) * 0.31
+          + sin(angle * 0.85 + vWorld.z * 0.039 - time * (0.18 + uMid * 0.4)) * 0.36
+          + sin(angle * 3.55 - vWorld.z * 0.026 - time * 0.10) * 0.22;
+
+        float lv2 =
+            sin(angle * 1.10 - vWorld.z * 0.115 - time * (0.15 + uMid * 0.5)) * 0.38
+          + sin(angle * 2.85 + vWorld.z * 0.052 + time * 0.17) * 0.29
+          + sin(angle * 4.20 - vWorld.z * 0.031 + time * 0.08) * 0.20;
+
+        float lavaRaw1 = lv1 * 0.5 + 0.5;
+        float lavaRaw2 = lv2 * 0.5 + 0.5;
+
+        float lavaBlob1 = smoothstep(0.18, 0.72, lavaRaw1);
+        float lavaBlob2 = smoothstep(0.22, 0.78, lavaRaw2);
+        float lavaHot1  = smoothstep(0.58, 0.92, lavaRaw1);
+        float lavaHot2  = smoothstep(0.62, 0.95, lavaRaw2);
+        float lavaEdge2 = smoothstep(0.28, 0.62, lavaRaw2) * (1.0 - smoothstep(0.80, 0.98, lavaRaw2));
+
+        float lavaPulse = 0.72 + 0.28 * sin(time * 0.23 + 1.3) + uMid * 0.35 + uOnsetPulse * 0.4;
+
+        // Default warm palette + chroma drift
+        vec3 lavaDark = mix(vec3(0.55, 0.10, 0.015), vec3(0.20, 0.40, 0.05), uChromaTint.g * 0.6);
+        vec3 lavaMid  = mix(vec3(0.95, 0.22, 0.025), vec3(0.30, 0.10, 0.55), uChromaTint.b * 0.5);
+        vec3 lavaHot  = mix(vec3(1.00, 0.48, 0.08), vec3(1.00, 0.20, 0.40), uChromaTint.r * 0.4);
+        vec3 lavaMag  = vec3(0.42, 0.035, 0.18);
+
+        vec3 lavaCol =
+            lavaDark * lavaBlob1 * 0.45
+          + lavaMid  * lavaBlob2 * 0.38
+          + lavaHot  * (lavaHot1 + lavaHot2) * 0.32
+          + lavaMag  * lavaEdge2 * 0.22;
+
+        float lavaReadable = 0.60 + 0.40 * pow(max(0.0, 1.0 - absAngle * 0.42), 2.0);
+
+        col += lavaCol * inSafe * depthFade * lavaPulse * lavaReadable * 0.72 * uLavaInt;
+
+        float lavaAmbient = (lavaBlob1 * 0.55 + lavaBlob2 * 0.45);
+        col += vec3(0.42, 0.08, 0.015) * lavaAmbient * inSafe * depthFade * 0.22 * uLavaInt;
+      }
+
+      // ===========================================================
+      // RING SEAMS — pulse on beats
+      // ===========================================================
+      if (uRings > 0.5) {
+        float fineAng = smoothstep(0.91, 1.0, abs(sin(angle * 60.0)));
+        col += fineAng * vec3(0.0, 0.10, 0.20) * (0.15 + inSafe * 0.85) * depthFade * cyanGrid;
+
+        float ringSeam = smoothstep(0.94, 1.0, abs(sin(vWorld.z * 0.7854)));
+        col += ringSeam * vec3(0.0, 0.10, 0.20) * inSafe * depthFade * cyanRing
+             * (1.0 + uBeatPulse * 1.5);
+
+        float ringCoarse = smoothstep(0.91, 1.0, abs(sin(vWorld.z * 0.196)));
+        col += ringCoarse * vec3(0.0, 0.18, 0.34) * inSafe * depthFade * 0.55 * cyanRing
+             * (1.0 + uBeatPulse * 1.0);
+      }
+
+      // ===========================================================
+      // CYAN STRIPS — pulse with bass
+      // ===========================================================
+      if (uStrips > 0.5) {
+        float strip = step(0.984, abs(sin(angle * 4.0)));
+        float pulse = 0.5 + 0.5 * sin(vWorld.z * 0.55 - time * (6.5 + uTreble * 8.0));
+        float bassBoost = 1.0 + uBass * 1.6 + uOnsetPulse * 0.5;
+        col += strip * inSafe * vec3(0.04, 0.75, 0.90) * (0.30 + pulse * 0.50) * depthFade * cyanStrip * bassBoost;
+        col += strip * sheen * inSafe * vec3(0.15, 0.45, 0.75) * 0.18 * depthFade * cyanStrip;
+      }
+
+      // ===========================================================
+      // AMBER PANEL TILES — flash on onsets
+      // ===========================================================
+      if (uTiles > 0.5) {
+        float tileAng = step(0.955, abs(sin(angle * 22.0 + 0.5)));
+        float tileZ   = step(0.920, abs(sin(vWorld.z * 0.85)));
+        float tileBoost = 0.65 + uOnsetPulse * 1.4 + uBass * 0.5;
+        col += tileAng * tileZ * inSafe * vec3(1.0, 0.45, 0.04) * tileBoost * depthFade;
+
+        // cyan tile variant — modulated by treble
+        float tileAng2 = step(0.968, abs(sin(angle * 38.0 + 1.8)));
+        float tileZ2   = step(0.948, abs(sin(vWorld.z * 1.85 - time * (0.11 + uTreble * 0.5))));
+        col += tileAng2 * tileZ2 * inSafe * vec3(0.05, 0.55, 0.80)
+             * (0.38 + uTreble * 0.7) * depthFade * cyanTile2;
+
+        // amber tile soft bloom
+        col += tileAng * tileZ * inSafe * vec3(0.8, 0.22, 0.0) * 0.18 * depthFade
+             * smoothstep(0.0, 1.0, 1.0 - abs(sin(angle * 22.0 + 0.5)) * 12.0 + 11.0);
+      }
+
+      // ===========================================================
+      // FLOOR CHEVRONS — scroll faster with treble
+      // ===========================================================
+      if (uChevrons > 0.5) {
+        float ground = smoothstep(0.55, 0.0, absAngle) * inSafe;
+        float chevSpeed = 5.5 + uTreble * 9.0 + uMid * 4.0;
+        float chev   = abs(sin(vWorld.z * 0.85 - time * chevSpeed));
+        col += ground * step(0.86, chev) * vec3(0.0, 0.60, 0.80) * 0.28 * depthFade * cyanChev
+             * (1.0 + uMid * 0.8);
+      }
+
+      // ===========================================================
+      // DANGER ZONE: dim orange grid + spectrum-shaped flicker
+      // ===========================================================
+      float dangerGrid = smoothstep(0.91, 1.0, abs(sin(angle * 60.0))) * (1.0 - inSafe) * 0.35;
+      col += dangerGrid * vec3(0.30, 0.04, 0.01) * depthFade;
+
+      // History-driven horizontal lines in danger zone (radio noise feel)
+      vec4 hist = historyAt(vWorld.z);
+      float dangerLines = smoothstep(0.94, 1.0, abs(sin(vWorld.z * 0.85))) * (1.0 - inSafe);
+      col += dangerLines * vec3(0.55, 0.12, 0.02) * (0.4 + hist.r * 1.2) * depthFade;
+
+      // ===========================================================
+      // ORANGE BOUNDARY — the centerpiece
+      // ===========================================================
+      float bassBoost = 1.0 + uBass * 1.5 + uOnsetPulse * 0.8;
+
+      col += smoothstep(0.018, 0.0, edgeDist) * vec3(1.0, 0.88, 0.45) * 4.5 * depthFade * bassBoost;
+
+      col += smoothstep(0.18, 0.0, edgeDist)
+           * inSafe * vec3(1.0, 0.38, 0.0) * 1.6 * depthFade * bassBoost;
+
+      col += smoothstep(0.24, 0.0, edgeDist)
+           * (1.0 - inSafe) * vec3(0.8, 0.14, 0.0) * 1.2 * depthFade * bassBoost;
+
+      // Wide bloom layers
+      col += smoothstep(0.55, 0.0, edgeDist) * vec3(0.9, 0.28, 0.0) * 0.28 * depthFade * bassBoost;
+      col += smoothstep(1.10, 0.0, edgeDist) * vec3(0.7, 0.15, 0.0) * 0.10 * depthFade
+           * (1.0 + uOnsetPulse * 0.8);
+
+      // Soft clamp
+      col = min(col, vec3(3.5));
+
+      gl_FragColor = vec4(col, 1.0);
+    }
+  `,
+});
+
+const tunnel = new THREE.Mesh(tunnelGeo, tunnelMat);
+scene.add(tunnel);
+
+// ============================================================
+// STATE & ANIMATION
+// ============================================================
+let cameraZ = 0;
+let cameraSpeed = 8;
+let lastTime = performance.now();
+
+window.addEventListener('resize', () => {
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+});
+
+// HUD refs
+const elBarLow = document.getElementById('bar-low');
+const elBarMid = document.getElementById('bar-mid');
+const elBarHigh = document.getElementById('bar-high');
+const elBpm = document.getElementById('bpm-val');
+const elRms = document.getElementById('rms-val');
+const elBeatLight = document.getElementById('beat-light');
+const elOnsetCount = document.getElementById('onset-count');
+const elSrc = document.getElementById('src-label');
+const elSpeed = document.getElementById('speed-val');
+
+let beatLightTimer = 0;
+
+function animate() {
+  requestAnimationFrame(animate);
+  const now = performance.now();
+  const dt = Math.min(0.05, (now - lastTime) / 1000);
+  lastTime = now;
+
+  const f = analyzeFrame(dt);
+
+  // --- write current audio energy into history ring buffer
+  // R channel: low+mid composite for boundary shape
+  // G channel: bass for danger lines  (kept for future use)
+  // B channel: high for noise variance
+  const composite = Math.min(1, f.low * 0.7 + f.mid * 0.45 + f.beatPulse * 0.25);
+  historyData[historyWriteIdx * 4 + 0] = (composite * 255) | 0;
+  historyData[historyWriteIdx * 4 + 1] = ((f.low * 1.2) > 1 ? 255 : (f.low * 1.2 * 255)) | 0;
+  historyData[historyWriteIdx * 4 + 2] = (Math.min(1, f.high) * 255) | 0;
+  historyData[historyWriteIdx * 4 + 3] = 255;
+  historyWriteIdx = (historyWriteIdx + 1) % HISTORY_LEN;
+  historyTex.needsUpdate = true;
+
+  // --- camera dynamics
+  const targetSpeed = (8 + f.low * 38 + f.rms * 16) * settings.camSpeed;
+  cameraSpeed = cameraSpeed * 0.9 + targetSpeed * 0.1;
+  cameraZ -= cameraSpeed * dt;
+
+  let shakeX = 0, shakeY = 0;
+  if (settings.shake && f.onsetPulse > 0.1) {
+    const sh = f.onsetPulse * 0.22;
+    shakeX = (Math.random() - 0.5) * sh;
+    shakeY = (Math.random() - 0.5) * sh;
+  }
+  camera.position.set(shakeX, -3 + shakeY, cameraZ);
+  camera.lookAt(0, -1.2, cameraZ - 30);
+
+  // Keep tunnel centered around camera
+  tunnel.position.z = cameraZ - TUNNEL_LEN / 2;
+
+  // --- update shader uniforms
+  const u = tunnelMat.uniforms;
+  u.time.value = now / 1000;
+  u.uPlayerZ.value = cameraZ;
+  u.uHistoryWriteIdx.value = historyWriteIdx;
+  u.uBass.value = f.low;
+  u.uMid.value = f.mid;
+  u.uTreble.value = f.high;
+  u.uOnsetPulse.value = f.onsetPulse;
+  u.uBeatPulse.value = f.beatPulse;
+  u.uMusicEnergy.value = f.rms;
+  u.uChromaTint.value.set(f.chroma[0], f.chroma[1], f.chroma[2]);
+  u.uAudioBoundary.value = settings.audioBoundary ? 1 : 0;
+  u.uLava.value = settings.lava ? 1 : 0;
+  u.uTiles.value = settings.tiles ? 1 : 0;
+  u.uStrips.value = settings.strips ? 1 : 0;
+  u.uChevrons.value = settings.chevrons ? 1 : 0;
+  u.uRings.value = settings.rings ? 1 : 0;
+  u.uBoundDepth.value = settings.boundDepth;
+  u.uLavaInt.value = settings.lavaInt;
+
+  // --- HUD
+  elBarLow.style.height  = (Math.min(1, f.low * 1.4) * 100).toFixed(0) + '%';
+  elBarMid.style.height  = (Math.min(1, f.mid * 1.4) * 100).toFixed(0) + '%';
+  elBarHigh.style.height = (Math.min(1, f.high * 1.4) * 100).toFixed(0) + '%';
+  elRms.textContent = f.rms.toFixed(2);
+  elBpm.textContent = bpm > 30 ? bpm.toFixed(1) : '—';
+  elOnsetCount.textContent = onsetCount;
+  elSrc.textContent = sourceLabel;
+  elSpeed.textContent = (cameraSpeed * 3.6).toFixed(0);
+
+  if (f.isOnset && f.low > 0.22) {
+    elBeatLight.classList.add('on');
+    beatLightTimer = 0.12;
+  } else {
+    beatLightTimer -= dt;
+    if (beatLightTimer <= 0) elBeatLight.classList.remove('on');
+  }
+
+  renderer.render(scene, camera);
+}
+animate();
+
+// ============================================================
+// UI — start screen, settings panel
+// ============================================================
+const startScreen = document.getElementById('start-screen');
+const settingsPanel = document.getElementById('settings-panel');
+
+function hideStartScreen() { startScreen.classList.add('hidden'); }
+function showStartScreen() { startScreen.classList.remove('hidden'); }
+function onCaptureStarted() { hideStartScreen(); }
+
+function toggleSettings() { settingsPanel.classList.toggle('open'); }
+function closeSettings() { settingsPanel.classList.remove('open'); }
+
+document.getElementById('btn-start').addEventListener('click', startDisplayCapture);
+document.getElementById('btn-stop').addEventListener('click', stopAll);
+document.getElementById('btn-file').addEventListener('click', () =>
+  document.getElementById('file-input').click()
+);
+document.getElementById('file-input').addEventListener('change', async (e) => {
+  const file = e.target.files[0];
+  if (file) await loadFile(file);
+  e.target.value = '';
+});
+document.getElementById('gear').addEventListener('click', toggleSettings);
+document.getElementById('btn-close-settings').addEventListener('click', closeSettings);
+
+// Settings wiring
+function wireSlider(id, key, formatter) {
+  const inp = document.getElementById(id);
+  const out = document.getElementById(id + '-v');
+  inp.value = settings[key];
+  out.textContent = formatter(settings[key]);
+  inp.addEventListener('input', () => {
+    settings[key] = parseFloat(inp.value);
+    out.textContent = formatter(settings[key]);
+    saveSettings();
+  });
+}
+function wireToggle(id, key) {
+  const el = document.getElementById(id);
+  if (settings[key]) el.classList.add('on');
+  el.addEventListener('click', () => {
+    settings[key] = !settings[key];
+    el.classList.toggle('on', settings[key]);
+    saveSettings();
+  });
+}
+
+wireSlider('s-sensLow',    'sensLow',    v => v.toFixed(2));
+wireSlider('s-sensMid',    'sensMid',    v => v.toFixed(2));
+wireSlider('s-sensHigh',   'sensHigh',   v => v.toFixed(2));
+wireSlider('s-camSpeed',   'camSpeed',   v => v.toFixed(2));
+wireSlider('s-fov',        'fov',        v => v.toFixed(0) + '°');
+wireSlider('s-boundDepth', 'boundDepth', v => v.toFixed(2));
+wireSlider('s-lavaInt',    'lavaInt',    v => v.toFixed(2));
+
+// FOV is camera-side
+document.getElementById('s-fov').addEventListener('input', () => {
+  camera.fov = settings.fov;
+  camera.updateProjectionMatrix();
+});
+
+wireToggle('s-shake',         'shake');
+wireToggle('s-audioBoundary', 'audioBoundary');
+wireToggle('s-lava',          'lava');
+wireToggle('s-tiles',         'tiles');
+wireToggle('s-strips',        'strips');
+wireToggle('s-chevrons',      'chevrons');
+wireToggle('s-rings',         'rings');
+
+document.getElementById('btn-reset').addEventListener('click', () => {
+  settings = { ...DEFAULT_SETTINGS };
+  saveSettings();
+  // Re-sync UI
+  for (const [id, key, fmt] of [
+    ['s-sensLow',    'sensLow',    v => v.toFixed(2)],
+    ['s-sensMid',    'sensMid',    v => v.toFixed(2)],
+    ['s-sensHigh',   'sensHigh',   v => v.toFixed(2)],
+    ['s-camSpeed',   'camSpeed',   v => v.toFixed(2)],
+    ['s-fov',        'fov',        v => v.toFixed(0) + '°'],
+    ['s-boundDepth', 'boundDepth', v => v.toFixed(2)],
+    ['s-lavaInt',    'lavaInt',    v => v.toFixed(2)],
+  ]) {
+    document.getElementById(id).value = settings[key];
+    document.getElementById(id + '-v').textContent = fmt(settings[key]);
+  }
+  for (const [id, key] of [
+    ['s-shake', 'shake'], ['s-audioBoundary', 'audioBoundary'],
+    ['s-lava', 'lava'], ['s-tiles', 'tiles'], ['s-strips', 'strips'],
+    ['s-chevrons', 'chevrons'], ['s-rings', 'rings'],
+  ]) {
+    document.getElementById(id).classList.toggle('on', settings[key]);
+  }
+  camera.fov = settings.fov;
+  camera.updateProjectionMatrix();
+});
+
+// ============================================================
+// Errors, drag-drop, keys, visibility
+// ============================================================
+function showError(msg) {
+  const el = document.getElementById('error');
+  el.textContent = msg;
+  el.classList.add('show');
+  clearTimeout(showError._t);
+  showError._t = setTimeout(() => el.classList.remove('show'), 9000);
+}
+function hideError() { document.getElementById('error').classList.remove('show'); }
+
+window.addEventListener('dragover', e => e.preventDefault());
+window.addEventListener('drop', async e => {
+  e.preventDefault();
+  if (!e.dataTransfer.files || !e.dataTransfer.files.length) return;
+  const file = e.dataTransfer.files[0];
+  if (file && (file.type.startsWith('audio/') || /\.(mp3|wav|ogg|flac|m4a|aac)$/i.test(file.name))) {
+    await loadFile(file);
+  }
+});
+
+window.addEventListener('keydown', e => {
+  if (e.target.tagName === 'INPUT') return;
+  if (e.key === 's' || e.key === 'S') toggleSettings();
+  else if (e.key === 'Escape') {
+    if (settingsPanel.classList.contains('open')) closeSettings();
+    else if (analyser || audioElement) stopAll();
+  }
+});
+
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden && audioCtx && audioCtx.state === 'running') {
+    audioCtx.suspend().catch(() => {});
+  } else if (!document.hidden && audioCtx && audioCtx.state === 'suspended') {
+    audioCtx.resume().catch(() => {});
+  }
+});
+
+// Apply loaded FOV at startup
+camera.fov = settings.fov;
+camera.updateProjectionMatrix();
+</script>
+</body>
+</html>

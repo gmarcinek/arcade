@@ -50,4 +50,11 @@ export const state = {
 
   // --- obstacles ---
   obstacles: [],
+
+  // --- procedural player (M3) ---
+  activeSurfaceId: null,
+  s:               0,
+  u:               0,
+  uVelocity:       0,
+  sVelocity:       0,
 };

@@ -130,7 +130,7 @@ export function createBall(scene) {
   };
 }
 
-export function updateCarVisuals(dt, ballObjects, renderer, scene) {
+export function updateCarVisuals(dt, ballObjects, renderer, scene, proceduralFrame = null) {
   const {
     carGroup, ball, equator, cubeCamera, carLight, tailLight,
     ribbonGeo, ribbonHistory, ribbonPos, ribbonAlpha,
@@ -140,19 +140,27 @@ export function updateCarVisuals(dt, ballObjects, renderer, scene) {
   const basis = getBasis(state.carTheta);
   const r = TUNNEL_R - CAR_OFF - state.radialOffset;
 
-  carGroup.position.set(
-    basis.surfaceOut.x * (r - 0.65),
-    basis.surfaceOut.y * (r - 0.65),
-    state.carZ,
-  );
+  if (!proceduralFrame) {
+    carGroup.position.set(
+      basis.surfaceOut.x * (r - 0.65),
+      basis.surfaceOut.y * (r - 0.65),
+      state.carZ,
+    );
 
-  if (state.bounceImpact > 0) {
-    emitBounce(carGroup.position, basis.surfaceOut, state.speed, state.bounceImpact);
-    state.bounceImpact = 0;
+    if (state.bounceImpact > 0) {
+      emitBounce(carGroup.position, basis.surfaceOut, state.speed, state.bounceImpact);
+      state.bounceImpact = 0;
+    }
+
+    const matrix = new THREE.Matrix4().makeBasis(basis.right, basis.up, basis.forward);
+    carGroup.quaternion.setFromRotationMatrix(matrix);
+  } else {
+    // Procedural mode: position already set by updateBallPositionFromFrame
+    if (state.bounceImpact > 0) {
+      emitBounce(carGroup.position, proceduralFrame.up, state.speed, state.bounceImpact);
+      state.bounceImpact = 0;
+    }
   }
-
-  const matrix = new THREE.Matrix4().makeBasis(basis.right, basis.up, basis.forward);
-  carGroup.quaternion.setFromRotationMatrix(matrix);
 
   // Rolling spin
   state.ballSpinAngle += (state.speed / 0.9) * dt;
@@ -189,13 +197,18 @@ export function updateCarVisuals(dt, ballObjects, renderer, scene) {
   );
 
   // Lights
-  carLight.position.set(
-    basis.surfaceOut.x * (r - 2),
-    basis.surfaceOut.y * (r - 2),
-    state.carZ + 1.5,
-  );
+  if (!proceduralFrame) {
+    carLight.position.set(
+      basis.surfaceOut.x * (r - 2),
+      basis.surfaceOut.y * (r - 2),
+      state.carZ + 1.5,
+    );
+    tailLight.position.set(basis.surfaceOut.x * r, basis.surfaceOut.y * r, state.carZ - 1.5);
+  } else {
+    carLight.position.copy(carGroup.position).addScaledVector(proceduralFrame.forward, 1.5);
+    tailLight.position.copy(carGroup.position).addScaledVector(proceduralFrame.forward, -1.5);
+  }
   carLight.intensity  = state.boostActive ? 3.5 : 2.0;
-  tailLight.position.set(basis.surfaceOut.x * r, basis.surfaceOut.y * r, state.carZ - 1.5);
   tailLight.intensity = state.boostActive ? 2.1 : 0.7;
 
   // ── Yellow wake (kilwater) — state machine ──
@@ -283,7 +296,7 @@ export function updateCarVisuals(dt, ballObjects, renderer, scene) {
   if (alive && !state.crashed) {
     ribbonHistory.push({
       pos:   carGroup.position.clone(),
-      right: basis.right.clone(),
+      right: proceduralFrame ? proceduralFrame.right.clone() : basis.right.clone(),
     });
     if (ribbonHistory.length > RIBBON_SEGS) ribbonHistory.shift();
   } else if (!alive) {
@@ -332,4 +345,17 @@ export function updateCarVisuals(dt, ballObjects, renderer, scene) {
     cubeCamera.update(renderer, scene);
     carGroup.visible = true;
   }
+}
+
+export function updateBallPositionFromFrame(carGroup, frame) {
+  if (!frame) return;
+  carGroup.position.copy(frame.position);
+  // Orient the ball: up = inward normal, forward = tangent
+  const up  = frame.normal.clone();       // inward normal = "up" inside tube
+  const fwd = frame.forward.clone();
+  const right = new THREE.Vector3().crossVectors(fwd, up).normalize();
+  const correctedFwd = new THREE.Vector3().crossVectors(up, right).normalize();
+  carGroup.quaternion.setFromRotationMatrix(
+    new THREE.Matrix4().makeBasis(right, up, correctedFwd.negate())
+  );
 }

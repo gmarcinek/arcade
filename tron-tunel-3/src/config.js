@@ -1,14 +1,14 @@
 // ---- Tunnel geometry constants ----
 export const TUNNEL_R   = 12;
-export const TUNNEL_LEN = 900;
+export const TUNNEL_LEN = 1200;
 export const LANE_COUNT = 120;
 export const LANE_ANGLE = (Math.PI * 2) / LANE_COUNT; // 0.05236 rad per lane
 export const CAR_OFF    = 0.32;
-export const DANGER_TIMEOUT   = 5.0;
+export const DANGER_TIMEOUT   = 145.0;
 export const BASE_SPEED_START = 32;
 
 // ---- Camera constants ----
-export const CAM_SPRING        = 52;
+export const CAM_SPRING        = 52; //
 export const CAM_DAMP          = 13.5;
 export const CAM_MAX_VEL       = 4.4;
 export const CAM_FOV_NORMAL    = 66;
@@ -17,9 +17,9 @@ export const CAM_FOV_ENTER_S   = 3.0;
 export const CAM_FOV_EXIT_S    = 3.0;
 export const CAM_HEIGHT_NORMAL = 4.0;
 export const CAM_HEIGHT_BOOST  = 2.0;
-export const CAM_DIST_NORMAL   = 10;
+export const CAM_DIST_NORMAL   = 6;
 export const CAM_DIST_FORWARD  = 14;
-export const CAM_DIST_BACK     = 6;
+export const CAM_DIST_BACK     = 4;
 
 
 
@@ -40,6 +40,7 @@ export const CFG = {
   airControl:          1, // jak bardzo sterowanie działa w powietrzu (0-1), 0 to brak kontroli, 1 to pełna kontrola jak na ziemi
   jumpImpulse:         15.5,
   tunnelGravity:       36,
+  tunnelAngularGravity: 4.0,  // rad/s² — pulls ball toward tube floor (world gravity projected)
   maxRadialOffset:     10, // maksymalne odsunięcie od ściany tunelu, powyżej tego punktu gracz jest "w powietrzu"
   boostDrain:          0.32,
   boostRegen:          0.60, // szybkość regeneracji boosta (1 to pełna regeneracja w 1 sekundę)
@@ -49,13 +50,13 @@ export const CFG = {
 export const BALL_PHYS = {
   restitution:       0.7, // sprężystość, czyli jak bardzo piłka odbija się od ściany (0-1), 1 to idealnie sprężysta, 0 to brak odbicia
 
-  inertiaDecay:      0.5, // jak szybko zanika bezwładność kątowa po utracie kontaktu ze ścianą, im większa wartość, tym szybciej piłka przestaje się obracać w powietrzu
+  inertiaDecay:      0.08, // jak szybko zanika bezwładność lateralna — niska wartość = momentum utrzymuje się długo, gracz musi walczyć z inercją
 
   squashDuration:    0.05, // czas trwania efektu squasha po uderzeniu o ścianę
   squashAmount:      0.15, // jak bardzo piłka się spłaszcza przy uderzeniu o ścianę (0-1), 0.1 to 10% spłaszczenia
   stretchAmount:     0.15, // jak bardzo piłka się rozciąga przy uderzeniu o ścianę (0-1), 0.1 to 10% rozciągnięcia
   speedStretch:      0.0, // jak bardzo piłka się rozciąga przy dużej prędkości (0-1), 0.1 to 10% rozciągnięcia
-  steerLagK:         3.5, // jak szybko wizualna reprezentacja samochodu dogania aktualną pozycję fizyczną, im większa wartość, tym szybciej nadąża (w sekundach^-1)
+  steerLagK:         4.5, // jak szybko wizualna reprezentacja samochodu dogania aktualną pozycję fizyczną, im większa wartość, tym szybciej nadąża (w sekundach^-1)
   
   surfaceDamp:       1, // jak bardzo mikro-odbicia przy kontakcie ze ścianą są tłumione, im większa wartość, tym bardziej tłumione
   surfaceDampRadius: 0.2, // promień od ściany, w którym zaczyna działać tłumienie mikro-odbicia, im większa wartość, tym dalej od ściany zaczyna działać tłumienie
@@ -68,8 +69,8 @@ export const BALL_MAT = {
   metalness:       0.9,
   roughness:       0,
   reflectionRes:   128,
-  envMapIntensity: 3.0,
-  ringOpacity:     0.9,
+  envMapIntensity: 4.0,
+  ringOpacity:     1.0,
   ringColor:       0x60ffee,
   transparent:     false,
   opacity:         1.0,
