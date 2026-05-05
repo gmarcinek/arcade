@@ -1,9 +1,35 @@
 export const tunnelVertexShader = /* glsl */`
+  uniform float time;
+  uniform float uSubBass;
+  uniform float uBass;
+  uniform float uBassImpact;
+  uniform float uMidWave;
+  uniform float uBeatPulse;
+  uniform float uOnsetPulse;
+
   varying vec3 vWorld;
 
   void main() {
-    vec4 wp = modelMatrix * vec4(position, 1.0);
-    vWorld = wp.xyz;
+    float angle = atan(position.x, -position.y);
+    float z     = position.z;
+
+    float bassStretch = uSubBass * 0.020 + uBass * 0.032 + uBassImpact * 0.026 + uBeatPulse * 0.014;
+
+    float longWave =
+        sin(z * 0.045 - time * (0.85 + uMidWave * 1.10) + angle * 2.0) * 0.55
+      + sin(z * 0.095 + time * (1.20 + uMidWave * 1.70) - angle * 4.0) * 0.32
+      + sin(z * 0.165 - time * (1.80 + uMidWave * 2.20) + angle * 6.0) * 0.13;
+
+    float kickRipple = sin(z * 0.24 - time * 5.4 + angle * 1.5)
+                     * (uBeatPulse * 0.018 + uOnsetPulse * 0.007);
+
+    float warp = longWave * (0.018 + uMidWave * 0.030) + kickRipple;
+
+    vec3 p = position;
+    p.xy *= 1.0 + bassStretch + warp;
+
+    vec4 wp = modelMatrix * vec4(p, 1.0);
+    vWorld  = wp.xyz;
     gl_Position = projectionMatrix * viewMatrix * wp;
   }
 `;
@@ -13,13 +39,44 @@ export const tunnelFragmentShader = /* glsl */`
   uniform float playerZ;
   uniform float playerTheta;
 
+  uniform float uSubBass;
+  uniform float uBass;
+  uniform float uMid;
+  uniform float uTreble;
+  uniform float uBassImpact;
+  uniform float uMidWave;
+  uniform float uLavaLight;
+  uniform float uOnsetPulse;
+  uniform float uBeatPulse;
+  uniform float uMusicEnergy;
+  uniform vec3  uChromaTint;
+  uniform sampler2D uHistory;
+  uniform float uHistoryWriteIdx;
+  uniform float uHistoryLen;
+  uniform float uHistMps;
+
   varying vec3 vWorld;
 
-  // Must match JS getArcHalfAngle exactly
+  // Sample audio history at a given world Z — encodes scrolling waveform
+  vec4 historyAt(float z) {
+    float worldDist = playerZ - z;
+    float idxF = uHistoryWriteIdx + worldDist / uHistMps;
+    float u = mod(idxF, uHistoryLen) / uHistoryLen;
+    return texture2D(uHistory, vec2(u, 0.5));
+  }
+
   float arcHalfAtZ(float z) {
     float slow = sin(z * 0.009);
     float med  = sin(z * 0.038) * 0.42;
     float t = clamp((slow + med + 1.42) / 2.84, 0.0, 1.0);
+
+    float audio    = historyAt(z).r;
+    float audioMod = (audio - 0.5) * 0.55;
+    t = clamp(t + audioMod, 0.05, 0.95);
+
+    float bassWidth = uSubBass * 0.10 + uBass * 0.18 + uBassImpact * 0.12 + uBeatPulse * 0.08;
+    t = clamp(t + bassWidth, 0.05, 0.98);
+
     return (4.0 + t * 56.0) * 0.05236;
   }
 
@@ -96,13 +153,15 @@ export const tunnelFragmentShader = /* glsl */`
     float lavaEdge1 = smoothstep(0.30, 0.58, lavaRaw1) * (1.0 - smoothstep(0.78, 0.96, lavaRaw1));
     float lavaEdge2 = smoothstep(0.28, 0.62, lavaRaw2) * (1.0 - smoothstep(0.80, 0.98, lavaRaw2));
 
-    // Never drop to zero.
-    float lavaPulse = 0.72 + 0.28 * sin(time * 0.23 + 1.3);
+    // Never drop to zero. Reacts to mid wave, lava light, beat pulse and onset.
+    float lavaPulse = 0.62 + 0.22 * sin(time * 0.23 + 1.3)
+                    + uMidWave * 0.22 + uLavaLight * 0.58
+                    + uBeatPulse * 0.35 + uOnsetPulse * 0.25;
 
-    // Colour layers: deep amber, orange, slight magenta contamination.
-    vec3 lavaDark = vec3(0.55, 0.10, 0.015);
-    vec3 lavaMid  = vec3(0.95, 0.22, 0.025);
-    vec3 lavaHot  = vec3(1.00, 0.48, 0.08);
+    // Colour layers with chroma tint drift
+    vec3 lavaDark = mix(vec3(0.55, 0.10, 0.015), vec3(0.20, 0.40, 0.05), uChromaTint.g * 0.6);
+    vec3 lavaMid  = mix(vec3(0.95, 0.22, 0.025), vec3(0.30, 0.10, 0.55), uChromaTint.b * 0.5);
+    vec3 lavaHot  = mix(vec3(1.00, 0.48, 0.08),  vec3(1.00, 0.20, 0.40), uChromaTint.r * 0.4);
     vec3 lavaMag  = vec3(0.42, 0.035, 0.18);
 
     vec3 lavaCol =
@@ -170,7 +229,7 @@ export const tunnelFragmentShader = /* glsl */`
 
     // ---- ring seams: every ~4 m ----
     float ringSeam = smoothstep(0.94, 1.0, abs(sin(vWorld.z * 0.7854)));
-    col += ringSeam * vec3(0.0, 0.10, 0.20) * inSafe * depthFade * cyanRing;
+    col += ringSeam * vec3(0.0, 0.10, 0.20) * inSafe * depthFade * cyanRing * (1.0 + uBeatPulse * 1.5);
 
     // ---- coarse ring seams: every ~16 m ----
     float ringCoarse = smoothstep(0.91, 1.0, abs(sin(vWorld.z * 0.196)));
@@ -179,7 +238,8 @@ export const tunnelFragmentShader = /* glsl */`
     // ---- 8 cyan running-light strips ----
     float strip = step(0.984, abs(sin(angle * 4.0)));
     float pulse = 0.5 + 0.5 * sin(vWorld.z * 0.55 - time * 6.5);
-    col += strip * inSafe * vec3(0.04, 0.75, 0.90) * (0.30 + pulse * 0.50) * depthFade * cyanStrip;
+    float stripBassBoost = 1.0 + uBass * 1.6 + uOnsetPulse * 0.5;
+    col += strip * inSafe * vec3(0.04, 0.75, 0.90) * (0.30 + pulse * 0.50) * depthFade * cyanStrip * stripBassBoost;
 
     // ---- mirror-specular glint on strips ----
     col += strip * sheen * inSafe * vec3(0.15, 0.45, 0.75) * 0.18 * depthFade * cyanStrip;
@@ -187,7 +247,8 @@ export const tunnelFragmentShader = /* glsl */`
     // ---- amber rectangular panel tiles — always on ----
     float tileAng  = step(0.955, abs(sin(angle * 22.0 + 0.5)));
     float tileZ    = step(0.920, abs(sin(vWorld.z * 0.85)));
-    col += tileAng * tileZ * inSafe * vec3(1.0, 0.45, 0.04) * 0.65 * depthFade;
+    float tileBoost = 0.65 + uOnsetPulse * 1.4 + uBass * 0.5;
+    col += tileAng * tileZ * inSafe * vec3(1.0, 0.45, 0.04) * tileBoost * depthFade;
 
     // ---- cyan tile variant — breathes ----
     float tileAng2 = step(0.968, abs(sin(angle * 38.0 + 1.8)));
@@ -196,7 +257,8 @@ export const tunnelFragmentShader = /* glsl */`
 
     // ---- scrolling chevrons on floor ----
     float ground = smoothstep(0.55, 0.0, absAngle) * inSafe;
-    float chev   = abs(sin(vWorld.z * 0.85 - time * 5.5));
+    float chevSpeed = 5.5 + uTreble * 9.0 + uMid * 4.0;
+    float chev   = abs(sin(vWorld.z * 0.85 - time * chevSpeed));
     col += ground * step(0.86, chev) * vec3(0.0, 0.60, 0.80) * 0.28 * depthFade * cyanChev;
 
     // ---- danger zone: dim orange grid ----
@@ -204,7 +266,8 @@ export const tunnelFragmentShader = /* glsl */`
     col += dangerGrid * vec3(0.30, 0.04, 0.01) * depthFade;
 
     // ---- orange boundary glow — always bright ----
-    col += smoothstep(0.018, 0.0, edgeDist) * vec3(1.0, 0.88, 0.45) * 4.5 * depthFade;
+    float bassBoostBound = 1.0 + uBass * 1.5 + uOnsetPulse * 0.8;
+    col += smoothstep(0.018, 0.0, edgeDist) * vec3(1.0, 0.88, 0.45) * 4.5 * depthFade * bassBoostBound;
 
     col += smoothstep(0.18, 0.0, edgeDist)
          * inSafe

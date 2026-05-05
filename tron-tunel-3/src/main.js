@@ -15,6 +15,7 @@ import { createSparks, updateSparks, clearSparks } from './sparks.js';
 import { updatePhysics } from './physics.js';
 import { updateCamera } from './camera.js';
 import { updateHUD, applyFlash, applyDanger, endGame } from './ui.js';
+import { createAudioSystem, AudioMetadataBus } from './audio/index.js';
 
 const PROCEDURAL_DEBUG = false;
 const PROCEDURAL_PLAYER = true;
@@ -66,6 +67,10 @@ scene.add(new THREE.PointLight(0x0080ff, 2.5, 40));
 const ballObjects = createBall(scene);
 const { carGroup } = ballObjects;
 
+// ---- Audio system ----
+const audioSystem = createAudioSystem();
+audioSystem.bridge.register(tunnelMat);
+
 // ---- Sparks ----
 createSparks(scene);
 
@@ -95,6 +100,7 @@ if (PROCEDURAL_PLAYER) {
   infiniteSpline.extend(800);
   crossSection = createCrossSection();
   infiniteMeshObj = new InfiniteMesh(scene, infiniteSpline, crossSection);
+  audioSystem.bridge.register(infiniteMeshObj.material);
 }
 
 // ---- Flythrough state ----
@@ -367,6 +373,7 @@ function loop(t) {
 
   if (flythroughActive) {
     updateFlythroughCamera(dt);
+    audioSystem.tick(dt);
     tunnelMat.uniforms.time.value    = elapsedTime;
     tunnelMat.uniforms.playerZ.value = flythroughS;
     tunnel.position.z                = flythroughS;
@@ -376,6 +383,15 @@ function loop(t) {
   }
 
   tick(dt);
+
+  audioSystem.tick(dt);
+
+  // Update BPM display
+  const audioFrame = AudioMetadataBus.current;
+  if (audioFrame && audioFrame.bpm) {
+    const bpmEl = document.getElementById('audio-bpm');
+    if (bpmEl) bpmEl.textContent = Math.round(audioFrame.bpm) + ' BPM';
+  }
 
   tunnelMat.uniforms.time.value = elapsedTime;
   if (!PROCEDURAL_PLAYER) {
@@ -395,6 +411,27 @@ document.getElementById('start-btn').addEventListener('click', startGame);
 document.getElementById('flythrough-btn').addEventListener('click', startFlythrough);
 document.addEventListener('keydown', e => {
   if (e.key === 'Escape' && flythroughActive) stopFlythrough();
+});
+
+document.getElementById('open-spotify-btn').addEventListener('click', () => {
+  const url = document.getElementById('spotify-input').value.trim();
+  if (url) window.open(url, '_blank');
+});
+
+document.getElementById('audio-btn').addEventListener('click', async () => {
+  if (audioSystem.isActive) {
+    audioSystem.stopCapture();
+    const statusEl = document.getElementById('audio-status');
+    if (statusEl) statusEl.style.display = 'none';
+    return;
+  }
+  try {
+    await audioSystem.startCapture();
+    const statusEl = document.getElementById('audio-status');
+    if (statusEl) statusEl.style.display = 'block';
+  } catch (e) {
+    console.warn('Audio capture failed:', e.message);
+  }
 });
 
 document.getElementById('mode-btn').addEventListener('click', () => {

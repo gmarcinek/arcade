@@ -12,6 +12,7 @@ export const state = {
   // --- position / movement ---
   carTheta:        0,
   thetaVelocity:   0,
+  ballOmega:       0,   // ball's own angular velocity (rad/s) — drives rolling
   radialOffset:    0,
   radialVelocity:  0,
   grounded:        true,

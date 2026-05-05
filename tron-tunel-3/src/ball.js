@@ -3,6 +3,7 @@ import { BALL_MAT, BALL_PHYS, CFG, PROC_CFG, TUNNEL_R, CAR_OFF } from './config.
 import { input } from './input.js';
 import { state } from './state.js';
 import { emitBounce } from './sparks.js';
+import { AudioMetadataBus } from './audio/AudioMetadataBus.js';
 
 export function getBasis(theta) {
   return {
@@ -144,10 +145,12 @@ export function createBall(scene) {
   scene.add(tailLight);
 
   // Force debug arrows (world-space, toggled by F key)
-  const arrowInertia   = makeArrow(0x22ff66, scene);  // green  — lateral inertia (thetaVelocity)
-  const arrowRadial    = makeArrow(0xff4422, scene);  // red    — radial velocity (gravity/bounce)
-  const arrowInput     = makeArrow(0x2288ff, scene);  // blue   — steering input force
-  const arrowResultant = makeArrow(0xffee00, scene);  // yellow — resultant
+  const arrowInertia   = makeArrow(0x22ff66, scene);  // green   — lateral inertia (thetaVelocity)
+  const arrowRadial    = makeArrow(0xff4422, scene);  // red     — radial velocity (gravity/bounce)
+  const arrowInput     = makeArrow(0x2288ff, scene);  // blue    — steering input force
+  const arrowResultant = makeArrow(0xffee00, scene);  // yellow  — resultant
+  const arrowGravWorld = makeArrow(0xffffff, scene);  // white   — world gravity (0,-g,0)
+  const arrowGravLat   = makeArrow(0xff44ff, scene);  // magenta — gravity projected onto lateral axis
 
   // Pivot axes — shows ball local frame (red=right, green=out, blue=forward)
   const pivotAxes = new THREE.AxesHelper(2.5);
@@ -179,12 +182,13 @@ export function createBall(scene) {
     sputterAmp:       0,
     // Debug arrows
     arrowInertia, arrowRadial, arrowInput, arrowResultant, pivotAxes,
+    arrowGravWorld, arrowGravLat,
   };
 }
 
 export function updateCarVisuals(dt, ballObjects, renderer, scene, proceduralFrame = null) {
   const {
-    carGroup, ball, equator, cubeCamera, carLight, tailLight,
+    carGroup, ball, equator, cubeCamera, carLight, tailLight, ballMat,
     ribbonGeo, ribbonHistory, ribbonPos, ribbonAlpha,
   } = ballObjects;
 
@@ -390,6 +394,21 @@ export function updateCarVisuals(dt, ballObjects, renderer, scene, proceduralFra
     ribbonGeo.setDrawRange(0, 0);
   }
 
+  // ── Audio reactive modulation ──
+  const audioData = AudioMetadataBus.current;
+  if (audioData) {
+    ballMat.emissive.setRGB(
+      audioData.beatPulse * 0.15 + audioData.bassImpact * 0.05,
+      audioData.beatPulse * 0.35 + audioData.midWave    * 0.08,
+      audioData.beatPulse * 0.55 + audioData.high       * 0.12,
+    );
+    ballMat.emissiveIntensity = 0.8 + audioData.beatPulse * 2.5 + audioData.bassImpact * 1.2;
+    const beatScale = 1.0 + audioData.beatPulse * 0.08 + audioData.onsetPulse * 0.04;
+    ball.scale.setScalar(beatScale);
+    carLight.intensity = 2.5 + audioData.bassImpact * 4.0 + audioData.beatPulse * 3.5;
+    carLight.distance  = 22 + audioData.low * 18;
+  }
+
   // Live reflection — every 10 frames
   if (state.frameCount % 10 === 0) {
     cubeCamera.position.copy(carGroup.position);
@@ -448,6 +467,19 @@ export function updateCarVisuals(dt, ballObjects, renderer, scene, proceduralFra
     const resultLen = resultVec.length();
     const resultDir = resultLen > 0.05 ? resultVec.clone().normalize() : ballRight.clone();
     setArrow(ballObjects.arrowResultant, pos, resultDir, resultLen, state.showForces);
+
+    // World gravity: always points (0,-1,0) in world space — scaled by tunnelGravity
+    const gravWorld = new THREE.Vector3(0, -1, 0);
+    const gravWorldLen = CFG.tunnelGravity * SCALE;
+    setArrow(ballObjects.arrowGravWorld, pos, gravWorld, gravWorldLen, state.showForces);
+
+    // Lateral gravity projection: component of world gravity along ballRight axis
+    // This is the constant sideways force pushing ball depending on its theta position
+    const gravLat    = gravWorld.dot(ballRight);  // positive = pushes in +right direction
+    const gravLatDir = ballRight.clone().multiplyScalar(gravLat >= 0 ? 1 : -1);
+    const gravLatLen = Math.abs(gravLat) * gravWorldLen;
+    setArrow(ballObjects.arrowGravLat, pos, gravLatDir, gravLatLen,
+      state.showForces && gravLatLen > 0.05);
   }
 }
 

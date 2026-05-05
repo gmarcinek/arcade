@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { CFG, BALL_PHYS } from './config.js';
+import { CFG, BALL_PHYS, BALL_R, TUNNEL_R, LANE_ANGLE } from './config.js';
 import { state } from './state.js';
 import { input } from './input.js';
 import { showTrick } from './ui.js';
@@ -13,6 +13,7 @@ function respawnAfterCrash() {
   state.carZ              += 18;
   state.carTheta           = 0;
   state.thetaVelocity      = 0;
+  state.ballOmega          = 0;
   state.radialOffset       = 0;
   state.radialVelocity     = 0;
   state.grounded           = true;
@@ -63,20 +64,53 @@ export function updatePhysics(dt, left, right, jumpPressed, boostHeld) {
   state.totalDistance += dz;
   state.timeElapsed   += dt;
 
-  const rawSteer = (left ? 1 : 0) - (right ? 1 : 0);
-  const hasInput = rawSteer !== 0;
-  const steerControl = state.grounded ? 1 : CFG.airControl;
-
+  const rawSteer = (right ? 1 : 0) - (left ? 1 : 0);
   state.physicsForce = rawSteer;
-  const lateralFriction = hasInput ? 0 : (state.grounded ? CFG.groundedFriction : CFG.airFriction);
 
-  state.thetaVelocity += state.physicsForce * CFG.steerAcceleration * steerControl * dt;
-  state.thetaVelocity -= CFG.tunnelAngularGravity * Math.sin(state.carTheta) * dt;
-  state.thetaVelocity  = THREE.MathUtils.clamp(
+  // ── Rolling physics ──
+  // Player applies torque to ball spin (like motorising the ball's own rotation).
+  // Rolling friction then couples ball spin → tunnel position.
+  // Sign: rawSteer > 0 = right → increasing carTheta → ball moves right (matches getBasis convention)
+  const driveControl = state.grounded ? 1.0 : CFG.airControl;
+  state.ballOmega += rawSteer * CFG.driveTorque * driveControl * dt;
+
+  if (state.grounded) {
+    // Rolling contact: slip = surface speed of ball minus contact point speed
+    const v_spin    = state.ballOmega    * BALL_R;    // m/s — ball surface tangential
+    const v_contact = state.thetaVelocity * TUNNEL_R; // m/s — wall contact speed
+    const slip      = v_spin - v_contact;
+
+    // Friction force (per unit mass, m/s²) — proportional, soft coupling
+    const frictionAcc = CFG.rollingFriction * slip;
+
+    // Friction drives tunnel angular velocity
+    state.thetaVelocity += (frictionAcc / TUNNEL_R) * dt;
+
+    // Friction reacts on ball spin: I_sphere = (2/5)*m*r², alpha = F*r/I = F/(0.4*r)
+    state.ballOmega -= (frictionAcc / (0.4 * BALL_R)) * dt;
+  } else {
+    // In air: no friction — spin conserved (gyroscopic), lateral drifts slowly
+    state.ballOmega     *= Math.exp(-CFG.spinDecay      * dt);
+    state.thetaVelocity *= Math.exp(-CFG.airLateralDecay * dt);
+  }
+
+  // Lane-snap autopilot: soft pull toward nearest lane centre
+  // laneError is signed angle offset from nearest lane centre, normalised to [-1, 1]
+  if (CFG.tunnelAngularGravity > 0) {
+    const halfLane  = LANE_ANGLE * 0.5;
+    const local     = ((state.carTheta % LANE_ANGLE) + LANE_ANGLE) % LANE_ANGLE;
+    const laneError = local < halfLane ? local : local - LANE_ANGLE;
+    state.thetaVelocity -= CFG.tunnelAngularGravity * (laneError / halfLane) * dt;
+  }
+
+  // Hard velocity cap
+  state.thetaVelocity = THREE.MathUtils.clamp(
     state.thetaVelocity, -CFG.maxThetaVelocity, CFG.maxThetaVelocity
   );
-  state.thetaVelocity *= Math.exp(-lateralFriction * dt);
-  state.carTheta      += state.thetaVelocity * dt;
+  const maxOmega = CFG.maxThetaVelocity * TUNNEL_R / BALL_R;
+  state.ballOmega = THREE.MathUtils.clamp(state.ballOmega, -maxOmega, maxOmega);
+
+  state.carTheta += state.thetaVelocity * dt;
 
   // S/↓ held: lerp restitution + materialDamp toward 0 (absorb / pure rolling)
   const absorb = input.down;
@@ -114,6 +148,13 @@ export function updatePhysics(dt, left, right, jumpPressed, boostHeld) {
       state.radialOffset = 0;
       // squashTimer scaled by materialDamp — no deform when absorbing
       state.squashTimer  = BALL_PHYS.squashDuration * state.materialDamp;
+
+      // Spin transfer: tangential velocity at impact imparts backspin/topspin to ball
+      const v_tangential = state.thetaVelocity * TUNNEL_R;
+      const spinGain     = v_tangential * CFG.bounceSpinTransfer / BALL_R;
+      state.ballOmega   += spinGain;
+      // Reaction: spin bleeds into lateral velocity
+      state.thetaVelocity += state.ballOmega * BALL_R * CFG.bounceSpinTransfer / TUNNEL_R;
 
       if (!state.landingEvaluated) {
         evaluateLanding();

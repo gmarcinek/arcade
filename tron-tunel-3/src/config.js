@@ -1,5 +1,6 @@
 // ---- Tunnel geometry constants ----
 export const TUNNEL_R   = 12;
+export const BALL_R     = 0.9;  // ball mesh radius (m)
 export const TUNNEL_LEN = 1200;
 export const LANE_COUNT = 120;
 export const LANE_ANGLE = (Math.PI * 2) / LANE_COUNT; // 0.05236 rad per lane
@@ -23,24 +24,30 @@ export const CAM_DIST_BACK     = 4;
 
 // ---- Physics config ----
 export const CFG = {
-  steerAcceleration:   1.5,
-  maxThetaVelocity:    3,
+  // ── Lateral rolling physics ──
+  driveTorque:         18,    // rad/s² — torque applied to ball spin by player input
+  rollingFriction:     28,    // coupling strength between ball spin and tunnel position (higher = grippier)
+  spinDecay:           0.4,   // rad/s² decay of ball spin in air (gyroscopic momentum)
+  airLateralDecay:     0.15,  // decay of thetaVelocity in air (low = floaty drift)
+  bounceSpinTransfer:  0.25,  // fraction of tangential velocity converted to spin on impact
+  maxThetaVelocity:    4,     // hard cap on tunnel angular velocity (rad/s)
+  tunnelAngularGravity: 0.0,  // rad/s² — pendulum pull toward tube floor (theta=0); tune per difficulty
 
+  // ── Radial physics ──
+  jumpImpulse:         15.5, // initial radial velocity from jump (m/s)
+  tunnelGravity:       32, // radial acceleration toward tube center when airborne (m/s²)
+  maxRadialOffset:     10, // max distance from tube center (for crash)
+
+  // ── Forward speed ──
   baseSpeed:           20,
   forwardSpeed:        70,
   boostSpeed:          95,
   acceleration:        0.2,
   speedForce:          10,
   speedFriction:       0.5,
-  groundedFriction:    0.01,
-  airFriction:         0.01,
+  boostDrain:          0.32,
+  boostRegen:          0.60,
   airControl:          1,
-  jumpImpulse:         15.5,
-  tunnelGravity:       32,// gravity toward tube floor (rad/s²)
-  tunnelAngularGravity: 0.0,  // rad/s² — pendulum restoring force toward tube floor (theta=0); tune per difficulty level
-  maxRadialOffset:     10, // max distance from tube center (for camera floor avoidance)
-  boostDrain:          0.32, // per second
-  boostRegen:          0.60, // per second
 };
 
 // ---- Ball physics material ----

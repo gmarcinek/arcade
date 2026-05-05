@@ -16,6 +16,16 @@ function makeMaterial() {
       playerWorldPos: { value: new THREE.Vector3() },
       behindDist:     { value: BEHIND_DIST },
       totalLen:       { value: TOTAL_LEN },
+      // audio uniforms — driven by ShaderAudioBridge each frame
+      uBass:        { value: 0 },
+      uMid:         { value: 0 },
+      uTreble:      { value: 0 },
+      uBassImpact:  { value: 0 },
+      uMidWave:     { value: 0 },
+      uOnsetPulse:  { value: 0 },
+      uBeatPulse:   { value: 0 },
+      uMusicEnergy: { value: 0 },
+      uChromaTint:  { value: new THREE.Vector3(0, 0, 0) },
     },
     vertexShader: /* glsl */`
       varying vec3 vWorld;
@@ -35,6 +45,16 @@ function makeMaterial() {
       uniform vec3  playerWorldPos;
       uniform float behindDist;
       uniform float totalLen;
+      // audio
+      uniform float uBass;
+      uniform float uMid;
+      uniform float uTreble;
+      uniform float uBassImpact;
+      uniform float uMidWave;
+      uniform float uOnsetPulse;
+      uniform float uBeatPulse;
+      uniform float uMusicEnergy;
+      uniform vec3  uChromaTint;
 
       varying vec3 vWorld;
       varying vec2 vUv;
@@ -86,7 +106,7 @@ function makeMaterial() {
         float lavaHot1  = smoothstep(0.58, 0.92, lavaRaw1);
         float lavaHot2  = smoothstep(0.62, 0.95, lavaRaw2);
         float lavaEdge2 = smoothstep(0.28, 0.62, lavaRaw2) * (1.0 - smoothstep(0.80, 0.98, lavaRaw2));
-        float lavaPulse = 0.72 + 0.28 * sin(time * 0.23 + 1.3);
+        float lavaPulse = 0.72 + 0.28 * sin(time * 0.23 + 1.3) + uBass * 0.7;
         vec3 lavaDark = vec3(0.55, 0.10, 0.015);
         vec3 lavaMid  = vec3(0.95, 0.22, 0.025);
         vec3 lavaHot  = vec3(1.00, 0.48, 0.08);
@@ -97,7 +117,8 @@ function makeMaterial() {
           + lavaHot  * (lavaHot1 + lavaHot2) * 0.32
           + lavaMag  * lavaEdge2 * 0.22;
         float lavaReadableZone = 0.60 + 0.40 * pow(max(0.0, 1.0 - absAngle * 0.42), 2.0);
-        col += lavaCol * depthFade * lavaPulse * lavaReadableZone * 0.72;
+        vec3 lavaColTinted = mix(lavaCol, lavaCol + uChromaTint * 0.5, uMusicEnergy * 0.6);
+        col += lavaColTinted * depthFade * lavaPulse * lavaReadableZone * 0.72;
         col += vec3(0.42, 0.08, 0.015) * (lavaBlob1 * 0.55 + lavaBlob2 * 0.45) * depthFade * 0.22;
 
         // contact glow (3D world-space)
@@ -110,30 +131,31 @@ function makeMaterial() {
           + sin(fragS * 4.7 - angle * 11.0 - time * 2.1) * 0.5;
         float shimmer = 0.82 + 0.18 * reflNoise;
         col += reflWideMask * vec3(0.01, 0.025, 0.035) * 0.85 * depthFade;
-        col += reflMask     * vec3(0.35, 0.95, 1.00)   * 1.35 * shimmer * depthFade;
+        col += reflMask     * vec3(0.35, 0.95, 1.00)   * (1.35 + uOnsetPulse * 2.5) * shimmer * depthFade;
         col += exp(-distSq * 0.12) * vec3(0.95, 1.00, 1.00) * 1.25 * depthFade;
         col += reflWideMask * (0.45 + 0.55 * sin(time * 7.0 + fragS * 0.9)) * vec3(1.0, 0.95, 0.0) * 0.12 * depthFade;
 
         // 120-division angular grid
         float fineAng = smoothstep(0.91, 1.0, abs(sin(angle * 60.0)));
-        col += fineAng * vec3(0.0, 0.10, 0.20) * depthFade * cyanGrid;
+        col += fineAng * vec3(0.0, 0.10, 0.20) * depthFade * cyanGrid * (1.0 + uBeatPulse * 5.0);
 
         // ring seams (fragS — seamless)
         float ringSeam   = smoothstep(0.94, 1.0, abs(sin(fragS * 0.7854)));
         float ringCoarse = smoothstep(0.91, 1.0, abs(sin(fragS * 0.196)));
-        col += ringSeam   * vec3(0.0, 0.10, 0.20) * depthFade * cyanRing;
-        col += ringCoarse * vec3(0.0, 0.18, 0.34) * depthFade * 0.55 * cyanRing;
+        float beatRing = 1.0 + uBeatPulse * 4.0;
+        col += ringSeam   * vec3(0.0, 0.10, 0.20) * depthFade * cyanRing * beatRing;
+        col += ringCoarse * vec3(0.0, 0.18, 0.34) * depthFade * 0.55 * cyanRing * beatRing;
 
         // 8 cyan running-light strips
         float strip = step(0.984, abs(sin(angle * 4.0)));
         float pulse = 0.5 + 0.5 * sin(fragS * 0.55 - time * 6.5);
-        col += strip * vec3(0.04, 0.75, 0.90) * (0.30 + pulse * 0.50) * depthFade * cyanStrip;
+        col += strip * vec3(0.04, 0.75, 0.90) * (0.30 + pulse * 0.50 + uMidWave * 0.8) * depthFade * cyanStrip;
         col += strip * sheen * vec3(0.15, 0.45, 0.75) * 0.18 * depthFade * cyanStrip;
 
         // amber panel tiles
         float tileAng = step(0.955, abs(sin(angle * 22.0 + 0.5)));
         float tileS   = step(0.920, abs(sin(fragS * 0.85)));
-        col += tileAng * tileS * vec3(1.0, 0.45, 0.04) * 0.65 * depthFade;
+        col += tileAng * tileS * vec3(1.0, 0.45, 0.04) * (0.65 + uBassImpact * 0.8) * depthFade;
 
         // cyan tile variant
         float tileAng2 = step(0.968, abs(sin(angle * 38.0 + 1.8)));
@@ -156,7 +178,8 @@ function makeMaterial() {
         col += tileAng * tileS * vec3(0.8, 0.22, 0.0) * 0.18 * depthFade
              * smoothstep(0.0, 1.0, 1.0 - abs(sin(angle * 22.0 + 0.5)) * 12.0 + 11.0);
 
-        col = min(col, vec3(3.2));
+        col *= (1.0 + uMusicEnergy * 0.35);
+        col = min(col, vec3(3.5));
         gl_FragColor = vec4(col, 1.0);
       }
     `,
@@ -171,6 +194,8 @@ export class InfiniteMesh {
     this._time   = 0;
     this._build();
   }
+
+  get material() { return this._mat; }
 
   _build() {
     const VERT_COLS = RADIAL_SEGS + 1;

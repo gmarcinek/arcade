@@ -9,17 +9,30 @@
 </head>
 
 <body>
+    <iframe data-testid="embed-iframe" style="border-radius: 3px;
+            position: absolute;
+            z-index: 1;
+            width: 433px;
+            left: 223px;
+            height: 86px;
+            top: 20px;
+            zoom: 0.9;" src="https://open.spotify.com/embed/playlist/37i9dQZF1EIg6Tz5eO41Eb?utm_source=generator"
+        width="100%" height="86" frameBorder="0" allowfullscreen=""
+        allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture" loading="lazy"></iframe>
     <canvas id="game-canvas"></canvas>
     <div id="flash"></div>
     <div id="danger-warn"></div>
 
     <div class="hud hud-tl">
+
         <div class="lbl">score</div>
         <div class="val-big" id="score">0</div>
         <div id="trick-display" style="margin-top:8px;">
             <div class="trick-name" id="trick-name"></div>
             <div class="trick-pts" id="trick-pts"></div>
         </div>
+
+
     </div>
 
     <div class="hud hud-tc">
@@ -69,6 +82,26 @@
             style="background: rgba(0,255,180,0.1); color: #00ffcc; border: 1px solid rgba(0,255,180,0.4); font-size: 12px; padding: 8px 20px; margin-top: 4px;">
             FLYTHROUGH DEBUG
         </button>
+
+        <div id="audio-panel"
+            style="display:flex; flex-direction:column; align-items:center; gap:8px; margin-top:12px;">
+            <div style="display:flex; gap:6px; align-items:center;">
+                <input id="spotify-input" type="url" placeholder="Spotify link…" style="background:rgba(0,0,0,0.4); border:1px solid rgba(255,106,0,0.35); color:#ff9955;
+                           font-size:11px; padding:6px 10px; border-radius:4px; width:220px; outline:none;" />
+                <button class="btn" id="open-spotify-btn" style="background:rgba(30,215,96,0.12); color:#1ed760; border:1px solid rgba(30,215,96,0.35);
+                           font-size:11px; padding:6px 14px; margin-top:0;">
+                    OPEN
+                </button>
+            </div>
+            <button class="btn" id="audio-btn" style="background:rgba(255,106,0,0.15); color:#ff8844; border:1px solid rgba(255,106,0,0.4);
+                       font-size:11px; padding:8px 20px;">
+                ♫ AUDIO REACTIVE
+            </button>
+            <div id="audio-status"
+                style="font-size:9px; letter-spacing:2px; color:rgba(255,140,60,0.55); text-transform:uppercase; display:none;">
+                CAPTURING · <span id="audio-bpm">— BPM</span>
+            </div>
+        </div>
     </div>
 
     <script type="module" src="/src/main.js"></script>
