@@ -5,14 +5,14 @@ export const TUNNEL_LEN = 1200;
 export const LANE_COUNT = 120;
 export const LANE_ANGLE = (Math.PI * 2) / LANE_COUNT; // 0.05236 rad per lane
 export const CAR_OFF    = 0.32; //
-export const DANGER_TIMEOUT   = 145.0;
+export const DANGER_TIMEOUT   = 2.0;
 export const BASE_SPEED_START = 32;
 
 // ---- Camera constants ----
 export const CAM_SPRING        = 52; // spring stiffness (N/m) — higher = tighter spring, more rubber-banding; lower = looser spring, more floaty feel
 export const CAM_DAMP          = 13.5; // critically damped at ~13.5, lower for more floaty feel
 export const CAM_MAX_VEL       = 4.4; // max camera velocity (prevents extreme rubber-banding when player clips into wall)
-export const CAM_FOV_NORMAL    = 60;
+export const CAM_FOV_NORMAL    = 70;
 export const CAM_FOV_BOOST     = 110;
 export const CAM_FOV_ENTER_S   = 3.0;
 export const CAM_FOV_EXIT_S    = 3.0;
@@ -39,14 +39,14 @@ export const CFG = {
   maxRadialOffset:     10, // max distance from tube center (for crash)
 
   // ── Forward speed ──
-  baseSpeed:           50,
-  forwardSpeed:        70,
+  baseSpeed:           80,
+  forwardSpeed:        90,
   boostSpeed:          95,
   acceleration:        0.2,
   speedForce:          10,
-  speedFriction:       0.5,
+  speedFriction:       0.3,
   boostDrain:          0.20,
-  boostRegen:          0.25,
+  boostRegen:          0.35,
   airControl:          1,
 };
 
@@ -57,9 +57,9 @@ export const EDGE_HEAT_COOL     = 0.18;  // heat lost per second when out of dan
 
 // ---- Boost-heat interaction ----
 export const BOOST_HEAT_RATE   = 0.20;  // heat/sec accumulated while boosting
-export const BOOST_HEAT_CUTOFF = 0.65;  // heat level that force-kills boost
-export const BOOST_HEAT_REARM  = 0.30;  // heat must drop below this before boost can re-arm
-export const BOOST_MIN_FUEL    = 0.95;  // fraction of boost fuel required to start boost
+export const BOOST_HEAT_CUTOFF = 0.35;  // heat level that force-kills boost
+export const BOOST_HEAT_REARM  = 0.20;  // heat must drop below this before boost can re-arm
+export const BOOST_MIN_FUEL    = 0.85;  // fraction of boost fuel required to start boost
 
 // ---- Ball physics material ----
 export const BALL_PHYS = {
@@ -129,14 +129,17 @@ export const PROC_CFG = {
   STEER_ACCELERATION:    5,
   MAX_U_VELOCITY:        9,
 
-  KAPPA_INTERVAL: 300,
-  KAPPA_MIN: -0.2,
-  KAPPA_MAX: +1.8,
+  KAPPA_INTERVAL: 200, // steps between new curvature targets
+  KAPPA_MIN: -1.0, // min curvature (1/radius) for procedural segments; controls max turn tightness; tune with MAX_TURN_XZ
+  KAPPA_MAX: +1.8, // max curvature (1/radius) for procedural segments; controls max turn tightness; tune with MAX_TURN_XZ
 
-  ARC_INTERVAL: 450,
-  ARC_MIN: 0.3,
-  ARC_MAX: 1.0,
-  TWIST_INTERVAL: 300,
+  ARC_INTERVAL: 450, // steps between new arc length targets
+
+  ARC_MIN: 0.3, // min arc length for procedural segments; controls how long turns last; tune with MAX_TURN_XZ and KAPPA_MAX
+
+  ARC_MAX: 1.0, // max arc length for procedural segments; controls how long turns last; tune with MAX_TURN_XZ and KAPPA_MAX
+
+  TWIST_INTERVAL: 300,  // steps between new twist targets
 
   // Camera look-ahead
   CAM_LOOKAHEAD_OFFSETS: [8, 18, 30],

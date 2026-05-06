@@ -1,0 +1,213 @@
+{
+  "fxBass": 2,
+  "fxBeat": 2,
+  "fxOnset": 1.57,
+  "fxMid": 1.27,
+  "fxEnergy": 0.75,
+  "shakeAmp": 0.008,
+  "waveAmp": 0.95,
+  "emergeDist": 310,
+  "parallax": {
+    "amount": 2,
+    "flow": 1.46,
+    "depthStretch": 4.38,
+    "audioPush": 0,
+    "deltaA": 0.36,
+    "deltaS": -0.56,
+    "layerDepth": {
+      "bgFlares": -0.62,
+      "lava": 0.41,
+      "lavaDeep": 1.21,
+      "waveform": 1.29,
+      "longBlue": 0.95,
+      "longOrange": 0.46,
+      "twistBlue": 0.13,
+      "twistOrange": 0.78,
+      "grid": -1.12,
+      "strips": 0.78,
+      "tilesOrange": -1.11,
+      "tilesBlue": 1.16,
+      "chevrons": -0.91,
+      "frontPalette": 0.12
+    }
+  },
+  "baseNavy": [
+    0,
+    0.015,
+    0.15
+  ],
+  "deepNavy": [
+    0.136,
+    0.035,
+    0.105
+  ],
+  "structureBlue": [
+    0,
+    0.3,
+    0.85
+  ],
+  "waveformBlue": [
+    0.07,
+    0.52,
+    1
+  ],
+  "electricBlue": [
+    0.02,
+    0.682,
+    1.477
+  ],
+  "lavaColorDark": [
+    0.33,
+    0.07,
+    0
+  ],
+  "lavaColorMid": [
+    0.9,
+    0.22,
+    0.02
+  ],
+  "lavaColorHot": [
+    1,
+    0.36,
+    0.02
+  ],
+  "dashOrange": [
+    1,
+    0.3,
+    0.02
+  ],
+  "edgeOrange": [
+    1,
+    0.22,
+    0
+  ],
+  "contactWarm": [
+    1,
+    0.5,
+    0.12
+  ],
+  "accentRed": [
+    1.5,
+    0.04,
+    0.02
+  ],
+  "accentEmerald": [
+    0,
+    0.95,
+    0.65
+  ],
+  "accentAfrican": [
+    1,
+    0.52,
+    0.05
+  ],
+  "accentFuchsia": [
+    1,
+    0.048,
+    0.16
+  ],
+  "layerCyclePeriod": 3.3,
+  "brightCyclePeriod": 5,
+  "brightMin": 0.12,
+  "brightMax": 1.11,
+  "opacity": {
+    "grid": {
+      "min": 0.99,
+      "max": 1.5,
+      "source": "rms",
+      "smooth": 12.1,
+      "phase": 0
+    },
+    "waveform": {
+      "min": 0,
+      "max": 1,
+      "source": "midWave",
+      "smooth": 4,
+      "phase": 1.18
+    },
+    "lava": {
+      "min": 0.39,
+      "max": 0.85,
+      "source": "lavaLight",
+      "smooth": 3.2,
+      "phase": 2.36
+    },
+    "lavaDeep": {
+      "min": 0.35,
+      "max": 0.7,
+      "source": "low",
+      "smooth": 4.5,
+      "phase": 3.54
+    },
+    "strips": {
+      "min": 0,
+      "max": 0.9,
+      "source": "mid",
+      "smooth": 5,
+      "phase": 4.71
+    },
+    "longBands": {
+      "min": 0,
+      "max": 0.85,
+      "source": "ribbonDrive",
+      "smooth": 3.5,
+      "phase": 5.89
+    },
+    "twistBands": {
+      "min": 0,
+      "max": 0.95,
+      "source": "midWave",
+      "smooth": 4.5,
+      "phase": 0.79
+    },
+    "tilesOrange": {
+      "min": 0,
+      "max": 0.95,
+      "source": "bassImpact",
+      "smooth": 8,
+      "phase": 1.97
+    },
+    "tilesBlue": {
+      "min": 0,
+      "max": 0.6,
+      "source": "high",
+      "smooth": 4,
+      "phase": 3.14
+    },
+    "chevrons": {
+      "min": 0.17,
+      "max": 0.82,
+      "source": "beatPulse",
+      "smooth": 9,
+      "phase": 4.32
+    },
+    "floorEdge": {
+      "min": 1.19,
+      "max": 1.5,
+      "source": "rms",
+      "smooth": 15,
+      "phase": 0.39
+    },
+    "contact": {
+      "min": 0.3,
+      "max": 1,
+      "source": "onsetPulse",
+      "smooth": 10,
+      "phase": 0
+    },
+    "bgFlares": {
+      "min": 0.34,
+      "max": 0.85,
+      "source": "rms",
+      "smooth": 1.2,
+      "phase": 5.5
+    },
+    "frontPalette": {
+      "min": 0,
+      "max": 0.85,
+      "source": "onsetPulse",
+      "smooth": 5.5,
+      "phase": 2.75
+    }
+  }
+}
