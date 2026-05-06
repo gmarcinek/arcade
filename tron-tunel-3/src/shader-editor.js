@@ -7,6 +7,50 @@ import { createAudioSystem, AudioMetadataBus } from './audio/index.js';
 // ── Capture defaults before any edits ─────────────────────────────────────────
 const DEFAULTS = JSON.parse(JSON.stringify(TUNNEL_FX_CONFIG));
 
+// ── Apply last exported editor state (overrides defaults at startup) ───────────
+(function applyStartConfig() {
+  const c = TUNNEL_FX_CONFIG;
+  c.fxBass = 2; c.fxBeat = 2; c.fxOnset = 1.57; c.fxMid = 1.27; c.fxEnergy = 0.75;
+  c.shakeAmp = 0.04294060221381721; c.waveAmp = 2.915408874527218; c.emergeDist = 310;
+  c.layerCyclePeriod = 3.3; c.brightCyclePeriod = 5; c.brightMin = 0.12; c.brightMax = 1.11;
+  Object.assign(c.parallax, { amount: 2, flow: 1.46, depthStretch: 4.38, audioPush: 0, deltaA: 0.36, deltaS: -0.56 });
+  Object.assign(c.parallax.layerDepth, {
+    bgFlares: -0.62, lava: 0.41, lavaDeep: 1.21, waveform: 1.29,
+    longBlue: 0.95, longOrange: 0.46, twistBlue: 0.13, twistOrange: 0.78,
+    grid: -1.12, strips: 0.78, tilesOrange: -1.11, tilesBlue: 1.16, chevrons: -0.91, frontPalette: 0.12,
+  });
+  c.baseNavy.splice(0, 3, 0, 0.015, 0.15);
+  c.deepNavy.splice(0, 3, 0.136, 0.035, 0.105);
+  c.structureBlue.splice(0, 3, 0, 0.3, 0.85);
+  c.waveformBlue.splice(0, 3, 0.07, 0.52, 1);
+  c.electricBlue.splice(0, 3, 0.02, 0.682, 1.477);
+  c.lavaColorDark.splice(0, 3, 0.33, 0.07, 0);
+  c.lavaColorMid.splice(0, 3, 0.9, 0.22, 0.02);
+  c.lavaColorHot.splice(0, 3, 1, 0.36, 0.02);
+  c.dashOrange.splice(0, 3, 1, 0.3, 0.02);
+  c.edgeOrange.splice(0, 3, 1, 0.22, 0);
+  c.contactWarm.splice(0, 3, 1, 0.5, 0.12);
+  c.accentRed.splice(0, 3, 1.5, 0.04, 0.02);
+  c.accentEmerald.splice(0, 3, 0, 0.95, 0.65);
+  c.accentAfrican.splice(0, 3, 1, 0.52, 0.05);
+  c.accentFuchsia.splice(0, 3, 1, 0.048, 0.16);
+  const op = c.opacity;
+  Object.assign(op.grid,         { min: 0.99, max: 1.5,  smooth: 12.1 });
+  Object.assign(op.waveform,     { min: 0,    max: 1,    smooth: 4    });
+  Object.assign(op.lava,         { min: 0.39, max: 0.85, smooth: 3.2  });
+  Object.assign(op.lavaDeep,     { min: 0.35, max: 0.7,  smooth: 4.5  });
+  Object.assign(op.strips,       { min: 0,    max: 0.9,  smooth: 5    });
+  Object.assign(op.longBands,    { min: 0,    max: 0.85, smooth: 3.5  });
+  Object.assign(op.twistBands,   { min: 0,    max: 0.95, smooth: 4.5  });
+  Object.assign(op.tilesOrange,  { min: 0,    max: 0.95, smooth: 8    });
+  Object.assign(op.tilesBlue,    { min: 0,    max: 0.6,  smooth: 4    });
+  Object.assign(op.chevrons,     { min: 0.17, max: 0.82, smooth: 9    });
+  Object.assign(op.floorEdge,    { min: 1.19, max: 1.5,  smooth: 15   });
+  Object.assign(op.contact,      { min: 0.3,  max: 1,    smooth: 10   });
+  Object.assign(op.bgFlares,     { min: 0.34, max: 0.85, smooth: 1.2  });
+  Object.assign(op.frontPalette, { min: 0,    max: 0.85, smooth: 5.5  });
+})();
+
 // ── Renderer / scene / camera ─────────────────────────────────────────────────
 const canvasWrapper = document.getElementById('canvas-wrapper');
 const canvas        = document.getElementById('editor-canvas');
