@@ -21,6 +21,11 @@ import { DOFPass } from './postprocess/passes/dofPass.js';
 import { FXAAPass } from './postprocess/passes/fxaaPass.js';
 import { HuePass } from './postprocess/passes/huePass.js';
 import { VignettePass } from './postprocess/passes/vignettePass.js';
+import { BlackAndWhitePass } from './postprocess/passes/bwPass.js';
+import { InvertPass } from './postprocess/passes/invertPass.js';
+import { PostTimelineManager } from './postprocess/PostTimelineManager.js';
+import { POST_TIMELINE } from './postprocess/postTimeline.js';
+
 
 function bitrev32(n) {
   n = n >>> 0;
@@ -53,7 +58,18 @@ let postChain = null;
 let dofPass = null;
 let fxaaPass = null;
 let huePass = null;
+let bwPass = null;
+let invertPass = null;
 let vignettePass = null;
+let postTimelineMgr = null;
+let _hueSat = 1.0;      // smoothed saturation driven by audio energy
+let _lumRT = null;
+let _lumOrthoScene = null;
+let _lumOrthoCamera = null;
+let _lumMat = null;
+const _lumBuf = new Uint8Array(4);
+let _sceneLuminance = 0.5;    // smoothed average scene luminance (0..1)
+let _lumTick = 0;
 
 function resize() {
   const w = window.innerWidth;
@@ -78,6 +94,12 @@ function resize() {
   }
   if (huePass) {
     huePass.resize(w, h);
+  }
+  if (bwPass) {
+    bwPass.resize(w, h);
+  }
+  if (invertPass) {
+    invertPass.resize(w, h);
   }
 }
 
@@ -124,6 +146,26 @@ scene.add(new THREE.PointLight(0x0080ff, 2.5, 40));
 }
 
 // ---- Stage 3: Postprocess chain ----
+const _LUM_VERT = `void main() { gl_Position = vec4(position, 1.0); }`;
+const _LUM_FRAG = `
+  precision mediump float;
+  uniform sampler2D tDiffuse;
+  void main() {
+    const vec3 W = vec3(0.299, 0.587, 0.114);
+    float l = 0.0;
+    l += dot(texture2D(tDiffuse, vec2(0.1, 0.1)).rgb, W);
+    l += dot(texture2D(tDiffuse, vec2(0.5, 0.1)).rgb, W);
+    l += dot(texture2D(tDiffuse, vec2(0.9, 0.1)).rgb, W);
+    l += dot(texture2D(tDiffuse, vec2(0.1, 0.5)).rgb, W);
+    l += dot(texture2D(tDiffuse, vec2(0.5, 0.5)).rgb, W);
+    l += dot(texture2D(tDiffuse, vec2(0.9, 0.5)).rgb, W);
+    l += dot(texture2D(tDiffuse, vec2(0.1, 0.9)).rgb, W);
+    l += dot(texture2D(tDiffuse, vec2(0.5, 0.9)).rgb, W);
+    l += dot(texture2D(tDiffuse, vec2(0.9, 0.9)).rgb, W);
+    l /= 9.0;
+    gl_FragColor = vec4(l, 0.0, 0.0, 1.0);
+  }
+`;
 function initPostprocessing() {
   const w = window.innerWidth;
   const h = window.innerHeight;
@@ -150,8 +192,29 @@ function initPostprocessing() {
   huePass = new HuePass(w, h);
   postChain.addPass('hue', huePass.getMaterial());
 
+  bwPass = new BlackAndWhitePass(w, h, 0.0);
+  postChain.addPass('bw', bwPass.getMaterial());
+
+  invertPass = new InvertPass(w, h, 0.0);
+  postChain.addPass('invert', invertPass.getMaterial());
+
+  // Sparse luminance sampler — 1×1 RT, 9 manual samples
+  _lumRT = new THREE.WebGLRenderTarget(1, 1, { type: THREE.UnsignedByteType });
+  _lumOrthoCamera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
+  _lumOrthoScene = new THREE.Scene();
+  _lumMat = new THREE.ShaderMaterial({
+    uniforms: { tDiffuse: { value: null } },
+    vertexShader: _LUM_VERT,
+    fragmentShader: _LUM_FRAG,
+  });
+  _lumOrthoScene.add(new THREE.Mesh(new THREE.PlaneGeometry(2, 2), _lumMat));
+
   vignettePass = new VignettePass(w, h, state.vignetteRadius, state.vignetteIntensity);
   postChain.addPass('vignette', vignettePass.getMaterial());
+
+  // Timeline-driven post-process events
+  postTimelineMgr = new PostTimelineManager(POST_TIMELINE);
+  postTimelineMgr.setPasses({ huePass, bwPass, invertPass });
 
   console.log('Postprocessing chain initialized');
 }
@@ -214,6 +277,12 @@ setupInput();
 
 // ---- Game flow ----
 function startGame(spawnS = 0) {
+  if (postTimelineMgr) {
+    postTimelineMgr.reset();
+    // Apply events scheduled at t=0 immediately after reset.
+    postTimelineMgr.tick(0);
+  }
+
   state.carTheta = 0;
   state.thetaVelocity = 0;
 
@@ -371,6 +440,7 @@ function tick(dt) {
     if (state.gameRunning && !state.crashed) {
       // No danger/game-over detection in procedural mode
       state.score += state.sVelocity * dt * 0.18;
+
       state.timeLeft -= dt;
       if (state.timeLeft <= 0) {
         state.timeLeft = 0;
@@ -540,6 +610,18 @@ function loop(t) {
 
   if (huePass) {
     huePass.update(postTime);
+
+    const af = AudioMetadataBus.get();
+    const energy = af.rms;                              // 0..1 smoothed RMS energy
+    const targetSat = 1.0 + energy * 1.5;              // saturation: 1.0 → 2.5 on energy
+    const lerpSpeed = 1.0 - Math.exp(-8.0 * dt);
+    _hueSat = _hueSat + lerpSpeed * (targetSat - _hueSat);
+    huePass.setSaturation(_hueSat);
+    huePass.setContrast(1.05 + energy * 0.1); // base contrast from audio
+  }
+
+  if (postTimelineMgr) {
+    postTimelineMgr.tick(dt);
   }
 
   if (flythroughActive) {
@@ -601,7 +683,7 @@ function loop(t) {
 }
 
 // ---- UI wiring ----
-document.getElementById('start-btn').addEventListener('click', () => startGame(0));
+document.getElementById('start-btn').addEventListener('click', () => startGame(RESTART_SPAWN_M));
 document.getElementById('flythrough-btn').addEventListener('click', startFlythrough);
 const hudRestartBtn = document.getElementById('hud-restart-btn');
 if (hudRestartBtn) hudRestartBtn.addEventListener('click', () => startGame(RESTART_SPAWN_M));

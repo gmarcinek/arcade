@@ -24,7 +24,11 @@ export const POSTPROCESS_CONFIG = {
     enableHue: true,
   },
   hue: {
-      period: 12.0,          // sekundy na pełny obrót
-      defaultIntensity: 1.0, // 0..1 miksuje między oryginałem a obróconym
+      period: 12.0,           // sekundy na pełny obrót
+      defaultIntensity: 1.0,  // 0..1 miksuje między oryginałem a obróconym
+      defaultSaturation: 1.0, // 1.0 = bez zmian, 0.0 = szarość, >1.0 = przesycenie
+      defaultContrast: 1.0,   // 1.0 = bez zmian
+      defaultBrightness: 0.0, // -1..1, 0 = bez zmian
+      defaultMidtonesContrast: 0.0, // 0 = bez zmian, >0 = więcej kontrastu w półtonach
   },
 };

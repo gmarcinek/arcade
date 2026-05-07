@@ -244,6 +244,10 @@ export const hueShader = `
   uniform float uTime;
   uniform float uPeriod;
   uniform float uIntensity;
+  uniform float uSaturation;
+  uniform float uContrast;
+  uniform float uBrightness;
+  uniform float uMidtonesContrast;
 
   vec3 hueShift(vec3 color, float angle) {
     const vec3 k = vec3(0.57735026);
@@ -254,10 +258,84 @@ export const hueShader = `
 
   void main() {
     vec4 src = texture2D(tDiffuse, vUv);
+
+    // hue shift
     float phase = (uTime / max(uPeriod, 0.0001)) * 6.2831853;
-    float angle = sin(phase) * 0.2;
+    float angle = sin(phase) * 0.314; // max 18 degrees shift
     vec3 shifted = hueShift(src.rgb, angle);
     vec3 outColor = mix(src.rgb, shifted, clamp(uIntensity, 0.0, 1.0));
-    gl_FragColor = vec4(outColor, src.a);
+
+    // saturation (1.0 = no change, 0.0 = grayscale, >1.0 = oversaturated)
+    float luma = dot(outColor, vec3(0.299, 0.587, 0.114));
+    outColor = mix(vec3(luma), outColor, uSaturation);
+
+    // contrast (1.0 = no change)
+    outColor = (outColor - 0.5) * uContrast + 0.5;
+
+    // brightness (-1..1, 0 = no change)
+    outColor = outColor + uBrightness;
+
+    // midtones contrast (0 = no change, positive = more contrast in mids)
+    float midLuma = dot(outColor, vec3(0.299, 0.587, 0.114));
+    float midMask = 1.0 - abs(clamp(midLuma, 0.0, 1.0) - 0.5) * 2.0;
+    outColor = outColor + (outColor - 0.5) * uMidtonesContrast * midMask;
+
+    gl_FragColor = vec4(clamp(outColor, 0.0, 1.0), src.a);
+  }
+`;
+
+// ============================================================================
+// BLACK & WHITE
+// ============================================================================
+
+export const blackAndWhiteShader = `
+  precision highp float;
+
+  varying vec2 vUv;
+
+  uniform sampler2D tDiffuse;
+  uniform float uIntensity; // 0 = oryginał, 1 = pełny B&W
+
+  void main() {
+    vec4 src = texture2D(tDiffuse, vUv);
+    float luma = dot(src.rgb, vec3(0.299, 0.587, 0.114));
+    gl_FragColor = vec4(mix(src.rgb, vec3(luma), uIntensity), src.a);
+  }
+`;
+
+// ============================================================================
+// INVERT
+// ============================================================================
+
+export const invertShader = `
+  precision highp float;
+
+  varying vec2 vUv;
+
+  uniform sampler2D tDiffuse;
+  uniform float uIntensity;
+  uniform float uContrast;
+  uniform float uBrightness;
+  uniform float uMidtonesContrast;
+
+  void main() {
+    vec4 src = texture2D(tDiffuse, vUv);
+
+    // invert
+    vec3 outColor = mix(src.rgb, 1.0 - src.rgb, uIntensity);
+
+    // contrast (1.0 = no change) — scaled by intensity so no effect when pass is off
+    vec3 contrasted = (outColor - 0.5) * uContrast + 0.5;
+    outColor = mix(outColor, contrasted, uIntensity);
+
+    // brightness — scaled by intensity
+    outColor = outColor + uBrightness * uIntensity;
+
+    // midtones contrast — scaled by intensity
+    float midLuma = dot(outColor, vec3(0.299, 0.587, 0.114));
+    float midMask = 1.0 - abs(clamp(midLuma, 0.0, 1.0) - 0.5) * 2.0;
+    outColor = outColor + (outColor - 0.5) * uMidtonesContrast * midMask * uIntensity;
+
+    gl_FragColor = vec4(clamp(outColor, 0.0, 1.0), src.a);
   }
 `;

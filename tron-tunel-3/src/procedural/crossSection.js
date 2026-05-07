@@ -20,11 +20,43 @@ export function createCrossSection() {
     return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
   }
 
+  // ── Variable-interval segment cache ──────────────────────────────────────
+  // Each channel (kappa / arc / twist) has its own segment lengths drawn from
+  // [ivMin, ivMax] via the deterministic hash, so consecutive turns, arc-width
+  // changes and twists are all independently timed.
+  function makeSegCache(ivMin, ivMax, hashSeed) {
+    const starts = [0]; // starts[i] = cumulative start position of segment i
+    function segLen(i) {
+      return ivMin + hash(i * hashSeed + hashSeed) * (ivMax - ivMin);
+    }
+    function ensureIdx(i) {
+      while (starts.length <= i + 1) {
+        const j = starts.length - 1;
+        starts.push(starts[j] + segLen(j));
+      }
+    }
+    function idxPhase(s) {
+      // Use ivMin as a rough upper bound for initial guess, then adjust.
+      let i = Math.max(0, Math.floor(s / ivMax));
+      ensureIdx(i + 2);
+      while (starts[i + 1] <= s) { i++; ensureIdx(i + 2); }
+      while (i > 0 && starts[i] > s) { i--; }
+      const len = starts[i + 1] - starts[i];
+      return { idx: i, phase: (s - starts[i]) / Math.max(1, len) };
+    }
+    return idxPhase;
+  }
+
+  const kappaIdxPhase = makeSegCache(
+    PROC_CFG.KAPPA_INTERVAL_MIN, PROC_CFG.KAPPA_INTERVAL_MAX, 17);
+  const arcIdxPhase   = makeSegCache(
+    PROC_CFG.ARC_INTERVAL_MIN,   PROC_CFG.ARC_INTERVAL_MAX,   31);
+  const twistIdxPhase = makeSegCache(
+    PROC_CFG.TWIST_INTERVAL_MIN, PROC_CFG.TWIST_INTERVAL_MAX, 53);
+
   function getKappa(s) {
     s = Math.max(0, s);
-    const iv  = PROC_CFG.KAPPA_INTERVAL;
-    const idx   = Math.floor(s / iv);
-    const phase = (s % iv) / iv;
+    const { idx, phase } = kappaIdxPhase(s);
     const kMin = PROC_CFG.KAPPA_MIN, kMax = PROC_CFG.KAPPA_MAX;
     const kA = idx === 0 ? kMax : idx === 1 ? kMax : kMin + hash(idx * 13 + 1)       * (kMax - kMin);
     const kB = idx === 0 ? kMax :              kMin + hash((idx + 1) * 13 + 1) * (kMax - kMin);
@@ -34,9 +66,7 @@ export function createCrossSection() {
 
   function getArcSpan(s) {
     s = Math.max(0, s);
-    const iv  = PROC_CFG.ARC_INTERVAL;
-    const idx   = Math.floor(s / iv);
-    const phase = (s % iv) / iv;
+    const { idx, phase } = arcIdxPhase(s);
     const arcMin = PROC_CFG.ARC_MIN, arcMax = PROC_CFG.ARC_MAX;
     const wA = idx === 0 ? arcMax : idx === 1 ? arcMax : arcMin + hash(idx)     * (arcMax - arcMin);
     const wB = idx === 0 ? arcMax :              arcMin + hash(idx + 1) * (arcMax - arcMin);
@@ -45,10 +75,7 @@ export function createCrossSection() {
 
   function getTwist(s) {
     s = Math.max(0, s);
-    const iv  = PROC_CFG.TWIST_INTERVAL;
-    const idx   = Math.floor(s / iv);
-    const phase = (s % iv) / iv;
-    // Map hash to [-0.5, +0.5]
+    const { idx, phase } = twistIdxPhase(s);
     const tA = idx === 0 ? 0 : idx === 1 ? 0 : (hash(idx * 7 + 3)       - 0.5) * 1.0;
     const tB = idx === 0 ? 0 :                  (hash((idx + 1) * 7 + 3) - 0.5) * 1.0;
     return tA + (tB - tA) * smoothstep(0, 1, phase);

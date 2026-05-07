@@ -29,16 +29,16 @@ export const CAM_DIST_BACK     = 4;
 // ---- Physics config ----
 export const CFG = {
   // ── Lateral rolling physics ──
-  driveTorque:         18,    // rad/s² — torque applied to ball spin by player input
+  driveTorque:         28,    // rad/s² — torque applied to ball spin by player input
   rollingFriction:     28,    // coupling strength between ball spin and tunnel position (higher = grippier)
-  spinDecay:           0.4,   // rad/s² decay of ball spin in air (gyroscopic momentum)
+  spinDecay:           55,   // rad/s² decay of ball spin in air (gyroscopic momentum)
   airLateralDecay:     0.15,  // decay of thetaVelocity in air (low = floaty drift)
   bounceSpinTransfer:  0.25,  // fraction of tangential velocity converted to spin on impact
-  maxThetaVelocity:    4,     // hard cap on tunnel angular velocity (rad/s)
+  maxThetaVelocity:    44,     // hard cap on tunnel angular velocity (rad/s)
   tunnelAngularGravity: 0.0,  // rad/s² — pendulum pull toward tube floor (theta=0); tune per difficulty
 
   // ── Radial physics ──
-  jumpImpulse:         15.5, // initial radial velocity from jump (m/s)
+  jumpImpulse:         17, // initial radial velocity from jump (m/s)
   tunnelGravity:       36, // radial acceleration toward tube center when airborne (m/s²)
   maxRadialOffset:     10, // max distance from tube center (for crash)
 
@@ -112,38 +112,44 @@ export const TUNNEL_FX = {
 // ---- Procedural track config ----
 export const PROC_CFG = {
   // Segment geometry
-  SEGMENT_LENGTH_MIN:    290,
+  SEGMENT_LENGTH_MIN:    170,
   SEGMENT_LENGTH_MAX:    310,
-  MAX_TURN_XZ:           0.524,
-  MAX_TURN_Y:            0.10,
-  CONTROL_POINTS_MIN:    1,
-  CONTROL_POINTS_MAX:    1,
+  
+  MAX_TURN_XZ:           0.524, // max turn angle around horizontal axes (pitch/yaw); higher = more intense turns but more disorienting
+  
+  MAX_TURN_Y:            0.524, // max turn angle around forward axis (roll); higher = more intense barrel rolls but more disorienting
+
+  CONTROL_POINTS_MIN:    4, // min number of control points per segment; higher = more varied track but more erratic; lower = smoother track but more predictable
+
+  CONTROL_POINTS_MAX:    4, // max number of control points per segment; higher = more varied track but more erratic; lower = smoother track but more predictable
 
   // Safe track
-  SAFE_TRACK_SAMPLES:    200,
+  SAFE_TRACK_SAMPLES:    100, // number of points sampled along track to evaluate safe track; higher = more accurate but more CPU usage
 
   // Chunk streaming
-  LOOKAHEAD_SEGMENTS:    2,
-  TRAIL_SEGMENTS:        1,
+  LOOKAHEAD_SEGMENTS:    3, // number of segments ahead of player to keep loaded; higher = smoother streaming but more CPU/memory usage
+  TRAIL_SEGMENTS:        2,
 
   // Speed (proc-specific)
   SPEED_BASE:            60,
   SPEED_MAX:             110,
   SPEED_BOOST:           150,
-  STEER_ACCELERATION:    5,
-  MAX_U_VELOCITY:        9,
+  STEER_ACCELERATION:    5, //
+  MAX_U_VELOCITY:        9, //
 
-  KAPPA_INTERVAL: 230, // steps between new curvature targets
-  KAPPA_MIN: -0.5, // min curvature (1/radius) for procedural segments; controls max turn tightness; tune with MAX_TURN_XZ
-  KAPPA_MAX: +1.8, // max curvature (1/radius) for procedural segments; controls max turn tightness; tune with MAX_TURN_XZ
+  KAPPA_INTERVAL_MIN: 150, // min steps between curvature targets (shorter = quicker turns)
+  KAPPA_INTERVAL_MAX: 450, // max steps between curvature targets (longer = more sustained turns)
+  KAPPA_MIN: -0.8,
+  KAPPA_MAX: +2.8,
 
-  ARC_INTERVAL: 450, // steps between new arc length targets
+  ARC_INTERVAL_MIN: 200, // min steps between arc-width targets
+  ARC_INTERVAL_MAX: 650, // max steps between arc-width targets
 
-  ARC_MIN: 0.3, // min arc length for procedural segments; controls how long turns last; tune with MAX_TURN_XZ and KAPPA_MAX
+  ARC_MIN: 0.3,
+  ARC_MAX: 1.0,
 
-  ARC_MAX: 1.0, // max arc length for procedural segments; controls how long turns last; tune with MAX_TURN_XZ and KAPPA_MAX
-
-  TWIST_INTERVAL: 300,  // steps between new twist targets
+  TWIST_INTERVAL_MIN: 140, // min steps between twist targets
+  TWIST_INTERVAL_MAX: 450, // max steps between twist targets
 
   // Camera look-ahead
   CAM_LOOKAHEAD_OFFSETS: [8, 18, 30],

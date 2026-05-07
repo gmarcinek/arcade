@@ -125,3 +125,48 @@ export function getPlayerFrame() {
     lookAheadPos,
   };
 }
+
+/**
+ * Returns the world position of a point on the surface at (s, u),
+ * offset `inwardMeters` toward the tunnel center along the surface normal.
+ * Used for token placement.
+ */
+export function getWorldPositionAtSU(s, u, inwardMeters = 0) {
+  if (!_spline) return null;
+  const f = _spline.getFrameAt(s);
+  if (!f) return null;
+
+  const twistRot = _crossSection ? _crossSection.getTwist(s) * Math.PI * 2 : 0;
+  const cosT = Math.cos(twistRot), sinT = Math.sin(twistRot);
+  const norT = new THREE.Vector3(
+    f.nor.x * cosT + f.bin.x * sinT,
+    f.nor.y * cosT + f.bin.y * sinT,
+    f.nor.z * cosT + f.bin.z * sinT,
+  );
+  const binT = new THREE.Vector3(
+    -f.nor.x * sinT + f.bin.x * cosT,
+    -f.nor.y * sinT + f.bin.y * cosT,
+    -f.nor.z * sinT + f.bin.z * cosT,
+  );
+
+  const pt = _crossSection
+    ? _crossSection.getPoint(u, s, TUNNEL_R)
+    : { x: TUNNEL_R * Math.cos(u), y: TUNNEL_R * Math.sin(u) };
+
+  const nLocal = _crossSection
+    ? _crossSection.getBallSideNormal(u, s, TUNNEL_R)
+    : { nx: Math.cos(u), ny: Math.sin(u) };
+
+  const surfaceWorld = new THREE.Vector3()
+    .copy(f.pos)
+    .addScaledVector(norT, pt.x)
+    .addScaledVector(binT, pt.y);
+
+  const ballSideNormal = new THREE.Vector3()
+    .addScaledVector(norT, nLocal.nx)
+    .addScaledVector(binT, nLocal.ny)
+    .normalize();
+
+  // inward = toward tunnel center = along ball-side normal
+  return surfaceWorld.clone().addScaledVector(ballSideNormal, inwardMeters);
+}

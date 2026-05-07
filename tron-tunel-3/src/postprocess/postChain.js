@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { fullscreenVertexShader, passthroughShader } from './postShaders.js';
+import { fullscreenVertexShader, passthroughShader, hueShader } from './postShaders.js';
 
 /**
  * PostChain: Minimal postprocess composition manager

@@ -6,6 +6,10 @@ import { fullscreenVertexShader, fxaaShader } from '../postShaders.js';
  * Reduces aliasing artifacts, especially useful after blur passes
  */
 class FXAAPass {
+  static CONFIG = {
+    // FXAA has no tunable uniforms beyond resolution; slot kept for future params
+  };
+
   constructor(width, height) {
     this.width = width;
     this.height = height;

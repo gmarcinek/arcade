@@ -1,12 +1,17 @@
 import * as THREE from 'three';
 import { fullscreenVertexShader, vignetteShader } from '../postShaders.js';
 
-/**
- * Vignette Pass: Darkening falloff from center
- * Stylistic effect that draws attention to screen center
- */
 class VignettePass {
-  constructor(width, height, radius = 0.85, intensity = 0.5) {
+  static CONFIG = {
+    defaultRadius:    0.85,  // 0..1, larger = smaller vignette ring
+    defaultIntensity: 0.5,   // 0 = none, 1 = fully dark edges
+  };
+
+  constructor(
+    width, height,
+    radius    = VignettePass.CONFIG.defaultRadius,
+    intensity = VignettePass.CONFIG.defaultIntensity
+  ) {
     this.width = width;
     this.height = height;
 
