@@ -23,11 +23,38 @@ html, body {
 
 /* ---- HUD ---- */
 .hud { position: fixed; pointer-events: none; z-index: 20; color: #fff; font-family: inherit; }
-.hud-tl { top: 16px; left: 20px; }
+.hud-tl {
+  top: 16px;
+  left: 20px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+}
 .hud-tc { top: 16px; left: 50%; transform: translateX(-50%); text-align: center; white-space: nowrap; }
 .hud-tr { top: 16px; right: 20px; text-align: right; }
 .hud-bl { bottom: 22px; left: 20px; }
 .hud-br { bottom: 22px; right: 20px; text-align: right; }
+
+.hud-restart-btn {
+  pointer-events: auto;
+  cursor: pointer;
+  padding: 3px 8px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: #9feeff;
+  background: rgba(0, 160, 200, 0.18);
+  border: 1px solid rgba(0, 210, 255, 0.45);
+  border-radius: 3px;
+}
+
+.hud-restart-btn:hover {
+  color: #ccf6ff;
+  background: rgba(0, 195, 235, 0.28);
+  border-color: rgba(0, 225, 255, 0.65);
+}
 
 .lbl {
   font-size: 10px; font-weight: 600;

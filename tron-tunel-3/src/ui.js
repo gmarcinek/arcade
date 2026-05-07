@@ -1,5 +1,5 @@
 import { state } from './state.js';
-import { DANGER_TIMEOUT } from './config.js';
+import { OUT_OF_BOUNDS_KILL_S } from './config.js';
 
 const flashEl  = document.getElementById('flash');
 const dangerEl = document.getElementById('danger-warn');
@@ -50,9 +50,9 @@ export function applyFlash(dt) {
 export function applyDanger() {
   if (state.dangerTimer > 0 && state.gameRunning) {
     dangerEl.style.display = 'flex';
-    const remaining = (DANGER_TIMEOUT - state.dangerTimer).toFixed(1);
-    dangerEl.textContent = '\u26a0 CZARNA DZIURA! ' + remaining + 's';
-    const intensity = state.dangerTimer / DANGER_TIMEOUT;
+    const remaining = Math.max(0, OUT_OF_BOUNDS_KILL_S - state.dangerTimer).toFixed(1);
+    dangerEl.textContent = '' + remaining + 's';
+    const intensity = Math.min(1, state.dangerTimer / OUT_OF_BOUNDS_KILL_S);
     dangerEl.style.opacity = String(0.7 + 0.3 * Math.sin(Date.now() / (120 - 80 * intensity)));
   } else {
     dangerEl.style.display = 'none';

@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { BALL_MAT, BALL_PHYS, CFG, PROC_CFG, TUNNEL_R, CAR_OFF } from './config.js';
+import { BALL_MAT, BALL_PHYS, CFG, PROC_CFG, TUNNEL_R, CAR_OFF, DEATH_BLAST_DURATION_S, DEATH_BLAST_SCALE_MAX } from './config.js';
 import { input } from './input.js';
 import { state } from './state.js';
 import { emitBounce, emitEdgeScratch, emitExplosionBurst } from './sparks.js';
@@ -239,8 +239,30 @@ export function updateCarVisuals(dt, ballObjects, renderer, scene, proceduralFra
   if (ballObjects._heatScale === undefined) ballObjects._heatScale = 1.0;
   ballObjects._heatScale += (heatScaleTarget - ballObjects._heatScale) * (1.0 - Math.exp(-dt * 3.0));
   const hs = ballObjects._heatScale;
+  let deathBlastGrowth = 1.0;
+
+  if (ballObjects._deathBlastActive) {
+    ballObjects._deathBlastTime = (ballObjects._deathBlastTime ?? 0) + dt;
+    const t = Math.max(0, Math.min(1, ballObjects._deathBlastTime / DEATH_BLAST_DURATION_S));
+    const blastStart = ballObjects._deathBlastStartPos;
+    const blastDir = ballObjects._deathBlastDir;
+
+    if (blastStart && blastDir) {
+      const blastSpeed = ballObjects._deathBlastSpeed ?? 0;
+      const dist = blastSpeed * ballObjects._deathBlastTime * (1.0 - 0.35 * t);
+      carGroup.position.copy(blastStart).addScaledVector(blastDir, dist);
+    }
+
+    const blastEaseOut = 1.0 - Math.pow(1.0 - t, 3.0);
+    deathBlastGrowth = 1.0 + (DEATH_BLAST_SCALE_MAX - 1.0) * blastEaseOut;
+  }
+
   state.ballHeatScale = hs;
-  ball.scale.set(scaleXZ * hs, scaleY * hs, scaleXZ * speedStretch * hs);
+  ball.scale.set(
+    scaleXZ * hs * deathBlastGrowth,
+    scaleY * hs * deathBlastGrowth,
+    scaleXZ * speedStretch * hs * deathBlastGrowth,
+  );
   equator.scale.copy(ball.scale);
 
   if (state.crashed) {
@@ -448,7 +470,7 @@ export function updateCarVisuals(dt, ballObjects, renderer, scene, proceduralFra
     }
 
     // Mini-burst explosions
-    if (heat > 0.3) {
+    if (heat > 0.3 || state.outOfBounds) {
       if (ballObjects._miniBurstCooldown === undefined) ballObjects._miniBurstCooldown = 0.4 + Math.random() * 1.0;
       if (ballObjects._miniBurstCooldown <= 0) {
         const fwd = proceduralFrame ? proceduralFrame.forward : new THREE.Vector3(0, 0, 1);

@@ -13,11 +13,11 @@ function angleDiff(a, b) {
 let _spline = null;
 let _crossSection = null;
 
-export function initPlayerSurface(spline, crossSection) {
+export function initPlayerSurface(spline, crossSection, startS = 0) {
   _spline = spline;
   _crossSection = crossSection;
-  state.s          = 0;
-  state.u          = spline.getFloorU(0);
+  state.s          = Math.max(0, startS);
+  state.u          = spline.getFloorU(state.s);
   state.uVelocity  = 0;
   state.sVelocity  = PROC_CFG.SPEED_BASE;
   state.radialOffset   = BALL_R;

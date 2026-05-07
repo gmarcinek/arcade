@@ -1,5 +1,5 @@
 ﻿import * as THREE from 'three';
-import { BALL_PHYS, BASE_SPEED_START, EDGE_HEAT_ZONE_M } from './config.js';
+import { BALL_PHYS, BASE_SPEED_START, DEATH_BLAST_DURATION_S, EDGE_HEAT_ZONE_M, OUT_OF_BOUNDS_KILL_S, RESTART_SPAWN_M } from './config.js';
 import { generateDemoTrack, createDemoChunkManager } from './procedural/generateDemoTrack.js';
 import { DebugTrackRenderer } from './procedural/debugTrackRenderer.js';
 import { createInfiniteSpline } from './procedural/infiniteSpline.js';
@@ -15,6 +15,7 @@ import { createSparks, updateSparks, clearSparks, emitBounce, emitExplosionBurst
 import { updateCamera } from './camera.js';
 import { updateHUD, applyFlash, applyDanger, endGame, showRespawnCountdown } from './ui.js';
 import { createAudioSystem, AudioMetadataBus } from './audio/index.js';
+import { createBackgroundLayer } from './procedural/shadders/background/background.glsl.js';
 
 function bitrev32(n) {
   n = n >>> 0;
@@ -53,6 +54,8 @@ function resize() {
 resize();
 window.addEventListener('resize', resize);
 
+const backgroundLayer = createBackgroundLayer(scene);
+
 // ---- Tunnel ----
 const {
   tunnel,
@@ -79,6 +82,7 @@ const { carGroup } = ballObjects;
 // ---- Audio system ----
 const audioSystem = createAudioSystem();
 audioSystem.bridge.register(tunnelMat);
+audioSystem.bridge.register(backgroundLayer.material);
 
 // ---- Sparks ----
 createSparks(scene);
@@ -125,7 +129,7 @@ const FLYTHROUGH_SPEED = 55;
 setupInput();
 
 // ---- Game flow ----
-function startGame() {
+function startGame(spawnS = 0) {
   state.carTheta = 0;
   state.thetaVelocity = 0;
 
@@ -183,7 +187,7 @@ function startGame() {
   input.jumpConsumed = false;
 
   if (PROCEDURAL_PLAYER) {
-    initPlayerSurface(infiniteSpline, crossSection);
+    initPlayerSurface(infiniteSpline, crossSection, spawnS);
     initPlayerSurfaceBasis(infiniteSpline, crossSection);
   }
 
@@ -221,18 +225,31 @@ function tick(dt) {
     updateSparks(dt);
     updateDebris(dt);
 
+    state.dangerTimer = state.outOfBounds ? state.outOfBoundsTimer : 0;
+
     // ── Out-of-bounds: immediate big explosion → 3 sec respawn ──
-    if (state.outOfBounds && state.outOfBoundsTimer >= 0.15 && !state._gameOverFired) {
+    if (state.outOfBounds && state.outOfBoundsTimer >= OUT_OF_BOUNDS_KILL_S && !state._gameOverFired) {
       state._gameOverFired = true;
       state.respawning     = true;
-      state.respawnTimer   = 2.0;
+      state.respawnTimer   = DEATH_BLAST_DURATION_S;
       state.edgeHeat       = 0;
-      ballObjects.carGroup.visible = false;
-      showRespawnCountdown(2);
+      showRespawnCountdown(DEATH_BLAST_DURATION_S);
 
       const inertiaDir = frame
         ? frame.forward.clone()
         : new THREE.Vector3(0, 0, 1);
+      const blastDir = inertiaDir.clone();
+      if (blastDir.lengthSq() <= 1e-6) {
+        blastDir.set(0, 0, 1);
+      }
+      blastDir.normalize();
+
+      ballObjects._deathBlastActive = true;
+      ballObjects._deathBlastTime = 0;
+      ballObjects._deathBlastStartPos = ballObjects.carGroup.position.clone();
+      ballObjects._deathBlastDir = blastDir;
+      ballObjects._deathBlastSpeed = (state.sVelocity ?? state.speed) * 2.5;
+
       // 2.5x speed multiplier for a much bigger explosion
       const bigSpeed = (state.sVelocity ?? state.speed) * 2.5;
       emitExplosionBurst(ballObjects.carGroup.position, inertiaDir, bigSpeed);
@@ -253,10 +270,15 @@ function tick(dt) {
         state.outOfBoundsTimer = 0;
         ballObjects._heatLerp          = 0;
         ballObjects._miniBurstCooldown = 0;
+        ballObjects._deathBlastActive = false;
+        ballObjects._deathBlastTime = 0;
+        ballObjects._deathBlastStartPos = null;
+        ballObjects._deathBlastDir = null;
+        ballObjects._deathBlastSpeed = 0;
         // Recreate spline from scratch — old one was trimmed and has no data at s=0
         resetSpline();
         // Full game restart from scratch — audio stays as-is
-        startGame();
+        startGame(RESTART_SPAWN_M);
         ballObjects.carGroup.visible = true;
       }
     }
@@ -268,7 +290,7 @@ function tick(dt) {
       if (state.timeLeft <= 0) {
         state.timeLeft = 0;
         updateHUD();
-        endGame(false, startGame);
+        endGame(false, () => startGame(RESTART_SPAWN_M));
         return;
       }
       updateHUD();
@@ -377,6 +399,7 @@ function loop(t) {
   if (flythroughActive) {
     updateFlythroughCamera(dt);
     audioSystem.tick(dt);
+    backgroundLayer.update(elapsedTime, camera);
     tunnelMat.uniforms.time.value    = elapsedTime;
     tunnelMat.uniforms.playerZ.value = flythroughS;
     tunnel.position.z                = flythroughS;
@@ -388,6 +411,7 @@ function loop(t) {
   tick(dt);
 
   audioSystem.tick(dt);
+  backgroundLayer.update(elapsedTime, camera);
 
   // Update BPM display
   const audioFrame = AudioMetadataBus.current;
@@ -402,8 +426,18 @@ function loop(t) {
 }
 
 // ---- UI wiring ----
-document.getElementById('start-btn').addEventListener('click', startGame);
+document.getElementById('start-btn').addEventListener('click', () => startGame(0));
 document.getElementById('flythrough-btn').addEventListener('click', startFlythrough);
+const hudRestartBtn = document.getElementById('hud-restart-btn');
+if (hudRestartBtn) hudRestartBtn.addEventListener('click', () => startGame(RESTART_SPAWN_M));
+
+document.addEventListener('keydown', e => {
+  if ((e.ctrlKey || e.metaKey) && e.key && e.key.toLowerCase() === 'r') {
+    e.preventDefault();
+    e.stopPropagation();
+  }
+}, true);
+
 document.addEventListener('keydown', e => {
   if (e.key === 'Escape' && flythroughActive) stopFlythrough();
 });

@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { TUNNEL_R } from '../config.js';
 import { AudioMetadataBus } from '../audio/AudioMetadataBus.js';
-import { vertexShader, fragmentShader } from './mesh.shaders.js';
+import { vertexShader, fragmentShader } from './shadders/tunel/mesh.shaders.js';
 
 const RING_COUNT  = 80;
 const RADIAL_SEGS = 64;

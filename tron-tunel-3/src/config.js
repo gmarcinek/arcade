@@ -6,7 +6,11 @@ export const LANE_COUNT = 120;
 export const LANE_ANGLE = (Math.PI * 2) / LANE_COUNT; // 0.05236 rad per lane
 export const CAR_OFF    = 0.32; //
 export const DANGER_TIMEOUT   = 2.0;
+export const OUT_OF_BOUNDS_KILL_S = 1.0;
+export const DEATH_BLAST_DURATION_S = 2.0;
+export const DEATH_BLAST_SCALE_MAX = 10.0;
 export const BASE_SPEED_START = 32;
+export const RESTART_SPAWN_M  = 80;
 
 // ---- Camera constants ----
 export const CAM_SPRING        = 52; // spring stiffness (N/m) — higher = tighter spring, more rubber-banding; lower = looser spring, more floaty feel
@@ -124,12 +128,12 @@ export const PROC_CFG = {
 
   // Speed (proc-specific)
   SPEED_BASE:            60,
-  SPEED_MAX:             120,
-  SPEED_BOOST:           160,
+  SPEED_MAX:             110,
+  SPEED_BOOST:           150,
   STEER_ACCELERATION:    5,
   MAX_U_VELOCITY:        9,
 
-  KAPPA_INTERVAL: 200, // steps between new curvature targets
+  KAPPA_INTERVAL: 230, // steps between new curvature targets
   KAPPA_MIN: -1.0, // min curvature (1/radius) for procedural segments; controls max turn tightness; tune with MAX_TURN_XZ
   KAPPA_MAX: +1.8, // max curvature (1/radius) for procedural segments; controls max turn tightness; tune with MAX_TURN_XZ
 
