@@ -86,7 +86,7 @@ export const BALL_MAT = {
   metalness:       0.9,
   roughness:       0,
   reflectionRes:   128,
-  envMapIntensity: 4.0,
+  envMapIntensity: 15.0,
   ringOpacity:     1.0,
   ringColor:       0x60ffee,
   transparent:     false,
@@ -134,7 +134,7 @@ export const PROC_CFG = {
   MAX_U_VELOCITY:        9,
 
   KAPPA_INTERVAL: 230, // steps between new curvature targets
-  KAPPA_MIN: -1.0, // min curvature (1/radius) for procedural segments; controls max turn tightness; tune with MAX_TURN_XZ
+  KAPPA_MIN: -0.5, // min curvature (1/radius) for procedural segments; controls max turn tightness; tune with MAX_TURN_XZ
   KAPPA_MAX: +1.8, // max curvature (1/radius) for procedural segments; controls max turn tightness; tune with MAX_TURN_XZ
 
   ARC_INTERVAL: 450, // steps between new arc length targets

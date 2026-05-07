@@ -16,6 +16,11 @@ import { updateCamera } from './camera.js';
 import { updateHUD, applyFlash, applyDanger, endGame, showRespawnCountdown } from './ui.js';
 import { createAudioSystem, AudioMetadataBus } from './audio/index.js';
 import { createBackgroundLayer } from './procedural/shadders/background/background.glsl.js';
+import { PostChain } from './postprocess/postChain.js';
+import { DOFPass } from './postprocess/passes/dofPass.js';
+import { FXAAPass } from './postprocess/passes/fxaaPass.js';
+import { HuePass } from './postprocess/passes/huePass.js';
+import { VignettePass } from './postprocess/passes/vignettePass.js';
 
 function bitrev32(n) {
   n = n >>> 0;
@@ -42,6 +47,14 @@ scene.fog        = new THREE.Fog(0x040816, 28, 220);
 
 const camera = new THREE.PerspectiveCamera(75, 1, 0.1, 500);
 
+// ---- Render targets + postprocessing (declare early to avoid TDZ) ----
+let sceneColorRT = null;
+let postChain = null;
+let dofPass = null;
+let fxaaPass = null;
+let huePass = null;
+let vignettePass = null;
+
 function resize() {
   const w = window.innerWidth;
   const h = window.innerHeight;
@@ -49,12 +62,47 @@ function resize() {
   renderer.setSize(w, h, false);
   camera.aspect = w / Math.max(1, h);
   camera.updateProjectionMatrix();
+
+  // Update render targets for postprocessing
+  if (sceneColorRT) {
+    sceneColorRT.setSize(w, h);
+  }
+  if (postChain) {
+    postChain.resize(w, h);
+  }
+  if (dofPass) {
+    dofPass.resize(w, h);
+  }
+  if (fxaaPass) {
+    fxaaPass.resize(w, h);
+  }
+  if (huePass) {
+    huePass.resize(w, h);
+  }
 }
 
 resize();
 window.addEventListener('resize', resize);
 
 const backgroundLayer = createBackgroundLayer(scene);
+
+// ---- Stage 2: Render-target pipeline for depth-aware particles and postprocessing ----
+function createRenderTargets() {
+  const w = window.innerWidth;
+  const h = window.innerHeight;
+
+  sceneColorRT = new THREE.WebGLRenderTarget(w, h, {
+    format: THREE.RGBAFormat,
+    type: THREE.UnsignedByteType,
+    minFilter: THREE.LinearFilter,
+    magFilter: THREE.LinearFilter,
+    depthTexture: new THREE.DepthTexture(w, h, THREE.UnsignedIntType),
+  });
+
+  console.log('Created render targets:', w, 'x', h);
+}
+
+createRenderTargets();
 
 // ---- Tunnel ----
 const {
@@ -74,6 +122,41 @@ scene.add(new THREE.PointLight(0x0080ff, 2.5, 40));
   l.position.set(8, -8, 0);
   scene.add(l);
 }
+
+// ---- Stage 3: Postprocess chain ----
+function initPostprocessing() {
+  const w = window.innerWidth;
+  const h = window.innerHeight;
+
+  postChain = new PostChain(renderer, w, h);
+
+  // Create and add passes
+  dofPass = new DOFPass(w, h, sceneColorRT.depthTexture);
+  dofPass.setDOFParameters(
+    state.dofFocalDistance,
+    state.dofNearAmount,
+    state.dofFarAmount,
+    state.dofFocalRange,
+    state.dofMaxRadius,
+    camera.near,
+    camera.far
+  );
+  postChain.addPass('dof_h', dofPass.getHorizontalMaterial());
+  postChain.addPass('dof_v', dofPass.getVerticalMaterial());
+
+  fxaaPass = new FXAAPass(w, h);
+  postChain.addPass('fxaa', fxaaPass.getMaterial());
+
+  huePass = new HuePass(w, h);
+  postChain.addPass('hue', huePass.getMaterial());
+
+  vignettePass = new VignettePass(w, h, state.vignetteRadius, state.vignetteIntensity);
+  postChain.addPass('vignette', vignettePass.getMaterial());
+
+  console.log('Postprocessing chain initialized');
+}
+
+initPostprocessing();
 
 // ---- Ball / car ----
 const ballObjects = createBall(scene);
@@ -124,6 +207,7 @@ let flythroughActive = false;
 let flythroughS = 0;
 let flythroughSurfaceId = null;
 const FLYTHROUGH_SPEED = 55;
+let latestGameplayFrame = null;
 
 // ---- Input ----
 setupInput();
@@ -218,6 +302,7 @@ function tick(dt) {
     if (input.jumpConsumed) input.jumpConsumed = false;
 
     const frame = getPlayerFrame();
+    latestGameplayFrame = frame;
     // Set ball position FIRST so wake ribbon captures correct position
     updateBallPositionFromFrame(carGroup, frame);
     // Then visuals (ribbon uses carGroup.position + frame.right)
@@ -390,11 +475,72 @@ function stopFlythrough() {
 // ---- Main loop ----
 let lastT = performance.now();
 
+function updatePostprocessPasses() {
+  if (!postChain) return;
+
+  // Update DOF passes
+  const hasDOFH = postChain.passes.find(p => p.name === 'dof_h');
+  if (state.enableDOF && !hasDOFH) {
+    if (dofPass) {
+      dofPass.setDOFParameters(
+        state.dofFocalDistance,
+        state.dofNearAmount,
+        state.dofFarAmount,
+        state.dofFocalRange,
+        state.dofMaxRadius,
+        camera.near,
+        camera.far
+      );
+      postChain.addPass('dof_h', dofPass.getHorizontalMaterial());
+      postChain.addPass('dof_v', dofPass.getVerticalMaterial());
+    }
+  } else if (!state.enableDOF && hasDOFH) {
+    postChain.removePass('dof_h');
+    postChain.removePass('dof_v');
+  } else if (state.enableDOF && hasDOFH && dofPass) {
+    // Update DOF parameters if already enabled
+    dofPass.setDOFParameters(
+      state.dofFocalDistance,
+      state.dofNearAmount,
+      state.dofFarAmount,
+      state.dofFocalRange,
+      state.dofMaxRadius,
+      camera.near,
+      camera.far
+    );
+  }
+
+  // Update FXAA pass
+  const hasFXAA = postChain.passes.find(p => p.name === 'fxaa');
+  if (state.enableFXAA && !hasFXAA && fxaaPass) {
+    postChain.addPass('fxaa', fxaaPass.getMaterial());
+  } else if (!state.enableFXAA && hasFXAA) {
+    postChain.removePass('fxaa');
+  }
+
+  // Update Vignette pass
+  const hasVignette = postChain.passes.find(p => p.name === 'vignette');
+  if (state.enableVignette && !hasVignette && vignettePass) {
+    vignettePass.setVignetteParameters(state.vignetteRadius, state.vignetteIntensity);
+    postChain.addPass('vignette', vignettePass.getMaterial());
+  } else if (!state.enableVignette && hasVignette) {
+    postChain.removePass('vignette');
+  } else if (state.enableVignette && hasVignette && vignettePass) {
+    // Update vignette parameters if already enabled
+    vignettePass.setVignetteParameters(state.vignetteRadius, state.vignetteIntensity);
+  }
+}
+
 function loop(t) {
   const dt = Math.min(0.05, (t - lastT) / 1000);
   const elapsedTime = t / 1000;
+  const postTime = performance.now() * 0.001;
 
   lastT = t;
+
+  if (huePass) {
+    huePass.update(postTime);
+  }
 
   if (flythroughActive) {
     updateFlythroughCamera(dt);
@@ -403,7 +549,20 @@ function loop(t) {
     tunnelMat.uniforms.time.value    = elapsedTime;
     tunnelMat.uniforms.playerZ.value = flythroughS;
     tunnel.position.z                = flythroughS;
+
+    // Stage 2: Render scene to render target
+    renderer.setRenderTarget(sceneColorRT);
     renderer.render(scene, camera);
+    renderer.setRenderTarget(null);
+
+    // Stage 3: Apply postprocessing if enabled
+    if (state.postEnabled && postChain) {
+      postChain.execute(sceneColorRT);
+    } else if (postChain) {
+      // Fallback: reusable blit (no per-frame allocation)
+      postChain.blitFallback(sceneColorRT);
+    }
+
     requestAnimationFrame(loop);
     return;
   }
@@ -421,7 +580,23 @@ function loop(t) {
   }
 
   tunnelMat.uniforms.time.value = elapsedTime;
+
+  // Update postprocess passes based on state
+  updatePostprocessPasses();
+
+  // Stage 2: Render scene to render target
+  renderer.setRenderTarget(sceneColorRT);
   renderer.render(scene, camera);
+  renderer.setRenderTarget(null);
+
+  // Stage 3: Apply postprocessing if enabled
+  if (state.postEnabled && postChain) {
+    postChain.execute(sceneColorRT);
+  } else if (postChain) {
+    // Fallback: reusable blit (no per-frame allocation)
+    postChain.blitFallback(sceneColorRT);
+  }
+
   requestAnimationFrame(loop);
 }
 

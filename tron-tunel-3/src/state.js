@@ -1,4 +1,5 @@
 import { BALL_PHYS, CFG } from './config.js';
+import { POSTPROCESS_CONFIG } from './postprocess/config.js';
 
 export const state = {
   // --- physics flags ---
@@ -67,4 +68,21 @@ export const state = {
   u:               0,
   uVelocity:       0,
   sVelocity:       0,
+
+  // --- particles (Stage 1 & 2) ---
+  particlesHalfResBuffer: false,      // Optional half-res for intermediate stages
+
+  // --- postprocessing (Stage 3) ---
+  postEnabled:            POSTPROCESS_CONFIG.toggles.postEnabled,
+  enableDOF:              POSTPROCESS_CONFIG.toggles.enableDOF,
+  dofHalfRes:             true,       // Use half-resolution for DOF blur
+  dofFocalDistance:       POSTPROCESS_CONFIG.dof.defaultFocalDistance,
+  dofNearAmount:          POSTPROCESS_CONFIG.dof.defaultNearAmount,
+  dofFarAmount:           POSTPROCESS_CONFIG.dof.defaultFarAmount,
+  dofFocalRange:          POSTPROCESS_CONFIG.dof.defaultFocalRange,
+  dofMaxRadius:           POSTPROCESS_CONFIG.dof.maxBlurRadius,
+  enableFXAA:             POSTPROCESS_CONFIG.toggles.enableFXAA,
+  enableVignette:         POSTPROCESS_CONFIG.toggles.enableVignette,
+  vignetteRadius:         POSTPROCESS_CONFIG.vignette.defaultRadius,
+  vignetteIntensity:      POSTPROCESS_CONFIG.vignette.defaultIntensity,
 };

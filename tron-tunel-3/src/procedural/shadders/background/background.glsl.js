@@ -2,6 +2,8 @@ import * as THREE from 'three';
 import { BACKGROUND_SHADER_CONFIG } from './background.config.js';
 
 const vertexShader = /* glsl */`
+  precision highp float;
+  
   varying vec2 vUv;
   void main() {
     vUv = uv;
@@ -12,6 +14,8 @@ const vertexShader = /* glsl */`
 // Color ramp: black → deep red → deep purple → amber/yellow → near-white
 // Matches a heat / fire gradient driven purely by energy level.
 const fragmentShader = /* glsl */`
+  precision highp float;
+  
   varying vec2 vUv;
 
   // Set by JS update() — normalized current energy / smoothed baseline

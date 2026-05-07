@@ -1,4 +1,6 @@
 export const tunnelVertexShader = /* glsl */`
+  precision highp float;
+  
   uniform float time;
   uniform float uSubBass;
   uniform float uBass;
@@ -35,6 +37,8 @@ export const tunnelVertexShader = /* glsl */`
 `;
 
 export const tunnelFragmentShader = /* glsl */`
+  precision highp float;
+  
   uniform float time;
   uniform float playerZ;
   uniform float playerTheta;

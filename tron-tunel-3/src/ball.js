@@ -107,6 +107,8 @@ export function createBall(scene) {
   const ribbonMat = new THREE.ShaderMaterial({
     uniforms: { uColor: { value: RIBBON_COLOR } },
     vertexShader: /* glsl */`
+   
+      
       attribute float alpha;
       varying float vAlpha;
       void main() {
@@ -115,6 +117,8 @@ export function createBall(scene) {
       }
     `,
     fragmentShader: /* glsl */`
+
+      
       uniform vec3 uColor;
       varying float vAlpha;
       void main() {
