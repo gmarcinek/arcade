@@ -63,11 +63,17 @@ class PostTimelineManager {
     this._applySpecialEffectsContrast();
   }
 
-  /** Reset playhead to 0 and mark all events as unfired. */
+  /** Reset playhead to 0, clear all transitions/cache, and snap passes to defaults. */
   reset() {
     this._time = 0;
     this._nextIdx = 0;
     this._transitions.clear();
+    this._cache = {};
+
+    // Snap all effect passes back to their default (neutral) values immediately.
+    const { bwPass, invertPass } = this._passes;
+    bwPass?.setIntensity(0);
+    invertPass?.setIntensity(0);
   }
 
   // ------------------------------------------------------------------

@@ -67,13 +67,13 @@ export const BOOST_MIN_FUEL    = 0.85;  // fraction of boost fuel required to st
 
 // ---- Ball physics material ----
 export const BALL_PHYS = {
-  restitution:       0.7,
-  inertiaDecay:      0.08,
+  restitution:       0.7, // bounciness (0 = dead, 1 = perfect)
+  inertiaDecay:      0.08, // angular velocity decay (friction) applied each second; higher = quicker slowdown of spins and rolls
 
-  squashDuration:    0.05,
-  squashAmount:      0.15,
-  stretchAmount:     0.15,
-  speedStretch:      0.0,
+  squashDuration:    0.05, // seconds of squash/stretch animation on impact
+  squashAmount:      0.15,  // max scale reduction at peak of squash (0.15 = 15% smaller); also controls stretch amount for same duration
+  stretchAmount:     0.15,  // max scale increase at peak of stretch (0.15 = 15% bigger); also controls squash amount for same duration
+  speedStretch:      0.0, // additional stretch proportional to impact speed (0.0 = no stretch, 0.01 = 1% stretch per m/s of impact velocity)
 
   surfaceDamp:       1,
   surfaceDampRadius: 0.2,

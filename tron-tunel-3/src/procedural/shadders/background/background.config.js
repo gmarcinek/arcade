@@ -20,10 +20,10 @@ export const BACKGROUND_SHADER_CONFIG = {
 
     // How much a bass-impact transient (kick drum hit) adds a brightness jump.
     // 0.00 = no pulse, 0.08 = subtle flash, 0.18 = clearly visible, 0.30 = strong.
-    bassPulse: 0.01,
+    bassPulse: 0.02,
 
     // Additional brightness bump on beat-pulse signal (sustain, softer than impact).
     // 0.00 = off, 0.04 = faint throb, 0.12 = audible rhythm visible.
-    beatPulse: 0.02,
+    beatPulse: 0.03,
   },
 };
