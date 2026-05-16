@@ -1,5 +1,5 @@
 ﻿import * as THREE from 'three';
-import { BALL_PHYS, BASE_SPEED_START, DEATH_BLAST_DURATION_S, EDGE_HEAT_ZONE_M, OUT_OF_BOUNDS_KILL_S, RESTART_SPAWN_M } from './config.js';
+import { BALL_PHYS, BASE_SPEED_START, CFG, DEATH_BLAST_DURATION_S, EDGE_HEAT_ZONE_M, OUT_OF_BOUNDS_KILL_S, RESTART_SPAWN_M } from './config.js';
 import { generateDemoTrack, createDemoChunkManager } from './procedural/generateDemoTrack.js';
 import { DebugTrackRenderer } from './procedural/debugTrackRenderer.js';
 import { createInfiniteSpline } from './procedural/infiniteSpline.js';
@@ -368,12 +368,29 @@ function startGame(spawnS = 0) {
 
 function tick(dt) {
   if (PROCEDURAL_PLAYER) {
+    // ── Charged jump: accumulate charge while Space held, fire on release ──
+    if (input.jumpHeld && !state.crashed && state.jumpCooldown <= 0) {
+      state.jumpChargeTime = Math.min(state.jumpChargeTime + dt, CFG.jumpChargeTime);
+    }
+    if (state.jumpCooldown > 0 || state.crashed) {
+      state.jumpChargeTime = 0;
+    }
+
+    let jumpFiredPower = 0;
+    if (input.jumpReleased) {
+      input.jumpReleased = false;
+      if (!state.crashed && state.jumpCooldown <= 0) {
+        const t = Math.min(state.jumpChargeTime / CFG.jumpChargeTime, 1.0);
+        jumpFiredPower = CFG.jumpMinFactor + (CFG.jumpMaxFactor - CFG.jumpMinFactor) * t;
+      }
+      state.jumpChargeTime = 0;
+    }
+
     const _prevJumpCooldown = state.jumpCooldown;
-    updatePlayerSurface(dt, input.left, input.right, input.jumpConsumed, input.boost);
-    if (input.jumpConsumed) input.jumpConsumed = false;
+    updatePlayerSurface(dt, input.left, input.right, jumpFiredPower, input.boost);
     // Detect actual jump launch: cooldown just reset to its max value
     if (state.jumpCooldown > _prevJumpCooldown && infiniteMeshObj) {
-      infiniteMeshObj.triggerJumpWave(state.s, state.sVelocity);
+      infiniteMeshObj.triggerJumpWave(state.s, state.sVelocity, jumpFiredPower);
     }
     if (_fireCooldown > 0) _fireCooldown -= dt;
     if (input.fire) {

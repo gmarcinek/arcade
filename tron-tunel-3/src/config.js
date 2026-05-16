@@ -42,6 +42,11 @@ export const CFG = {
   tunnelGravity:       36, // radial acceleration toward tube center when airborne (m/s²)
   maxRadialOffset:     10, // max distance from tube center (for crash)
 
+  // ── Charged jump ──
+  jumpChargeTime:    4.0,  // seconds to reach full charge
+  jumpMinFactor:     0.30, // power multiplier on instant tap (30%)
+  jumpMaxFactor:     2.00, // power multiplier at full charge (200%)
+
   // ── Forward speed ──
   baseSpeed:           80,
   forwardSpeed:        90,
@@ -94,6 +99,23 @@ export const BALL_MAT = {
   depthWrite:      true,
 };
 
+// ---- Jump wave visual config ----
+export const JUMP_WAVE_CONFIG = {
+  speedMult:        1.6,   // wave speed = player speed × speedMult
+  speedRandRange:   0.2,   // ±random spread on speed (0 = no random, 0.2 = ±10%)
+  duration:         4.0,   // seconds until wave fades out completely
+  envelopeBase:    14.0,   // Gaussian envelope width at age=0 (metres)
+  envelopeGrow:     5.0,   // envelope width growth per second
+  oscillationCycle: 12.0,  // full sine cycle length (metres): bump + dip
+  waveAmp:          0.18,  // hill-valley oscillation amplitude (fraction of radius)
+  pushAmp:          0.32,  // radial push amplitude (fraction of radius)
+  pushWidthBase:   15.0,   // push Gaussian width at age=0 (metres)
+  pushWidthGrow:    2.0,   // push width growth per second
+  pushOffset:       4.0,   // push centre offset behind wave front (metres)
+  glowBlue:         1.12,  // glow intensity — electric blue channel
+  glowWhite:        2.70,  // glow intensity — white shimmer channel
+};
+
 // ---- Tunnel shader FX ----
 export const TUNNEL_FX = {
   lavaStrength: 0.52,
@@ -140,15 +162,15 @@ export const PROC_CFG = {
   KAPPA_INTERVAL_MIN: 150, // min steps between curvature targets (shorter = quicker turns)
   KAPPA_INTERVAL_MAX: 450, // max steps between curvature targets (longer = more sustained turns)
   KAPPA_MIN: -0.8,
-  KAPPA_MAX: +2.8,
+  KAPPA_MAX: +3.8, // curvature range (higher = more intense tube bends; lower = flatter tube)
 
   ARC_INTERVAL_MIN: 200, // min steps between arc-width targets
-  ARC_INTERVAL_MAX: 650, // max steps between arc-width targets
+  ARC_INTERVAL_MAX: 450, // max steps between arc-width targets
 
-  ARC_MIN: 0.3,
-  ARC_MAX: 1.0,
+  ARC_MIN: 0.15, 
+  ARC_MAX: 0.99, 
 
-  TWIST_INTERVAL_MIN: 140, // min steps between twist targets
+  TWIST_INTERVAL_MIN: 90, // min steps between twist targets
   TWIST_INTERVAL_MAX: 450, // max steps between twist targets
 
   // Camera look-ahead

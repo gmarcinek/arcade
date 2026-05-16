@@ -8,6 +8,7 @@ export const state = {
   restitutionCurrent: BALL_PHYS.restitution,
   materialDamp:   1.0,   // 1 = full deform, 0 = pure rolling (lerped by S/↓)
   jumpCooldown:   0,     // seconds until next jump allowed
+  jumpChargeTime: 0,     // seconds Space has been held while charging
   landingEvaluated: false,
 
   // --- position / movement ---

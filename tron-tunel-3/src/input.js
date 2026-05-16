@@ -6,7 +6,9 @@ export const input = {
   up:    false,
   down:  false,
   boost: false,
-  jumpConsumed: false,
+  jumpConsumed: false,  // legacy / classic mode
+  jumpHeld:     false,  // true while Space is held
+  jumpReleased: false,  // one-shot: true for one tick when Space is released
   fire: false,
 };
 
@@ -83,6 +85,8 @@ function resetInput() {
   // Nie resetuję jumpConsumed agresywnie, bo zwykle jest konsumowane
   // w logice skoku. Ale przy utracie focusa warto wyczyścić też to.
   input.jumpConsumed = false;
+  input.jumpHeld     = false;
+  input.jumpReleased = false;
 }
 
 export function setupInput() {
@@ -98,12 +102,8 @@ export function setupInput() {
     activeCodes.add(e.code);
     syncInputFromKeys();
 
-    if (
-      ACTION_CODES.jump.has(e.code) &&
-      state.gameRunning &&
-      !state.crashed
-    ) {
-      input.jumpConsumed = true;
+    if (ACTION_CODES.jump.has(e.code) && state.gameRunning && !state.crashed) {
+      input.jumpHeld = true;
     }
 
     if (e.code === 'KeyF') {
@@ -118,6 +118,11 @@ export function setupInput() {
 
     activeCodes.delete(e.code);
     syncInputFromKeys();
+
+    if (ACTION_CODES.jump.has(e.code)) {
+      if (input.jumpHeld) input.jumpReleased = true;
+      input.jumpHeld = false;
+    }
   }, { passive: false });
 
   // Gdy przeglądarka zgubi keyup, np. po zmianie focusa,

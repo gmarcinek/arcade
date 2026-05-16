@@ -26,4 +26,4 @@ export const BACKGROUND_SHADER_CONFIG = {
     // 0.00 = off, 0.04 = faint throb, 0.12 = audible rhythm visible.
     beatPulse: 0.03,
   },
-};
+};  

@@ -34,7 +34,7 @@ export function getFloorU(spline, s) {
   return spline ? spline.getFloorU(s) : Math.PI;
 }
 
-export function updatePlayerSurface(dt, left, right, jumpPressed, boostHeld) {
+export function updatePlayerSurface(dt, left, right, jumpPower, boostHeld) {
   if (!_spline) return;
 
   // Forward speed
@@ -186,8 +186,8 @@ export function updatePlayerSurface(dt, left, right, jumpPressed, boostHeld) {
   // When grounded, lift the ball centre with the swelling radius so it hovers above the track
   if (state.grounded) state.radialOffset = effBallR;
   if (state.jumpCooldown > 0) state.jumpCooldown -= dt;
-  if (jumpPressed && state.jumpCooldown <= 0 && !state.crashed) {
-    state.radialVelocity = Math.max(state.radialVelocity, 0) + CFG.jumpImpulse;
+  if (jumpPower > 0 && state.jumpCooldown <= 0 && !state.crashed) {
+    state.radialVelocity = Math.max(state.radialVelocity, 0) + CFG.jumpImpulse * jumpPower;
     state.grounded       = false;
     state.landingEvaluated = false;
     state.jumpCooldown   = 2.0;

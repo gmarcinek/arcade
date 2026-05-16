@@ -1,5 +1,5 @@
 import { state } from './state.js';
-import { OUT_OF_BOUNDS_KILL_S } from './config.js';
+import { OUT_OF_BOUNDS_KILL_S, CFG } from './config.js';
 
 const flashEl  = document.getElementById('flash');
 const dangerEl = document.getElementById('danger-warn');
@@ -17,6 +17,9 @@ export function showTrick(name) {
 }
 
 const boostSegs = [0,1,2,3].map(i => document.getElementById('bseg-' + i));
+const jumpChargeHud  = document.getElementById('jump-charge-hud');
+const jumpChargeFill = document.getElementById('jump-charge-fill');
+const jumpChargePct  = document.getElementById('jump-charge-pct');
 
 export function updateHUD() {
   document.getElementById('score').textContent = Math.floor(state.score).toLocaleString();
@@ -38,6 +41,24 @@ export function updateHUD() {
       seg.classList.remove('on', 'pulse');
     }
   });
+
+  // Jump charge bar
+  const charging = state.jumpChargeTime > 0 && state.jumpCooldown <= 0;
+  if (charging) {
+    jumpChargeHud.style.display = 'flex';
+    const t = Math.min(state.jumpChargeTime / CFG.jumpChargeTime, 1.0);
+    const pwr = Math.round((CFG.jumpMinFactor + (CFG.jumpMaxFactor - CFG.jumpMinFactor) * t) * 100);
+    jumpChargeFill.style.width = (t * 100) + '%';
+    jumpChargePct.textContent  = pwr + '%';
+    if (t >= 1.0) {
+      jumpChargeFill.classList.add('full');
+    } else {
+      jumpChargeFill.classList.remove('full');
+    }
+  } else {
+    jumpChargeHud.style.display = 'none';
+    jumpChargeFill.classList.remove('full');
+  }
 }
 
 export function applyFlash(dt) {
@@ -103,8 +124,8 @@ export function showRespawnCountdown(totalSeconds) {
     if (remaining <= 0) {
       clearInterval(_respawnIv);
       _respawnIv = null;
-      // Flash "JEB" then hide
-      respawnOverlayEl.innerHTML = '<span class="respawn-bum">JEBUDU</span>';
+      // Flash "LOOSER" then hide
+      respawnOverlayEl.innerHTML = '<span class="respawn-bum">LOOSER</span>';
       setTimeout(() => {
         respawnOverlayEl.classList.remove('active');
         respawnOverlayEl.innerHTML = '';

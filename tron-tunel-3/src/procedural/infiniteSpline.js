@@ -3,10 +3,12 @@ import { seededRng } from './math.js';
 
 // Spacing between stored RMF samples (meters)
 const SAMPLE_STEP = 5;
-// Max turn velocity (rad/step).
-const MAX_TURN_RATE = 0.030;
+// Max turn velocity (rad/step).  0.045 × 5m = 0.009 rad/m ≈ 0.52 deg/m
+// Per phase (avg 3.5 sub-holds × 25 avg steps): ~90 degrees total turn
+const MAX_TURN_RATE = 0.045;
 // How fast turnYaw approaches its target per step (0–1 factor)
-const TURN_APPROACH = 0.01;  // faster approach = smoother-looking transitions, less visible knee
+// 0.08: reaches 90% of target after ~28 steps (140m)
+const TURN_APPROACH = 0.08;
 
 /**
  * Creates a continuous procedural spline with Rotation Minimizing Frames.
@@ -31,10 +33,15 @@ export function createInfiniteSpline(seed) {
   for (let _w = 0; _w < 8; _w++) rng();
   const startSign  = rng() > 0.5 ? 1 : -1;
   let turnYaw      = startSign * (0.2 + rng() * 0.8) * MAX_TURN_RATE;  // start already turning
-  let turnPitch    = (rng() - 0.5) * MAX_TURN_RATE * 0.5;
-  let yawTarget    = startSign * (0.5 + rng() * 0.5) * MAX_TURN_RATE;
-  let pitchTarget  = (rng() - 0.5) * MAX_TURN_RATE * 0.35;
-  let yawHoldSteps = Math.floor(20 + rng() * 60); // 20–80 steps = 100–400m
+  let turnPitch    = (rng() - 0.5) * MAX_TURN_RATE * 0.9;
+  let yawTarget    = startSign * (0.6 + rng() * 0.4) * MAX_TURN_RATE;
+  let pitchTarget  = (rng() - 0.5) * MAX_TURN_RATE * 0.85;
+  // Phase system: commit to one yaw direction for 2–5 sub-holds, then unconditionally flip.
+  // Each sub-hold ≈ 25 avg steps × MAX_TURN_RATE × 0.80 avg intensity ≈ 26 deg/sub-hold.
+  // A phase of 3–4 sub-holds ≈ 78–104 degrees total — real bends without spiraling.
+  let phaseSign      = startSign;
+  let phaseHoldsLeft = 2 + Math.floor(rng() * 3);   // 2–4 sub-holds before first flip
+  let yawHoldSteps   = Math.floor(15 + rng() * 20); // 15–35 steps = 75–175m per sub-hold
 
   function pushSample() {
     samples.push({
@@ -51,33 +58,33 @@ export function createInfiniteSpline(seed) {
     // Hold-and-switch: steer toward current target, then pick new one
     yawHoldSteps--;
     if (yawHoldSteps <= 0) {
-      // New target: always non-zero, random sign, 20–100% of max for variety
-      const sign = rng() > 0.5 ? 1 : -1;
-      const intensity = 0.20 + rng() * 0.80;  // varies 20%–100% instead of always 50–100%
-      yawTarget    = sign * intensity * MAX_TURN_RATE;
-      pitchTarget  = (rng() - 0.5) * MAX_TURN_RATE * 0.45;
-      yawHoldSteps = Math.floor(20 + rng() * 80);  // 20–100 steps = 100–500m
+      // Phase system: stay in phaseSign direction for phaseHoldsLeft sub-holds, then flip
+      phaseHoldsLeft--;
+      if (phaseHoldsLeft <= 0) {
+        phaseSign      = -phaseSign;                           // unconditional flip
+        phaseHoldsLeft = 2 + Math.floor(rng() * 4);           // 2–5 sub-holds in new dir
+      }
+      // Always strong intensity — this is what makes bends feel decisive
+      const intensity  = 0.60 + Math.pow(rng(), 0.4) * 0.40; // 60–100%, biased toward 100%
+      yawTarget    = phaseSign * intensity * MAX_TURN_RATE;
+      pitchTarget  = (rng() - 0.5) * MAX_TURN_RATE * 0.90;
+      yawHoldSteps = Math.floor(15 + rng() * 20);             // 15–35 steps = 75–175m
     }
     // Smooth approach toward target
     turnYaw   += (yawTarget   - turnYaw)   * TURN_APPROACH;
     turnPitch += (pitchTarget - turnPitch) * TURN_APPROACH * 0.5;
     turnYaw   = Math.max(-MAX_TURN_RATE, Math.min(MAX_TURN_RATE, turnYaw));
-    turnPitch = Math.max(-MAX_TURN_RATE * 0.5, Math.min(MAX_TURN_RATE * 0.5, turnPitch));
-    // Gentle restoring force: push pitch back toward 0 when tan tilts too far from horizontal
-    // Prevents long-distance vertical drift that could degenerate the RMF normal
-    pitchTarget -= pitchTarget * 0.015;
+    turnPitch = Math.max(-MAX_TURN_RATE * 0.85, Math.min(MAX_TURN_RATE * 0.85, turnPitch));
+    // Very weak restoring force on pitch — allows real vertical bends, prevents only extreme drift
+    pitchTarget -= pitchTarget * 0.001;
 
-    // Yaw: rotate tan around world Y
-    const qY = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), turnYaw);
+    // Yaw: rotate tan around local normal (local "up" — avoids world-Y degeneracy when pitched)
+    const qY = new THREE.Quaternion().setFromAxisAngle(nor, turnYaw);
     tan.applyQuaternion(qY).normalize();
 
-    // Pitch: rotate tan around horizontal right = worldY × tan
-    const right = new THREE.Vector3().crossVectors(new THREE.Vector3(0, 1, 0), tan);
-    if (right.lengthSq() > 0.0001) {
-      right.normalize();
-      const qP = new THREE.Quaternion().setFromAxisAngle(right, turnPitch);
-      tan.applyQuaternion(qP).normalize();
-    }
+    // Pitch: rotate tan around local binormal (local "right")
+    const qP = new THREE.Quaternion().setFromAxisAngle(bin, turnPitch);
+    tan.applyQuaternion(qP).normalize();
 
     // Parallel transport normal (project-and-renormalize RMF)
     const dot = nor.dot(tan);
@@ -118,13 +125,15 @@ export function createInfiniteSpline(seed) {
 
   /** Interpolated RMF frame at arc-length s */
   function getFrameAt(s) {
+    // Auto-extend: never return a stale last-frame for ungenerated territory
+    const last = samples[samples.length - 1];
+    if (!last || s >= last.s) extend(s);
+
     if (samples.length < 2) return null;
-    const first = samples[0], last = samples[samples.length - 1];
+    const first = samples[0];
+    const lastS  = samples[samples.length - 1];
     if (s <= first.s) {
       return { pos: first.pos.clone(), tan: first.tan.clone(), nor: first.nor.clone(), bin: first.bin.clone() };
-    }
-    if (s >= last.s) {
-      return { pos: last.pos.clone(), tan: last.tan.clone(), nor: last.nor.clone(), bin: last.bin.clone() };
     }
     // Binary search
     let lo = 0, hi = samples.length - 1;
