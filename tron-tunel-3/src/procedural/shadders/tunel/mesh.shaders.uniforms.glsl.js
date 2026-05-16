@@ -88,4 +88,10 @@ export const uniformsGlsl = `
 
       varying vec3 vWorld;
       varying vec2 vUv;
+
+      uniform float uJumpWaveS[8];      // wave front S for each active wave
+      uniform float uJumpWaveAge[8];    // age in seconds (99.0 = slot unused)
+      uniform float uJumpWavePower[8];  // brightness scale per wave
+      uniform float uJumpWaveGlowBlue;  // electric-blue glow intensity
+      uniform float uJumpWaveGlowWhite; // white shimmer intensity
 `;

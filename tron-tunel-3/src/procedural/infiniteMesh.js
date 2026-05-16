@@ -78,6 +78,22 @@ export const TUNNEL_FX_CONFIG = {
   accentAfrican:   [1.000, 0.520, 0.050],
   accentFuchsia:   [1.000, 0.000, 0.760],
 
+  jumpWave: {
+    speedMult:        1.6,   // wave speed = player speed × speedMult
+    speedRandRange:   0.2,   // ±random spread on speed (0 = no random, 0.2 = ±10%)
+    duration:         4.0,   // seconds until wave fades out completely
+    envelopeBase:    14.0,   // Gaussian envelope width at age=0 (metres)
+    envelopeGrow:     5.0,   // envelope width growth per second
+    oscillationCycle: 12.0,  // full sine cycle length (metres): bump + dip
+    waveAmp:          0.18,  // hill-valley oscillation amplitude (fraction of radius)
+    pushAmp:          0.32,  // radial push amplitude (fraction of radius)
+    pushWidthBase:   15.0,   // push Gaussian width at age=0 (metres)
+    pushWidthGrow:    2.0,   // push width growth per second
+    pushOffset:       4.0,   // push centre offset behind wave front (metres)
+    glowBlue:         1.12,  // glow intensity — electric blue channel
+    glowWhite:        2.70,  // glow intensity — white shimmer channel
+  },
+
   // Cycle timing.
   layerCyclePeriod: 8.0,    // seconds per layer visibility cycle
   brightCyclePeriod: 60.0,  // seconds for full bright→dark→bright
@@ -197,6 +213,11 @@ function makeMaterial() {
       uOpFrontPalette:  { value: 0.00 },
       uHeatZoneFrac:    { value: 0.0 },
       uEdgeHeat:        { value: 0.0 },
+      uJumpWaveS:        { value: new Array(8).fill(-9999.0) },
+      uJumpWaveAge:      { value: new Array(8).fill(99.0) },
+      uJumpWavePower:    { value: new Array(8).fill(0.0) },
+      uJumpWaveGlowBlue: { value: TUNNEL_FX_CONFIG.jumpWave.glowBlue },
+      uJumpWaveGlowWhite:{ value: TUNNEL_FX_CONFIG.jumpWave.glowWhite },
     },
 
     vertexShader,
@@ -212,6 +233,7 @@ export class InfiniteMesh {
     this._cs     = crossSection;
     this._time   = 0;
     this._opSmooth = {};
+    this._jumpWaves = [];
     this._build();
   }
 
@@ -226,6 +248,15 @@ export class InfiniteMesh {
   setHeatZone(frac, heat) {
     this._mat.uniforms.uHeatZoneFrac.value = frac;
     this._mat.uniforms.uEdgeHeat.value     = heat;
+  }
+
+  /** Call when player jumps or bounces. Each call adds a new wave. Speed = 1.5× ± 10% of current speed, fixed at trigger time. */
+  triggerJumpWave(currentS, speed, power = 1.0) {
+    const jw = TUNNEL_FX_CONFIG.jumpWave;
+    const waveSpeed = speed * jw.speedMult * (1.0 + (Math.random() - 0.5) * jw.speedRandRange);
+    const wave = { s: currentS, age: 0.0, speed: waveSpeed, power, frontS: currentS };
+    this._jumpWaves.push(wave);
+    // Uniform arrays are written every frame in update() — do NOT set .value here.
   }
 
   _build() {
@@ -474,6 +505,32 @@ export class InfiniteMesh {
     this._time += dt;
     this._lastDt = dt;
 
+    // Advance all jump waves
+    for (const w of this._jumpWaves) {
+      w.age   += dt;
+      w.frontS = w.s + w.age * w.speed;
+    }
+    this._jumpWaves = this._jumpWaves.filter(w => w.age < 3.0);
+
+    // Write all active waves into shader uniform arrays (max 8 slots)
+    const _wS   = this._mat.uniforms.uJumpWaveS.value;
+    const _wAge = this._mat.uniforms.uJumpWaveAge.value;
+    const _wPow = this._mat.uniforms.uJumpWavePower.value;
+    for (let _i = 0; _i < 8; _i++) {
+      if (_i < this._jumpWaves.length) {
+        const _w = this._jumpWaves[_i];
+        _wS[_i]   = _w.frontS;
+        _wAge[_i] = _w.age;
+        _wPow[_i] = _w.power;
+      } else {
+        _wS[_i]   = -9999.0;
+        _wAge[_i] = 99.0;
+        _wPow[_i] = 0.0;
+      }
+    }
+    this._mat.uniforms.uJumpWaveGlowBlue.value  = TUNNEL_FX_CONFIG.jumpWave.glowBlue;
+    this._mat.uniforms.uJumpWaveGlowWhite.value = TUNNEL_FX_CONFIG.jumpWave.glowWhite;
+
     const cfg = TUNNEL_FX_CONFIG;
     const audio = AudioMetadataBus.get();
     const EMERGE_DIST = cfg.emergeDist;
@@ -524,6 +581,29 @@ export class InfiniteMesh {
 
       const radiusFactor = 0.035 + 0.965 * emergeFactor;
 
+      // Jump wave — hill+valley oscillation + radial push/stretch
+      let waveRadialBoost = 0.0;
+      for (const w of this._jumpWaves) {
+        const d = ringS - w.frontS;
+        const jw1 = TUNNEL_FX_CONFIG.jumpWave;
+        const envelope   = jw1.envelopeBase + w.age * jw1.envelopeGrow;
+        const gaussian   = Math.exp(-(d * d) / (envelope * envelope));
+        const ageFade    = Math.max(0, 1.0 - w.age / jw1.duration);
+
+        // Hill-valley oscillation — flipped: hill arrives first (ahead of front), then valley at front
+        const jw2 = TUNNEL_FX_CONFIG.jumpWave;
+        const oscillation = -Math.cos(d * Math.PI * 2.0 / jw2.oscillationCycle);
+        const wave        = jw2.waveAmp * oscillation * gaussian * ageFade * w.power;
+
+        // Radial push: centered pushOffset metres behind wave front — comes after valley
+        const pushWidth = jw2.pushWidthBase + w.age * jw2.pushWidthGrow;
+        const dPush     = d + jw2.pushOffset;
+        const push      = jw2.pushAmp * Math.exp(-(dPush * dPush) / (pushWidth * pushWidth)) * ageFade * w.power;
+
+        waveRadialBoost += wave + push;
+      }
+      const effectiveRadius = radiusFactor * (1.0 + waveRadialBoost);
+
       const mid = this._sourceValue(audio, 'mid');
       const bassImpact = this._sourceValue(audio, 'bassImpact');
 
@@ -558,22 +638,22 @@ export class InfiniteMesh {
 
         const wx =
           f.pos.x +
-          cx * radiusFactor * norTx +
-          cy * radiusFactor * binTx +
+          cx * effectiveRadius * norTx +
+          cy * effectiveRadius * binTx +
           dispN * norTx +
           dispB * binTx;
 
         const wy =
           f.pos.y +
-          cx * radiusFactor * norTy +
-          cy * radiusFactor * binTy +
+          cx * effectiveRadius * norTy +
+          cy * effectiveRadius * binTy +
           dispN * norTy +
           dispB * binTy;
 
         const wz =
           f.pos.z +
-          cx * radiusFactor * norTz +
-          cy * radiusFactor * binTz +
+          cx * effectiveRadius * norTz +
+          cy * effectiveRadius * binTz +
           dispN * norTz +
           dispB * binTz;
 

@@ -250,6 +250,7 @@ tunnel.visible = false;
 // ---- New continuous tunnel (replaces chunk system in PROCEDURAL_PLAYER mode) ----
 let infiniteSpline = null;
 let infiniteMeshObj = null;
+let _fireCooldown = 0;
 let crossSection = null;
 function resetSpline() {
   infiniteSpline = createInfiniteSpline(bitrev32(Date.now()));
@@ -367,8 +368,21 @@ function startGame(spawnS = 0) {
 
 function tick(dt) {
   if (PROCEDURAL_PLAYER) {
+    const _prevJumpCooldown = state.jumpCooldown;
     updatePlayerSurface(dt, input.left, input.right, input.jumpConsumed, input.boost);
     if (input.jumpConsumed) input.jumpConsumed = false;
+    // Detect actual jump launch: cooldown just reset to its max value
+    if (state.jumpCooldown > _prevJumpCooldown && infiniteMeshObj) {
+      infiniteMeshObj.triggerJumpWave(state.s, state.sVelocity);
+    }
+    if (_fireCooldown > 0) _fireCooldown -= dt;
+    if (input.fire) {
+      input.fire = false;
+      if (infiniteMeshObj && _fireCooldown <= 0) {
+        infiniteMeshObj.triggerJumpWave(state.s, state.sVelocity);
+        _fireCooldown = 3.0;
+      }
+    }
 
     const frame = getPlayerFrame();
     latestGameplayFrame = frame;

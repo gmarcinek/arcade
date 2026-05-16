@@ -478,6 +478,24 @@ export const layersGlsl = `
         col *= (1.0 + uMusicEnergy * uFxEnergy * 0.38);
         col += orangeTiles * uLavaColorHot * depthFade * emerge * uOpTilesOrange * 0.20;
 
+        // ===== JUMP WAVES — up to 8 concurrent, each independent =====
+        {
+          float floorBias = exp(-absAngle * absAngle * 0.5);
+          for (int _wi = 0; _wi < 8; _wi++) {
+            float _age   = uJumpWaveAge[_wi];
+            float _power = uJumpWavePower[_wi];
+            float _front = uJumpWaveS[_wi];
+            float _active = step(_age, 2.9999);        // 1 if age < 3, else 0
+            float waveDist  = fragS - _front;
+            float waveWidth = 5.0 + _age * 4.0;
+            float ring      = exp(-waveDist * waveDist / (waveWidth * waveWidth));
+            float ageFade   = max(0.0, 1.0 - _age / 3.0);
+            float waveMask  = ring * ageFade * (0.40 + 0.60 * floorBias) * _active * _power;
+            col += waveMask * uElectricBlue * uJumpWaveGlowBlue;
+            col += waveMask * vec3(0.88, 0.96, 1.00) * uJumpWaveGlowWhite * floorBias;
+          }
+        }
+
         // Slight blue/orange contrast shaping.
         col = mix(col, col * vec3(1.08, 0.94, 0.86), saturate(uBass * 0.22));
         col = mix(col, col + uElectricBlue * 0.10, saturate(uTreble * 0.18));

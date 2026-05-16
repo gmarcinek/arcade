@@ -6,7 +6,7 @@ const SAMPLE_STEP = 5;
 // Max turn velocity (rad/step).
 const MAX_TURN_RATE = 0.030;
 // How fast turnYaw approaches its target per step (0–1 factor)
-const TURN_APPROACH = 0.08;  // faster approach = smoother-looking transitions, less visible knee
+const TURN_APPROACH = 0.01;  // faster approach = smoother-looking transitions, less visible knee
 
 /**
  * Creates a continuous procedural spline with Rotation Minimizing Frames.

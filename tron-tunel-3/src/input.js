@@ -7,6 +7,7 @@ export const input = {
   down:  false,
   boost: false,
   jumpConsumed: false,
+  fire: false,
 };
 
 // Trzymamy fizyczne kody klawiszy, nie e.key.
@@ -128,6 +129,12 @@ export function setupInput() {
   document.addEventListener('visibilitychange', () => {
     if (document.hidden) {
       resetInput();
+    }
+  });
+
+  window.addEventListener('mousedown', (e) => {
+    if (e.button === 0 && state.gameRunning && !state.crashed) {
+      input.fire = true;
     }
   });
 }
