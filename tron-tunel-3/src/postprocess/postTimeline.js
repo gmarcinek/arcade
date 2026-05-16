@@ -16,12 +16,6 @@ export const POST_TIMELINE = [
   { time: 23.0,  trigger: 'stopInvert',           lerp: 1.5 },
   { time: 25.0,  trigger: 'stopBw',               lerp: 1.5 },
 
-  // --- 60s: full invert + B&W combo ---
-  { time: 55.0,  trigger: 'startInvert',          lerp: 0.5 },
-  { time: 56.0,  trigger: 'startBw',              lerp: 0.5 },
-  { time: 59.0,  trigger: 'stopInvert',           lerp: 0.5 },
-  { time: 61.0,  trigger: 'stopBw',               lerp: 0.5 },
-
   // --- 105s: final invert ---
   { time: 105.0,  trigger: 'startInvert',          lerp: 0.5 },
   { time: 105.0,  trigger: 'startBw',              lerp: 0.5 },
