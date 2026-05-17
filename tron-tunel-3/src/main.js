@@ -133,26 +133,5 @@ document.addEventListener('keydown', e => {
   if (e.key === 'Escape' && flythroughActive) stopFlythrough();
 });
 
-document.getElementById('open-spotify-btn').addEventListener('click', () => {
-  const url = document.getElementById('spotify-input').value.trim();
-  if (url) window.open(url, '_blank');
-});
-
-document.getElementById('audio-btn').addEventListener('click', async () => {
-  if (audioSystem.isActive) {
-    audioSystem.stopCapture();
-    const statusEl = document.getElementById('audio-status');
-    if (statusEl) statusEl.style.display = 'none';
-    return;
-  }
-  try {
-    await audioSystem.startCapture();
-    const statusEl = document.getElementById('audio-status');
-    if (statusEl) statusEl.style.display = 'block';
-  } catch (e) {
-    console.warn('Audio capture failed:', e.message);
-  }
-});
-
 initSettingsUI(resize);
 requestAnimationFrame(loop);
