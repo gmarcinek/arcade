@@ -189,3 +189,44 @@ export const PROC_CFG = {
   CAM_UP_TAU:        0.15,
   CAM_FLOOR_MIN:     1.5,
 };
+
+// ---- Audio-driven tunnel generation ----
+// Controls how AudioMetadataBus fields influence the procedural spline shape.
+// All effects are disabled when no audio is active (bus returns zero values).
+export const AUDIO_TUNNEL = {
+  enabled: true,
+
+  // ── 3 source assignments ─────────────────────────────────────────────────
+  // Swap any of these to a different AudioMetadataBus field to change what drives what.
+  // Available fields: 'bassImpact', 'low', 'sub', 'mid', 'high', 'rms',
+  //                   'midWave', 'ribbonDrive', 'lavaLight', 'onsetPulse',
+  //                   'beatPulse', 'energyRamp'  (>0 = crescendo, <0 = decrescendo)
+  beatSrc:  'isOnset',     // Beat events   → triggers a new curve turn every beatDiv beats
+  kappaSrc: 'bassImpact',  // 0–1+ float    → scales bend angle   (try 'energyRamp' for crescendo)
+  twistSrc: 'midWave',     // 0–1 float     → rolls the tunnel cross-section (melody / mid-freq)
+
+  // ── Beat → curve density ─────────────────────────────────────────────────
+  // Every beatDiv detected beats, cut the current hold short to force a new turn.
+  // Higher = beat-synced turns less frequent.
+  beatDiv:     4,
+  // When a beat fires: yawHoldSteps is cut to this range (steps, 1 step = 5 m).
+  beatHoldMin: 6,
+  beatHoldMax: 14,
+
+  // ── Kappa → bend magnitude ────────────────────────────────────────────────
+  // Multiplier range on the effective turn-yaw angle per spline step:
+  //   at silence / zero  → normal bend × kappaMin
+  //   at peak            → normal bend × kappaMax
+  kappaMin:   0.4,
+  kappaMax:   1.8,
+  // Scale on the raw source value before the min/max lerp (0 = no effect on bends).
+  kappaScale: 1.0,
+
+  // ── Twist → tunnel roll ───────────────────────────────────────────────────
+  // Applied in real-time in the mesh (InfiniteMesh), NOT baked into the spline.
+  // This means the player experiences the correct twist at exactly the right moment.
+  // twistRate: roll velocity in rad/s when source is at max/min.
+  //   positive source (>0.5) → rolls in one direction; below 0.5 → reverses.
+  twistRate:  0.6,    // rad/s; try 0.3 (subtle) to 2.0 (aggressive barrel feel)
+  twistScale: 1.0,    // 0 = no twist, >1 = exaggerated
+};

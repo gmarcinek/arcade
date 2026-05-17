@@ -94,8 +94,8 @@ export function updatePlayerSurface(dt, left, right, jumpPower, boostHeld) {
   //    This works for all κ: tube, flat, anti-tube automatically.
   const fAtBall = _spline.getFrameAt(state.s);
   if (fAtBall && _crossSection) {
-    // Apply twist (arc span is visual only, radius = TUNNEL_R)
-    const twistRot = _crossSection.getTwist(state.s) * Math.PI * 2;
+    // Apply twist — must match InfiniteMesh (includes audioTwistOffset so physics stays on the visual surface)
+    const twistRot = _crossSection.getTwist(state.s) * Math.PI * 2 + (state.audioTwistOffset ?? 0);
     const cosT = Math.cos(twistRot), sinT = Math.sin(twistRot);
     const norT = new THREE.Vector3(
       fAtBall.nor.x * cosT + fAtBall.bin.x * sinT,

@@ -13,4 +13,5 @@ AudioMetadataBus.ZERO = {
   beatPulse: 0, onsetPulse: 0, isOnset: false,
   bpm: 0,
   chroma: [0, 0, 0],
+  energyRamp: 0,  // smoothed rms derivative: >0 rising (crescendo), <0 falling (decrescendo)
 };

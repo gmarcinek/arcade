@@ -1,5 +1,7 @@
 import * as THREE from 'three';
 import { AudioMetadataBus } from '../audio/AudioMetadataBus.js';
+import { AUDIO_TUNNEL }     from '../config.js';
+import { state }            from '../state.js';
 
 import { TUNNEL_FX_CONFIG } from './infinite-mesh/config.js';
 import { makeMaterial } from './infinite-mesh/material.js';
@@ -43,6 +45,7 @@ export class InfiniteMesh {
     this._opSmooth = {};
     this._silenceGrid = 1.0;
     this._jumpWaves = new JumpWaveSystem();
+    this._audioTwistAcc = 0;  // accumulated cross-section roll driven by twistSrc (rad)
     this._build();
   }
 
@@ -83,6 +86,14 @@ export class InfiniteMesh {
 
     const audio = AudioMetadataBus.get();
 
+    // ── Twist: accumulate cross-section roll from twistSrc (perfectly synchronized) ──
+    if (AUDIO_TUNNEL.enabled) {
+      const _mv  = Math.min(1, Math.max(0, audio[AUDIO_TUNNEL.twistSrc] || 0));
+      this._audioTwistAcc += (_mv - 0.5) * 2.0 * AUDIO_TUNNEL.twistRate * AUDIO_TUNNEL.twistScale * dt;
+    }
+    // Share with player physics so ball position stays on the rotated surface
+    state.audioTwistOffset = this._audioTwistAcc;
+
     // Breathing envelope drives waveAmp and shakeAmp through the macro pattern.
     const bl = breatheLevel(this._time);
     TUNNEL_FX_CONFIG.waveAmp  = 0.5 + bl * 4.5;
@@ -100,6 +111,7 @@ export class InfiniteMesh {
       time: this._time,
       jumpWaves: this._jumpWaves.list,
       audio,
+      audioTwistOffset: this._audioTwistAcc,
     });
 
     this._mat.uniforms.time.value = this._time;

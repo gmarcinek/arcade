@@ -194,14 +194,7 @@ export function tick(dt) {
   }
 
   if (state.gameRunning && !state.crashed) {
-    state.score    += state.sVelocity * dt * 0.18;
-    state.timeLeft -= dt;
-    if (state.timeLeft <= 0) {
-      state.timeLeft = 0;
-      updateHUD();
-      endGame(false, () => startGame(RESTART_SPAWN_M));
-      return;
-    }
+    state.score += state.sVelocity * dt * 0.18;
     updateHUD();
   }
 

@@ -46,6 +46,9 @@ export const state = {
   cameraBackDistanceCurrent: 9,
   cameraHeightCurrent:     4.0,
 
+  // --- audio tunnel ---
+  audioTwistOffset: 0,  // accumulated cross-section roll driven by twistSrc (rad); synced from InfiniteMesh
+
   // --- visuals ---
   ballSpinAngle:   0,
   ballHeatScale:   1.0,

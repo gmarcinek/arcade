@@ -13,8 +13,8 @@ import { lerp } from "../procedural/math";
  * `lerp` (optional) — transition duration in seconds (default: 0 = instant)
  */
 export const POST_TIMELINE = [
-  { time: 12.0,  trigger: 'startBw', lerp:1.0 },
-  { time: 13.5,  trigger: 'stopBw', lerp:1.0 },
+  { time: 14.0,  trigger: 'startBw', lerp:1.0 },
+  { time: 15.5,  trigger: 'stopBw', lerp:1.0 },
 
 
   { time: 20.0,  trigger: 'startInvert',          lerp: 0.5 },

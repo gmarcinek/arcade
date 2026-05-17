@@ -23,7 +23,7 @@ const VERT_COLS = RADIAL_SEGS + 1;
 //   - Transform local frame to world space.
 //   - Write pos[] and nor[].
 
-export function updateVertices({ geo, spline, cs, playerGlobalS, time, jumpWaves, audio }) {
+export function updateVertices({ geo, spline, cs, playerGlobalS, time, jumpWaves, audio, audioTwistOffset = 0 }) {
   const pos = geo.attributes.position.array;
   const nor = geo.attributes.normal.array;
 
@@ -39,7 +39,7 @@ export function updateVertices({ geo, spline, cs, playerGlobalS, time, jumpWaves
     const uHalf   = arcSpan * Math.PI;
     const uCenter = Math.PI;
 
-    const twistRot = cs ? cs.getTwist(ringS) * Math.PI * 2 : 0;
+    const twistRot = (cs ? cs.getTwist(ringS) * Math.PI * 2 : 0) + audioTwistOffset;
     const cosT = Math.cos(twistRot);
     const sinT = Math.sin(twistRot);
 

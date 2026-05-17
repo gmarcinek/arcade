@@ -1,11 +1,27 @@
 import * as THREE from 'three';
 import { seededRng } from './math.js';
+import { AudioMetadataBus } from '../audio/AudioMetadataBus.js';
+import { AUDIO_TUNNEL }     from '../config.js';
 
 // Spacing between stored RMF samples (meters)
 const SAMPLE_STEP = 5;
-// Max turn velocity (rad/step).  0.045 × 5m = 0.009 rad/m ≈ 0.52 deg/m
-// Per phase (avg 3.5 sub-holds × 25 avg steps): ~90 degrees total turn
-const MAX_TURN_RATE = 0.045;
+
+// Max turn velocity (rad/step).  SAMPLE_STEP=5m, so 1 step = 5m of track.
+// Formula: deg/phase ≈ MAX_TURN_RATE / 0.045 × 90°  (avg 3.5 sub-holds × 25 steps × 0.8 intensity)
+//
+// MAX_TURN_RATE │ deg/step │ deg/m  │ max per sub-hold │ max per phase  │ feel
+// ─────────────────────────────────────────────────────────────────────────────
+//   0.020       │  1.1°    │ 0.23°  │  ~28°            │  ~40°          │ bardzo łagodne
+//   0.025       │  1.4°    │ 0.29°  │  ~35°            │  ~50°          │ łagodne
+//   0.030       │  1.7°    │ 0.34°  │  ~42°            │  ~60°          │ umiarkowane
+//   0.034       │  1.9°    │ 0.39°  │  ~48°            │  ~68°          │ ◄ obecne (75%)
+//   0.040       │  2.3°    │ 0.46°  │  ~56°            │  ~80°          │ wyraźne
+//   0.045       │  2.6°    │ 0.52°  │  ~63°            │  ~90°          │ oryginalne
+//   0.055       │  3.2°    │ 0.63°  │  ~77°            │  ~110°         │ intensywne
+//   0.070       │  4.0°    │ 0.80°  │  ~98°            │  ~140°         │ ostre
+// ─────────────────────────────────────────────────────────────────────────────
+const MAX_TURN_RATE = 0.034;
+
 // How fast turnYaw approaches its target per step (0–1 factor)
 // 0.08: reaches 90% of target after ~28 steps (140m)
 const TURN_APPROACH = 0.08;
@@ -43,6 +59,11 @@ export function createInfiniteSpline(seed) {
   let phaseHoldsLeft = 2 + Math.floor(rng() * 3);   // 2–4 sub-holds before first flip
   let yawHoldSteps   = Math.floor(15 + rng() * 20); // 15–35 steps = 75–175m per sub-hold
 
+  // ── Audio-driven tunnel state ─────────────────────────────────────────────
+  let _beatCount   = 0;
+  let _lastOnset   = false;
+  let _pendingBeat = false;
+
   function pushSample() {
     samples.push({
       s:   nextS,
@@ -55,6 +76,25 @@ export function createInfiniteSpline(seed) {
   }
 
   function advanceOne() {
+    // ── Audio modulation ─────────────────────────────────────────────────────
+    const _audio = AUDIO_TUNNEL.enabled ? AudioMetadataBus.get() : AudioMetadataBus.ZERO;
+
+    // Beat → curve density: detect rising edge of beatSrc (isOnset = boolean; others = >0.5 threshold)
+    const _isBeat = AUDIO_TUNNEL.beatSrc === 'isOnset'
+      ? _audio.isOnset
+      : (_audio[AUDIO_TUNNEL.beatSrc] || 0) > 0.5;
+    if (_isBeat && !_lastOnset) {
+      _beatCount++;
+      if (_beatCount % AUDIO_TUNNEL.beatDiv === 0) _pendingBeat = true;
+    }
+    _lastOnset = _isBeat;
+    // If a beat is pending and we're deep in a hold, cut it short
+    if (_pendingBeat && yawHoldSteps > AUDIO_TUNNEL.beatHoldMax) {
+      yawHoldSteps = AUDIO_TUNNEL.beatHoldMin +
+        Math.floor(rng() * (AUDIO_TUNNEL.beatHoldMax - AUDIO_TUNNEL.beatHoldMin + 1));
+      _pendingBeat = false;
+    }
+
     // Hold-and-switch: steer toward current target, then pick new one
     yawHoldSteps--;
     if (yawHoldSteps <= 0) {
@@ -79,7 +119,13 @@ export function createInfiniteSpline(seed) {
     pitchTarget -= pitchTarget * 0.001;
 
     // Yaw: rotate tan around local normal (local "up" — avoids world-Y degeneracy when pitched)
-    const qY = new THREE.Quaternion().setFromAxisAngle(nor, turnYaw);
+    // Kappa → bend magnitude: scale effective yaw by kappaSrc value
+    const _ev = Math.min(1, Math.max(0,
+      (_audio[AUDIO_TUNNEL.kappaSrc] || 0) * AUDIO_TUNNEL.kappaScale));
+    const _energyMul = AUDIO_TUNNEL.kappaMin +
+      (AUDIO_TUNNEL.kappaMax - AUDIO_TUNNEL.kappaMin) * _ev;
+    const _eTurnYaw = turnYaw * _energyMul;
+    const qY = new THREE.Quaternion().setFromAxisAngle(nor, _eTurnYaw);
     tan.applyQuaternion(qY).normalize();
 
     // Pitch: rotate tan around local binormal (local "right")
@@ -99,6 +145,10 @@ export function createInfiniteSpline(seed) {
       nor.normalize();
     }
     bin.crossVectors(tan, nor).normalize();
+
+    // Note: twist/roll is intentionally NOT baked into the spline here.
+    // It is applied in real-time per-frame inside InfiniteMesh (vertex-update.js)
+    // so it always uses current audio with zero delay.
 
     // Advance position
     pos.addScaledVector(tan, SAMPLE_STEP);

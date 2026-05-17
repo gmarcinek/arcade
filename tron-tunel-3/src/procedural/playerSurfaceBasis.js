@@ -29,8 +29,8 @@ export function getPlayerFrame() {
 
   const u = state.u;
 
-  // Apply twist — must match infiniteMesh.js. Arc span is visual only, radius = TUNNEL_R.
-  const twistRot = _crossSection ? _crossSection.getTwist(state.s) * Math.PI * 2 : 0;
+  // Apply twist — must match InfiniteMesh (includes audioTwistOffset so ball stays on visual surface)
+  const twistRot = (_crossSection ? _crossSection.getTwist(state.s) * Math.PI * 2 : 0) + (state.audioTwistOffset ?? 0);
   const cosT = Math.cos(twistRot), sinT = Math.sin(twistRot);
   const norT = new THREE.Vector3(
     f.nor.x * cosT + f.bin.x * sinT,
@@ -77,8 +77,8 @@ export function getPlayerFrame() {
     const sAhead = state.s + laOffsets[i];
     const fa = _spline.getFrameAt(sAhead);
     if (!fa) continue;
-    // Apply same twist as ball at this s
-    const twAhead = _crossSection ? _crossSection.getTwist(sAhead) * Math.PI * 2 : 0;
+    // Apply same twist as ball at this s (including audio offset so look-ahead stays on visual surface)
+    const twAhead = (_crossSection ? _crossSection.getTwist(sAhead) * Math.PI * 2 : 0) + (state.audioTwistOffset ?? 0);
     const cA = Math.cos(twAhead), sA = Math.sin(twAhead);
     const nA = new THREE.Vector3(
       fa.nor.x * cA + fa.bin.x * sA,

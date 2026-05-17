@@ -7,7 +7,7 @@ export const glsl = `
           float le = layerEmerge(fragS);
 
           float tileAngA = angle01 * ${c.colsA}.0;
-          float tileSA   = fragS * ${c.densityA} - time * (${c.speedA} + uBassImpact * 1.2);
+          float tileSA   = fragS * ${c.densityA} - time * (${c.speedA} + 1.5);
           float tileA    = softDash(tileAngA, tileSA, ${c.awA}, ${c.swA});
 
           float tileAngB = angle01 * ${c.colsB}.0 + ${c.phaseB};
@@ -16,7 +16,7 @@ export const glsl = `
 
           orangeTiles = max(tileA * (0.65 + uBassImpact), tileB * 0.70);
 
-          col += orangeTiles * uDashOrange    * lf * le * uOpTilesOrange * (0.55 + uBassImpact * 1.25);
-          col += orangeTiles * uLavaColorHot  * lf * le * uOpTilesOrange * uOnsetPulse * 0.75;
+          col += orangeTiles * uDashOrange   * lf * le * uOpTilesOrange * (0.55 + uBassImpact * 1.25);
+          col += orangeTiles * uLavaColorHot * lf * le * uOpTilesOrange * uOnsetPulse * 0.75;
         }
 `;

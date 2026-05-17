@@ -20,7 +20,7 @@ export const TUNNEL_FX_CONFIG = {
     amount:       2.0, // Overall strength of parallax effect. Higher = more apparent depth, but also more distortion and potential motion sickness.
     flow:         0.0, // Overall flow speed of parallax layers. Higher = more distortion, but also more noticeable movement on near layers.
     depthStretch: 3.0, // Stretching depth exaggerates parallax on near layers, while compressing it on far layers. This helps sell the effect without causing extreme distortion on close layers.
-    audioPush:    12.0, // Strength of parallax movement in response to audio. Higher = more reactive, but can cause distracting jitter when audio is intense.
+    audioPush:    0.0, // Strength of parallax movement in response to audio. Higher = more reactive, but can cause distracting jitter when audio is intense.
 
     // Can be overwritten/additively driven by AudioMetadataBus:
     // deltaA / parallaxDeltaA, deltaS / parallaxDeltaS, range -1..1.

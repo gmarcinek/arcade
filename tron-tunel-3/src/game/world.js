@@ -65,13 +65,13 @@ export let crossSection    = null;
 
 export function resetSpline() {
   infiniteSpline = createInfiniteSpline(bitrev32(Date.now()));
-  infiniteSpline.extend(800);
+  infiniteSpline.extend(50);  // minimal seed; lazy extension uses current audio
   if (infiniteMeshObj) infiniteMeshObj.setSpline(infiniteSpline);
 }
 
 if (PROCEDURAL_PLAYER) {
   infiniteSpline = createInfiniteSpline(bitrev32(Date.now()));
-  infiniteSpline.extend(800);
+  infiniteSpline.extend(50);  // minimal seed; mesh extends lazily with audio
   crossSection   = createCrossSection();
   infiniteMeshObj = new InfiniteMesh(scene, infiniteSpline, crossSection);
   audioSystem.bridge.register(infiniteMeshObj.material);

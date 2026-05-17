@@ -39,8 +39,9 @@ const jumpChargePct  = document.getElementById('jump-charge-pct');
 
 export function updateHUD() {
   document.getElementById('score').textContent = Math.floor(state.score).toLocaleString();
-  const m = Math.floor(state.timeLeft / 60);
-  const s = Math.floor(state.timeLeft % 60);
+  const _elapsed = state.timeElapsed ?? 0;
+  const m = Math.floor(_elapsed / 60);
+  const s = Math.floor(_elapsed % 60);
   document.getElementById('time').textContent  = m + ':' + (s < 10 ? '0' : '') + s;
   document.getElementById('speed').textContent = Math.floor(state.speed * 3.6);
   document.getElementById('dist').textContent  = Math.floor(state.totalDistance) + ' m';

@@ -30,6 +30,10 @@ export class AudioAnalyzer {
     this._smHigh = 0;
     this._smRms = 0;
 
+    // Energy trend (crescendo / decrescendo)
+    this._prevSmRms   = 0;
+    this._energyRamp  = 0;  // smoothed rms derivative; >0 = rising, <0 = falling, range ≈ ±0.08
+
     // Transient tracking
     this._prevRawSub = 0;
     this._prevRawLow = 0;
@@ -211,6 +215,11 @@ export class AudioAnalyzer {
     this._smHigh = this._smoothValue(this._smHigh, highRaw * 0.82 + airRaw * 0.18,   0.34, 0.10);
     this._smRms  = this._smRms * 0.70 + rms * 0.30;
 
+    // Energy ramp: smoothed per-frame derivative of rms (normalised)
+    const _rawRamp = this._smRms - this._prevSmRms;
+    this._prevSmRms  = this._smRms;
+    this._energyRamp = this._energyRamp * 0.80 + _rawRamp * 0.20;
+
     // Composite values
     const rawBassImpact = Math.min(1.8, this._smSub * 0.85 + this._smLow * 1.10 + lowTransient * 0.35 + this._beatPulse * 0.55);
     const rawMidWave    = Math.min(2.0, this._smMid * 1.45 + lowMidRaw * 0.45 + this._onsetPulse * 0.30);
@@ -247,6 +256,7 @@ export class AudioAnalyzer {
       isOnset,
       bpm:        this._bpm,
       chroma:     [this._chromaR, this._chromaG, this._chromaB],
+      energyRamp: this._energyRamp,
     };
   }
 
