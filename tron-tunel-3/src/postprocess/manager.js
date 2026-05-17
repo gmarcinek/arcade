@@ -8,6 +8,7 @@ import { FXAAPass }            from './passes/fxaaPass.js';
 import { HuePass }             from './passes/huePass.js';
 import { VignettePass }        from './passes/vignettePass.js';
 import { BlackAndWhitePass }   from './passes/bwPass.js';
+import { GrainPass }           from './passes/grainPass.js';
 import { InvertPass }          from './passes/invertPass.js';
 import { PostTimelineManager } from './PostTimelineManager.js';
 import { POST_TIMELINE }       from './postTimeline.js';
@@ -17,6 +18,7 @@ export let dofPass       = null;
 export let fxaaPass      = null;
 export let huePass       = null;
 export let bwPass        = null;
+export let grainPass     = null;
 export let invertPass    = null;
 export let vignettePass  = null;
 export let postTimelineMgr = null;
@@ -46,6 +48,9 @@ export function initPostprocessing() {
   bwPass = new BlackAndWhitePass(w, h, 0.0);
   postChain.addPass('bw', bwPass.getMaterial());
 
+  grainPass = new GrainPass(w, h);
+  postChain.addPass('grain', grainPass.getMaterial());
+
   invertPass = new InvertPass(w, h, 0.0);
   postChain.addPass('invert', invertPass.getMaterial());
 
@@ -62,6 +67,8 @@ export function initPostprocessing() {
 export function updateAudioDrivenPasses(dt, postTime) {
   if (!huePass) return;
   huePass.update(postTime);
+  grainPass?.update(postTime);
+  grainPass?.setFromHeat(state.edgeHeat ?? 0);
   const af     = AudioMetadataBus.get();
   const energy = af.rms;
   _hueSat += (1.0 - Math.exp(-8.0 * dt)) * (1.0 + energy * 1.5 - _hueSat);
@@ -131,5 +138,6 @@ export function resizePostprocess(w, h) {
   if (fxaaPass)   fxaaPass.resize(w, h);
   if (huePass)    huePass.resize(w, h);
   if (bwPass)     bwPass.resize(w, h);
+  if (grainPass)  grainPass.resize(w, h);
   if (invertPass) invertPass.resize(w, h);
 }

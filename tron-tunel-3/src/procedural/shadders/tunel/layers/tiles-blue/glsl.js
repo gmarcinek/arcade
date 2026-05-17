@@ -7,8 +7,8 @@ export const glsl = `
             angle01,
             fragS,
             uDepthTilesBlue,
-            -0.80,
-            -1.10,
+            -0.80, // depth range for this layer, controls how it overlaps with others
+            -1.10, // depth range for this layer, controls how it overlaps with others
             uTreble + uOnsetPulse * 0.25,
             1.35,
             12.4,

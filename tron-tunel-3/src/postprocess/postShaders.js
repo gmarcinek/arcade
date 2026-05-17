@@ -299,7 +299,63 @@ export const blackAndWhiteShader = `
   void main() {
     vec4 src = texture2D(tDiffuse, vUv);
     float luma = dot(src.rgb, vec3(0.299, 0.587, 0.114));
-    gl_FragColor = vec4(mix(src.rgb, vec3(luma), uIntensity), src.a);
+    gl_FragColor = vec4(mix(src.rgb, vec3(luma), clamp(uIntensity, 0.0, 1.0)), src.a);
+  }
+`;
+
+// ============================================================================
+// GRAIN
+// ============================================================================
+
+export const grainShader = `
+  precision highp float;
+
+  varying vec2 vUv;
+
+  uniform sampler2D tDiffuse;
+  uniform float uTime;
+  uniform vec2 uResolution;
+  uniform float uNoiseAmount;
+  uniform float uGrainAmount;
+  uniform float uGlitchAmount;
+
+  float hash12(vec2 p) {
+    vec3 p3 = fract(vec3(p.xyx) * 0.1031);
+    p3 += dot(p3, p3.yzx + 33.33);
+    return fract((p3.x + p3.y) * p3.z);
+  }
+
+  void main() {
+    vec2 uv = vUv;
+    float splitAmount = clamp(uGlitchAmount, 0.0, 1.0);
+
+    // Simple chromatic split instead of glitch artifacts.
+    vec2 centerDir = uv - 0.5;
+    float d = max(length(centerDir), 0.0001);
+    vec2 dir = centerDir / d;
+    float wobble = 0.8 + 0.2 * sin(uTime * 2.7);
+    vec2 rgbShift = dir * (0.004 + 0.008 * splitAmount) * splitAmount * wobble;
+
+    vec4 src = vec4(
+      texture2D(tDiffuse, fract(uv + rgbShift)).r,
+      texture2D(tDiffuse, uv).g,
+      texture2D(tDiffuse, fract(uv - rgbShift)).b,
+      texture2D(tDiffuse, uv).a
+    );
+
+    vec2 nUv = uv * vec2(1920.0, 1080.0) + vec2(uTime * 37.13, uTime * 91.73);
+    float n0 = hash12(nUv);
+    float n1 = hash12(nUv * 1.73 + 11.0);
+    float whiteNoise = (n0 - 0.5) * 2.0;
+    float grain = ((n0 + n1) * 0.5 - 0.5) * 2.0;
+
+    float luma = dot(src.rgb, vec3(0.299, 0.587, 0.114));
+    float midMask = 1.0 - abs(luma - 0.5) * 2.0;
+    float noiseMix = whiteNoise * uNoiseAmount;
+    float grainMix = grain * uGrainAmount * midMask;
+
+    vec3 outColor = clamp(src.rgb + vec3(noiseMix + grainMix), 0.0, 1.0);
+    gl_FragColor = vec4(outColor, src.a);
   }
 `;
 

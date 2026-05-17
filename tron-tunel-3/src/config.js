@@ -66,7 +66,7 @@ export const CFG = {
 // ---- Strefa ciepła przy krawędzi (otwarte powierzchnie) ----
 export const EDGE_HEAT_ZONE_M   = 4.0;   // metry od krawędzi, od których zaczyna się ciepło
 export const EDGE_HEAT_RATE     = 0.6;   // ciepło narastające na sekundę przy pełnej bliskości
-export const EDGE_HEAT_COOL     = 0.18;  // ciepło opadające na sekundę poza strefą
+export const EDGE_HEAT_COOL     = 0.36;  // ciepło opadające na sekundę poza strefą
 
 // ---- Interakcja boosta z ciepłem ----
 export const BOOST_HEAT_RATE   = 0.20;  // ciepło/s narastające podczas boostowania
