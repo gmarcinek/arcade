@@ -168,6 +168,19 @@ html, body {
 .btn { padding: 11px 38px; background: #00d9ff; color: #001824; border: none; border-radius: 4px; font-weight: 700; font-size: 12px; cursor: pointer; letter-spacing: 2px; text-transform: uppercase; font-family: inherit; }
 .btn:hover { background: #45e8ff; }
 
+/* ---- Difficulty select (HUD) ---- */
+.hud-tl-top { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; pointer-events: auto; }
+.diff-select {
+  background: rgba(0,0,0,0.55); color: rgba(255,255,255,0.55);
+  border: 1px solid rgba(255,255,255,0.12); border-radius: 3px;
+  font-family: inherit; font-size: 9px; font-weight: 700;
+  letter-spacing: 1.5px; text-transform: uppercase;
+  padding: 4px 6px; cursor: pointer; outline: none;
+  appearance: none; -webkit-appearance: none;
+}
+.diff-select:hover { border-color: rgba(0,217,255,0.40); color: #00d9ff; }
+.diff-select option { background: #08101a; color: #cceeff; }
+
 /* ---- End card ---- */
 .end-card { background: rgba(0,8,18,0.75); border: 1px solid rgba(0,217,255,0.28); padding: 30px 50px; border-radius: 8px; text-align: center; display: flex; flex-direction: column; gap: 10px; align-items: center; }
 .end-label { font-size: 11px; opacity: 0.65; letter-spacing: 2px; text-transform: uppercase; }

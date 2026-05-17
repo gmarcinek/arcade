@@ -1,3 +1,5 @@
+import { lerp } from "../procedural/math";
+
 /**
  * Post-process specialEffects timeline — 0..120 seconds.
  *
@@ -11,10 +13,14 @@
  * `lerp` (optional) — transition duration in seconds (default: 0 = instant)
  */
 export const POST_TIMELINE = [
+  { time: 12.0,  trigger: 'startBw', lerp:1.0 },
+  { time: 13.5,  trigger: 'stopBw', lerp:1.0 },
+
+
   { time: 20.0,  trigger: 'startInvert',          lerp: 0.5 },
-  { time: 21.0,  trigger: 'startBw',              lerp: 0.5 },
-  { time: 23.0,  trigger: 'stopInvert',           lerp: 1.5 },
-  { time: 25.0,  trigger: 'stopBw',               lerp: 1.5 },
+  { time: 20.5,  trigger: 'startBw',              lerp: 0.5 },
+  { time: 22.0,  trigger: 'stopInvert',           lerp: 0.5 },
+  { time: 24.0,  trigger: 'stopBw',               lerp: 0.5 },
 
   // --- 105s: final invert ---
   { time: 105.0,  trigger: 'startInvert',          lerp: 0.5 },

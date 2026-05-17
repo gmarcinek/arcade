@@ -1,22 +1,22 @@
-// ---- Tunnel geometry constants ----
+// ---- Stałe geometrii tunelu ----
 export const TUNNEL_R   = 12;
-export const BALL_R     = 0.9;  // ball mesh radius (m)
+export const BALL_R     = 0.9;  // promień siatki piłki (m)
 export const TUNNEL_LEN = 1200;
 export const LANE_COUNT = 120;
-export const LANE_ANGLE = (Math.PI * 2) / LANE_COUNT; // 0.05236 rad per lane
-export const CAR_OFF    = 0.32; //
+export const LANE_ANGLE = (Math.PI * 2) / LANE_COUNT; // 0.05236 rad na pas
+export const CAR_OFF    = 0.32;
 export const DANGER_TIMEOUT   = 2.0;
-export const OUT_OF_BOUNDS_KILL_S = 1.0;
-export const DEATH_BLAST_DURATION_S = 2.0;
-export const DEATH_BLAST_SCALE_MAX = 10.0;
-export const BASE_SPEED_START = 32;
+export const OUT_OF_BOUNDS_KILL_S = 2.0;  // sekundy do śmierci gdy piłka poza tunelem
+export const DEATH_BLAST_DURATION_S = 2.0; // czas animacji wybuchu śmierci (s)
+export const DEATH_BLAST_SCALE_MAX = 10.0; // maksymalna skala wybuchu
+export const BASE_SPEED_START = 12;
 export const RESTART_SPAWN_M  = 80;
 
-// ---- Camera constants ----
-export const CAM_SPRING        = 52; // spring stiffness (N/m) — higher = tighter spring, more rubber-banding; lower = looser spring, more floaty feel
-export const CAM_DAMP          = 13.5; // critically damped at ~13.5, lower for more floaty feel
-export const CAM_MAX_VEL       = 4.4; // max camera velocity (prevents extreme rubber-banding when player clips into wall)
-export const CAM_FOV_NORMAL    = 70;
+// ---- Stałe kamery ----
+export const CAM_SPRING        = 52; // sztywność sprężyny (N/m) — wyżej = ciaśniejsza, więcej gumowania; niżej = luźniejsza, bardziej płynna
+export const CAM_DAMP          = 13.5; // krytyczne tłumienie przy ~13.5; niżej = bardziej płynna kamera
+export const CAM_MAX_VEL       = 4.4; // maks. prędkość kamery (zapobiega szarpnięciom gdy gracz wpada w ścianę)
+export const CAM_FOV_NORMAL    = 70; // FOV normalny (stopnie)
 export const CAM_FOV_BOOST     = 110;
 export const CAM_FOV_ENTER_S   = 3.0;
 export const CAM_FOV_EXIT_S    = 3.0;
@@ -26,28 +26,32 @@ export const CAM_DIST_NORMAL   = 6;
 export const CAM_DIST_FORWARD  = 14;
 export const CAM_DIST_BACK     = 4;
 
-// ---- Physics config ----
+// ---- Konfiguracja fizyki ----
 export const CFG = {
-  // ── Lateral rolling physics ──
-  driveTorque:         28,    // rad/s² — torque applied to ball spin by player input
-  rollingFriction:     28,    // coupling strength between ball spin and tunnel position (higher = grippier)
-  spinDecay:           55,   // rad/s² decay of ball spin in air (gyroscopic momentum)
-  airLateralDecay:     0.15,  // decay of thetaVelocity in air (low = floaty drift)
-  bounceSpinTransfer:  0.25,  // fraction of tangential velocity converted to spin on impact
-  maxThetaVelocity:    44,     // hard cap on tunnel angular velocity (rad/s)
-  tunnelAngularGravity: 0.0,  // rad/s² — pendulum pull toward tube floor (theta=0); tune per difficulty
+  // ── Fizyka toczenia bocznego ──
+  driveTorque:         28,    // rad/s² — moment obrotowy nadawany piłce przez input gracza
+  rollingFriction:     28,    // siła sprzężenia obrotu piłki z pozycją w tunelu (wyżej = większa przyczepność)
+  spinDecay:           55,   // rad/s² zanik obrotu piłki w powietrzu (moment bezwładności)
+  airLateralDecay:     0.15,  // zanik prędkości bocznej w powietrzu (niżej = bardziej dryfuje)
+  bounceSpinTransfer:  0.25,  // ułamek prędkości stycznej zamieniany na spin przy odbiciu
+  maxThetaVelocity:    44,     // twarde ograniczenie prędkości kątowej w tunelu (rad/s)
 
-  // ── Radial physics ──
-  jumpImpulse:         17, // initial radial velocity from jump (m/s)
-  tunnelGravity:       36, // radial acceleration toward tube center when airborne (m/s²)
-  maxRadialOffset:     10, // max distance from tube center (for crash)
+  // ── AUTOPILOT: 
+  // automatyczne wyrównywanie trajektorii — im wyższe, tym silniej tunel "ciągnie" piłkę do środka pasa (u=π); 0 = wyłącz autopilota, 2–5 = subtelne wyrównywanie, 8+ = silne przyciąganie do środka pasa
+  tunnelAngularGravity: 0.0,  // rad/s² — sprężyna ku centrum widocznego łuku (u=π); 0 = wyłącz, 2–5 = subtelne, 8+ = silne przyciąganie
+  tunnelAngularDamp:    15,   // 0–100 — tłumienie wyrównywacza trajektorii; 0 = czysta sprężyna (oscylacje), 100 = krytyczne (bez przebiegu)
 
-  // ── Charged jump ──
-  jumpChargeTime:    4.0,  // seconds to reach full charge
-  jumpMinFactor:     0.30, // power multiplier on instant tap (30%)
-  jumpMaxFactor:     2.00, // power multiplier at full charge (200%)
+  // ── Fizyka radialna ──
+  jumpImpulse:         17, // początkowa prędkość radialna skoku (m/s)
+  tunnelGravity:       36, // przyspieszenie radialne ku środkowi tunelu gdy w powietrzu (m/s²)
+  maxRadialOffset:     10, // maksymalna odległość od środka tunelu (crash)
 
-  // ── Forward speed ──
+  // ── Naładowany skok ──
+  jumpChargeTime:    3.0,  // sekundy do pełnego naładowania
+  jumpMinFactor:     0.10, // mnożnik mocy przy natychmiastowym tapnięciu (10%)
+  jumpMaxFactor:     2.00, // mnożnik mocy przy pełnym naładowaniu (200%)
+
+  // ── Prędkość do przodu ──
   baseSpeed:           80,
   forwardSpeed:        90,
   boostSpeed:          95,
@@ -59,33 +63,33 @@ export const CFG = {
   airControl:          1,
 };
 
-// ---- Edge heat zone (open surfaces) ----
-export const EDGE_HEAT_ZONE_M   = 4.0;   // metres from edge where heat starts (danger strip width)
-export const EDGE_HEAT_RATE     = 0.6;   // heat accumulated per second at full proximity
-export const EDGE_HEAT_COOL     = 0.18;  // heat lost per second when out of danger zone
+// ---- Strefa ciepła przy krawędzi (otwarte powierzchnie) ----
+export const EDGE_HEAT_ZONE_M   = 4.0;   // metry od krawędzi, od których zaczyna się ciepło
+export const EDGE_HEAT_RATE     = 0.6;   // ciepło narastające na sekundę przy pełnej bliskości
+export const EDGE_HEAT_COOL     = 0.18;  // ciepło opadające na sekundę poza strefą
 
-// ---- Boost-heat interaction ----
-export const BOOST_HEAT_RATE   = 0.20;  // heat/sec accumulated while boosting
-export const BOOST_HEAT_CUTOFF = 0.35;  // heat level that force-kills boost
-export const BOOST_HEAT_REARM  = 0.20;  // heat must drop below this before boost can re-arm
-export const BOOST_MIN_FUEL    = 0.85;  // fraction of boost fuel required to start boost
+// ---- Interakcja boosta z ciepłem ----
+export const BOOST_HEAT_RATE   = 0.20;  // ciepło/s narastające podczas boostowania
+export const BOOST_HEAT_CUTOFF = 0.35;  // poziom ciepła wymuszający wyłączenie boosta
+export const BOOST_HEAT_REARM  = 0.20;  // ciepło musi spaść poniżej tej wartości by boost mógł się ponownie naładować
+export const BOOST_MIN_FUEL    = 0.85;  // ułamek paliwa wymagany do uruchomienia boosta
 
-// ---- Ball physics material ----
+// ---- Materiał fizyki piłki ----
 export const BALL_PHYS = {
-  restitution:       0.7, // bounciness (0 = dead, 1 = perfect)
-  inertiaDecay:      0.08, // angular velocity decay (friction) applied each second; higher = quicker slowdown of spins and rolls
+  restitution:       0.7, // sprężystość odbicia (0 = martwa, 1 = idealna)
+  inertiaDecay:      0.08, // zanik prędkości kątowej (tarcie) na sekundę; wyżej = szybsze hamowanie obrotów
 
-  squashDuration:    0.05, // seconds of squash/stretch animation on impact
-  squashAmount:      0.15,  // max scale reduction at peak of squash (0.15 = 15% smaller); also controls stretch amount for same duration
-  stretchAmount:     0.15,  // max scale increase at peak of stretch (0.15 = 15% bigger); also controls squash amount for same duration
-  speedStretch:      0.0, // additional stretch proportional to impact speed (0.0 = no stretch, 0.01 = 1% stretch per m/s of impact velocity)
+  squashDuration:    0.05, // sekundy animacji spłaszczenia/rozciągnięcia przy uderzeniu
+  squashAmount:      0.15,  // maksymalne spłaszczenie w szczycie (0.15 = 15% mniejszy)
+  stretchAmount:     0.15,  // maksymalne rozciągnięcie w szczycie (0.15 = 15% większy)
+  speedStretch:      0.0, // dodatkowe rozciągnięcie proporcjonalne do prędkości uderzenia (0.0 = brak)
 
   surfaceDamp:       1,
   surfaceDampRadius: 0.2,
   bounceThreshold:   5,
 };
 
-// ---- Ball visual material ----
+// ---- Materiał wizualny piłki ----
 export const BALL_MAT = {
   color:           0x000000,
   metalness:       0.9,
@@ -99,24 +103,24 @@ export const BALL_MAT = {
   depthWrite:      true,
 };
 
-// ---- Jump wave visual config ----
+// ---- Konfiguracja wizualna fali skoku ----
 export const JUMP_WAVE_CONFIG = {
-  speedMult:        1.6,   // wave speed = player speed × speedMult
-  speedRandRange:   0.2,   // ±random spread on speed (0 = no random, 0.2 = ±10%)
-  duration:         4.0,   // seconds until wave fades out completely
-  envelopeBase:    14.0,   // Gaussian envelope width at age=0 (metres)
-  envelopeGrow:     5.0,   // envelope width growth per second
-  oscillationCycle: 12.0,  // full sine cycle length (metres): bump + dip
-  waveAmp:          0.18,  // hill-valley oscillation amplitude (fraction of radius)
-  pushAmp:          0.32,  // radial push amplitude (fraction of radius)
-  pushWidthBase:   15.0,   // push Gaussian width at age=0 (metres)
-  pushWidthGrow:    2.0,   // push width growth per second
-  pushOffset:       4.0,   // push centre offset behind wave front (metres)
-  glowBlue:         1.12,  // glow intensity — electric blue channel
-  glowWhite:        2.70,  // glow intensity — white shimmer channel
+  speedMult:        2.0,   // prędkość fali = prędkość gracza × speedMult
+  speedRandRange:   0.2,   // ±losowy rozrzut prędkości (0 = brak, 0.2 = ±10%)
+  duration:         6.0,   // sekundy do całkowitego zaniku fali
+  envelopeBase:    16.0,   // szerokość obwiedni Gaussa przy wieku=0 (m)
+  envelopeGrow:     16.0,   // przyrost szerokości obwiedni na sekundę
+  oscillationCycle: 16.0,  // długość pełnego cyklu sinusoidy (m): garb + dołek
+  waveAmp:          0.18,  // amplituda oscylacji garb-dołek (ułamek promienia)
+  pushAmp:          0.42,  // amplituda radialnego wypychania (ułamek promienia)
+  pushWidthBase:   16.0,   // szerokość Gaussa wypychania przy wieku=0 (m)
+  pushWidthGrow:    16.0,   // przyrost szerokości wypychania na sekundę
+  pushOffset:       8.0,   // przesunięcie środka wypychania za frontem fali (m)
+  glowBlue:         1.12,  // intensywność poświaty — kanał elektrycznego błękitu
+  glowWhite:        2.70,  // intensywność poświaty — kanał białego połysku
 };
 
-// ---- Tunnel shader FX ----
+// ---- Efekty shadera tunelu ----
 export const TUNNEL_FX = {
   lavaStrength: 0.52,
 
@@ -146,7 +150,7 @@ export const PROC_CFG = {
   CONTROL_POINTS_MAX:    4, // max number of control points per segment; higher = more varied track but more erratic; lower = smoother track but more predictable
 
   // Safe track
-  SAFE_TRACK_SAMPLES:    100, // number of points sampled along track to evaluate safe track; higher = more accurate but more CPU usage
+  SAFE_TRACK_SAMPLES:    300, // number of points sampled along track to evaluate safe track; higher = more accurate but more CPU usage
 
   // Chunk streaming
   LOOKAHEAD_SEGMENTS:    3, // number of segments ahead of player to keep loaded; higher = smoother streaming but more CPU/memory usage
@@ -161,13 +165,13 @@ export const PROC_CFG = {
 
   KAPPA_INTERVAL_MIN: 150, // min steps between curvature targets (shorter = quicker turns)
   KAPPA_INTERVAL_MAX: 450, // max steps between curvature targets (longer = more sustained turns)
-  KAPPA_MIN: -0.8,
+  KAPPA_MIN: -1.0,
   KAPPA_MAX: +3.8, // curvature range (higher = more intense tube bends; lower = flatter tube)
 
   ARC_INTERVAL_MIN: 200, // min steps between arc-width targets
-  ARC_INTERVAL_MAX: 450, // max steps between arc-width targets
+  ARC_INTERVAL_MAX: 250, // max steps between arc-width targets
 
-  ARC_MIN: 0.15, 
+  ARC_MIN: 0.1, 
   ARC_MAX: 0.99, 
 
   TWIST_INTERVAL_MIN: 90, // min steps between twist targets
@@ -182,6 +186,6 @@ export const PROC_CFG = {
   CAM_HEIGHT:        3.5,
   CAM_BACK_DIST:     10,
   CAM_POS_TAU:       0.12,
-  CAM_UP_TAU:        0.05,
+  CAM_UP_TAU:        0.15,
   CAM_FLOOR_MIN:     1.5,
 };

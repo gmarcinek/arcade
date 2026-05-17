@@ -128,7 +128,17 @@ export function updatePlayerSurface(dt, left, right, jumpPower, boostHeld) {
     state.uVelocity += cfAngular * dt;
   }
 
-  // 4. Friction/damping — always active; inertia is the primary force, player fights it
+  // 4. Grawitacja ku centrum widocznego tunelu — tłumiona sprężyna (u → π)
+  //    Tłumienie: 0 = czysta sprężyna (oscylacje), 100 = krytyczne (bez przebiegu).
+  if (CFG.tunnelAngularGravity !== 0) {
+    const k    = CFG.tunnelAngularGravity;
+    const damp = Math.max(0, CFG.tunnelAngularDamp ?? 100) / 100;
+    const c    = damp * 2 * Math.sqrt(Math.abs(k));
+    const uDiff = Math.PI - state.u;
+    state.uVelocity += (k * uDiff - c * state.uVelocity) * dt;
+  }
+
+  // 5. Friction/damping — always active; inertia is the primary force, player fights it
   state.uVelocity *= Math.exp(-BALL_PHYS.inertiaDecay * dt);
   state.uVelocity = THREE.MathUtils.clamp(state.uVelocity, -MAX_U_VEL, MAX_U_VEL);
 

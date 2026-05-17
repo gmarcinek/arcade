@@ -49,17 +49,21 @@ export function createTrackChunkManager(globalSeed) {
     const intermediates = [];
 
     for (let i = 0; i < N; i++) {
-      // Horizontal rotation (yaw around world Y)
-      const turnXZ = (rng() * 2 - 1) * PROC_CFG.MAX_TURN_XZ;
-      const qH = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), turnXZ);
-      currentDir.applyQuaternion(qH);
+      if (i > 0) {
+        // Horizontal rotation (yaw around world Y)
+        // i=0 skipped: first intermediate lies along startTangent so CatmullRom
+        // computes the correct entry tangent — eliminates kink at chunk boundaries.
+        const turnXZ = (rng() * 2 - 1) * PROC_CFG.MAX_TURN_XZ;
+        const qH = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), turnXZ);
+        currentDir.applyQuaternion(qH);
 
-      // Vertical rotation (pitch around right vector)
-      const turnY = (rng() * 2 - 1) * PROC_CFG.MAX_TURN_Y;
-      const right = new THREE.Vector3(-currentDir.z, 0, currentDir.x).normalize();
-      if (right.lengthSq() < 0.001) right.set(1, 0, 0);
-      const qV = new THREE.Quaternion().setFromAxisAngle(right, turnY);
-      currentDir.applyQuaternion(qV).normalize();
+        // Vertical rotation (pitch around right vector)
+        const turnY = (rng() * 2 - 1) * PROC_CFG.MAX_TURN_Y;
+        const right = new THREE.Vector3(-currentDir.z, 0, currentDir.x).normalize();
+        if (right.lengthSq() < 0.001) right.set(1, 0, 0);
+        const qV = new THREE.Quaternion().setFromAxisAngle(right, turnY);
+        currentDir.applyQuaternion(qV).normalize();
+      }
 
       currentPoint = currentPoint.clone().addScaledVector(currentDir, stepSize);
       intermediates.push(currentPoint.clone());

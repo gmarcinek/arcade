@@ -715,9 +715,14 @@ function loop(t) {
 
 // ---- UI wiring ----
 document.getElementById('start-btn').addEventListener('click', () => startGame(RESTART_SPAWN_M));
-document.getElementById('flythrough-btn').addEventListener('click', startFlythrough);
+document.getElementById('flythrough-btn')?.addEventListener('click', startFlythrough);
 const hudRestartBtn = document.getElementById('hud-restart-btn');
 if (hudRestartBtn) hudRestartBtn.addEventListener('click', () => startGame(RESTART_SPAWN_M));
+
+const diffSelect = document.getElementById('difficulty-select');
+if (diffSelect) diffSelect.addEventListener('change', () => {
+  CFG.tunnelAngularGravity = parseFloat(diffSelect.value);
+});
 
 document.addEventListener('keydown', e => {
   if ((e.ctrlKey || e.metaKey) && e.key && e.key.toLowerCase() === 'r') {
@@ -750,27 +755,5 @@ document.getElementById('audio-btn').addEventListener('click', async () => {
     console.warn('Audio capture failed:', e.message);
   }
 });
-
-document.getElementById('mode-btn').addEventListener('click', () => {
-  state.physicsMode = !state.physicsMode;
-
-  const btn = document.getElementById('mode-btn');
-
-  btn.textContent = state.physicsMode ? 'PHYSICS MODE' : 'CLASSIC MODE';
-  btn.style.background = state.physicsMode ? '#ff8800' : '';
-  btn.style.color = state.physicsMode ? '#0a0400' : '';
-
-  document.getElementById('mode-indicator').textContent = state.physicsMode ? 'PHYSICS' : '';
-});
-
-{
-  const btn = document.getElementById('mode-btn');
-
-  btn.textContent = 'PHYSICS MODE';
-  btn.style.background = '#ff8800';
-  btn.style.color = '#0a0400';
-
-  document.getElementById('mode-indicator').textContent = 'PHYSICS';
-}
 
 requestAnimationFrame(loop);
