@@ -3,6 +3,7 @@ import { BALL_MAT, BALL_PHYS, CFG, PROC_CFG, TUNNEL_R, CAR_OFF, DEATH_BLAST_DURA
 import { input } from './input.js';
 import { state } from './state.js';
 import { emitBounce, emitEdgeScratch, emitExplosionBurst } from './sparks.js';
+import { settings } from './hud/settings.js';
 
 
 export function getBasis(theta) {
@@ -135,7 +136,7 @@ export function createBall(scene) {
   ribbon.frustumCulled = false;
   scene.add(ribbon);
 
-  const cubeRenderTarget = new THREE.WebGLCubeRenderTarget(BALL_MAT.reflectionRes, {
+  const cubeRenderTarget = new THREE.WebGLCubeRenderTarget(settings.reflectionRes, {
     generateMipmaps: true,
     minFilter: THREE.LinearMipmapLinearFilter,
   });

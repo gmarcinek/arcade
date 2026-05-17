@@ -10,6 +10,8 @@
 
 <body>
     <canvas id="game-canvas"></canvas>
+    <div id="touch-pad"></div>
+    <button id="jump-btn" type="button" aria-label="Jump">↑</button>
     <div id="respawn-overlay"></div>
     <div id="flash"></div>
     <div id="danger-warn"></div>
@@ -20,10 +22,11 @@
             <button id="hud-restart-btn" class="hud-restart-btn" type="button">restart</button>
             <select id="difficulty-select" class="diff-select">
                 <option value="0" selected>HARD</option>
-                <option value="6">NORMAL</option>
-                <option value="12">EASY</option>
+                <option value="1">NORMAL</option>
+                <option value="10">EASY</option>
                 <option value="24">DEMO</option>
             </select>
+            <button id="settings-btn" class="hud-restart-btn settings-btn" type="button" title="Settings">⚙</button>
         </div>
 
         <div class="lbl">score</div>
@@ -70,6 +73,7 @@
     <div class="hud hud-br">
         <div class="spd-row"><span class="val" id="speed">0</span><span class="km">km/h</span></div>
         <div class="lbl" id="mode-indicator" style="color:#ff8800; margin-top:4px;"></div>
+        <div id="fps-counter">60 fps</div>
     </div>
 
     <div id="overlay">
@@ -103,6 +107,46 @@
                 CAPTURING · <span id="audio-bpm">— BPM</span>
             </div>
         </div>
+    </div>
+
+    <!-- Settings panel -->
+    <div id="settings-panel">
+        <div class="settings-header">
+            <span class="settings-title">SETTINGS</span>
+            <button id="settings-close" type="button">✕</button>
+        </div>
+        <div class="settings-section-label">GRAPHICS</div>
+        <div class="settings-row">
+            <label for="set-fps">Max framerate</label>
+            <select id="set-fps">
+                <option value="30">30 fps</option>
+                <option value="60">60 fps</option>
+                <option value="144">144 fps</option>
+                <option value="185">185 fps</option>
+                <option value="240">240 fps</option>
+                <option value="0">max</option>
+            </select>
+        </div>
+        <div class="settings-row">
+            <label for="set-reflres">Ball reflection</label>
+            <select id="set-reflres">
+                <option value="64">fast (64)</option>
+                <option value="128">normal (128)</option>
+                <option value="254">high (254)</option>
+                <option value="512">ultra (512)</option>
+            </select>
+        </div>
+        <div class="settings-row">
+            <label for="set-renderres">Render resolution</label>
+            <select id="set-renderres">
+                <option value="0">native (max)</option>
+                <option value="1080">1080p</option>
+                <option value="720">720p</option>
+                <option value="540">540p</option>
+                <option value="360">360p (fast)</option>
+            </select>
+        </div>
+        <div id="settings-reload-note">restart required</div>
     </div>
 
     <script type="module" src="/src/main.js"></script>

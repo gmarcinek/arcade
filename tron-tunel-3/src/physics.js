@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { CFG, BALL_PHYS, BALL_R, TUNNEL_R } from './config.js';
 import { state } from './state.js';
 import { input } from './input.js';
-import { showTrick } from './ui.js';
+import { showTrick } from './hud/hud.js';
 
 
 function evaluateLanding() {

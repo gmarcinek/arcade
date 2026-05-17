@@ -18,7 +18,7 @@ export const TUNNEL_FX_CONFIG = {
 
   parallax: {
     amount:       2.0, // Overall strength of parallax effect. Higher = more apparent depth, but also more distortion and potential motion sickness.
-    flow:         3.0, // Overall flow speed of parallax layers. Higher = more distortion, but also more noticeable movement on near layers.
+    flow:         0.0, // Overall flow speed of parallax layers. Higher = more distortion, but also more noticeable movement on near layers.
     depthStretch: 3.0, // Stretching depth exaggerates parallax on near layers, while compressing it on far layers. This helps sell the effect without causing extreme distortion on close layers.
     audioPush:    12.0, // Strength of parallax movement in response to audio. Higher = more reactive, but can cause distracting jitter when audio is intense.
 
@@ -57,8 +57,8 @@ export const TUNNEL_FX_CONFIG = {
   // Orange heat family.
   lavaColorDark:   [0.330, 0.070, 0.000],
   lavaColorMid:    [0.900, 0.220, 0.020],
-  lavaColorHot:    [1.000, 0.360, 0.020],
-  dashOrange:      [1.000, 0.300, 0.020],
+  lavaColorHot:    [1.000, 0.200, 0.020],
+  dashOrange:      [1.000, 0.160, 0.020],
   edgeOrange:      [1.000, 0.220, 0.000],
   contactWarm:     [1.000, 0.500, 0.120],
 

@@ -79,7 +79,7 @@ export function makeMaterial() {
       uLavaColorDark:   { value: new THREE.Vector3(0.330, 0.070, 0.000) },
       uLavaColorMid:    { value: new THREE.Vector3(0.900, 0.220, 0.020) },
       uLavaColorHot:    { value: new THREE.Vector3(1.000, 0.360, 0.020) },
-      uDashOrange:      { value: new THREE.Vector3(1.000, 0.300, 0.020) },
+      uDashOrange:      { value: new THREE.Vector3(1.000, 0.160, 0.020) },
       uEdgeOrange:      { value: new THREE.Vector3(1.000, 0.220, 0.000) },
       uContactWarm:     { value: new THREE.Vector3(1.000, 0.500, 0.120) },
 

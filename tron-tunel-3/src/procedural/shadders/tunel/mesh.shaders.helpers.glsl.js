@@ -7,6 +7,21 @@ export const helpersGlsl = `
         return fract(sin(p * 127.1) * 43758.5453123);
       }
 
+      // Smooth 1D value noise — C1-continuous, replaces floor(s/N)*hash pattern.
+      float vnoise1(float s) {
+        float i = floor(s);
+        float f = fract(s);
+        float u = f * f * (3.0 - 2.0 * f);
+        return mix(hash11(i), hash11(i + 1.0), u);
+      }
+
+      // Multi-octave fbm for richer variation without discrete boundaries.
+      float fbm1(float s) {
+        return 0.55 * vnoise1(s)
+             + 0.28 * vnoise1(s * 2.13 + 5.3)
+             + 0.17 * vnoise1(s * 4.31 + 11.7);
+      }
+
       float softLine(float x, float width) {
         float d = abs(fract(x) - 0.5);
         return 1.0 - smoothstep(0.0, width, d);
@@ -21,9 +36,9 @@ export const helpersGlsl = `
       }
 
       float motifGate(float fragS, float speed, float phase) {
-        float seg = floor(fragS / 92.0);
-        float n = hash11(seg + phase * 17.0);
-        float w = 0.5 + 0.5 * sin(time * speed + seg * 1.91 + phase + n * 6.283);
+        float t    = fragS / 92.0;
+        float n    = fbm1(t + phase * 17.0);
+        float w    = 0.5 + 0.5 * sin(time * speed + t * 0.6 + phase + n * 6.283);
         float beat = saturate(uBeatPulse * 0.65 + uOnsetPulse * 0.45 + uMusicEnergy * 0.25);
         return smoothstep(0.42, 0.88, w + beat * 0.42);
       }
