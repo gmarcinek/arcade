@@ -120,7 +120,7 @@ export function tick(dt) {
   }
 
   const _prevJumpCooldown = state.jumpCooldown;
-  updatePlayerSurface(dt, input.left, input.right, jumpFiredPower, input.boost);
+  updatePlayerSurface(dt, input.left, input.right, jumpFiredPower, input.boost || state.demoMode);
 
   if (state.jumpCooldown > _prevJumpCooldown && infiniteMeshObj) {
     infiniteMeshObj.triggerJumpWave(state.s, state.sVelocity, jumpFiredPower);

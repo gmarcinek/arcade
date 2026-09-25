@@ -21,6 +21,7 @@ import {
   stopFlythrough,
 } from './game/flythrough.js';
 import { startGame, tick } from './game/flow.js';
+import { toggleDemoMode } from './camera.js';
 
 // ---- Resize ----
 function resize() {
@@ -113,7 +114,14 @@ if (hudRestartBtn) hudRestartBtn.addEventListener('click', () => startGame(RESTA
 const diffSelect = document.getElementById('difficulty-select');
 if (diffSelect) {
   diffSelect.addEventListener('change', () => {
-    CFG.tunnelAngularGravity = parseFloat(diffSelect.value);
+    const val = parseFloat(diffSelect.value);
+    // Wartość 24 oznacza tryb DEMO z dynamiczną kamerą i autopilota
+    if (val === 24) {
+      toggleDemoMode(true);
+    } else {
+      toggleDemoMode(false);
+      CFG.tunnelAngularGravity = val;
+    }
   });
   // On mobile, default to EASY (value 10)
   if (window.innerWidth <= 600 || navigator.maxTouchPoints > 1) {

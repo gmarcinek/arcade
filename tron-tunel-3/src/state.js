@@ -46,6 +46,16 @@ export const state = {
   cameraBackDistanceCurrent: 9,
   cameraHeightCurrent:     4.0,
 
+  // --- demo mode ---
+  demoMode:                false,
+  demoCamMode:             0,
+  demoCamModeTime:         0,
+  demoCamPanAngle:         0,
+  demoCamRollAngle:        0,
+  demoCamOscTime:          0,
+  demoCamDistCurrent:      6,
+  demoCamHeightCurrent:    4,
+
   // --- audio tunnel ---
   audioTwistOffset: 0,  // accumulated cross-section roll driven by twistSrc (rad); synced from InfiniteMesh
 

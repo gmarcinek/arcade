@@ -1,5 +1,5 @@
 import { state } from '../state.js';
-import { OUT_OF_BOUNDS_KILL_S, CFG } from '../config.js';
+import { OUT_OF_BOUNDS_KILL_S, CFG, DEMO_CAM } from '../config.js';
 
 const flashEl  = document.getElementById('flash');
 const dangerEl = document.getElementById('danger-warn');
@@ -45,6 +45,15 @@ export function updateHUD() {
   document.getElementById('time').textContent  = m + ':' + (s < 10 ? '0' : '') + s;
   document.getElementById('speed').textContent = Math.floor(state.speed * 3.6);
   document.getElementById('dist').textContent  = Math.floor(state.totalDistance) + ' m';
+
+  // Wyświetl aktualny tryb kamery DEMO
+  const modeIndicator = document.getElementById('mode-indicator');
+  if (state.demoMode && DEMO_CAM.modes) {
+    const currentMode = DEMO_CAM.modes[state.demoCamMode];
+    modeIndicator.textContent = currentMode?.label?.toUpperCase() || 'DEMO';
+  } else {
+    modeIndicator.textContent = '';
+  }
 
   const lit = Math.ceil(state.boost * 4);
   boostSegs.forEach((seg, i) => {

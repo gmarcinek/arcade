@@ -12,5 +12,5 @@
 export const RING_COUNT  = 290;
 export const RADIAL_SEGS = 64;
 export const RING_STEP   = 2;
-export const BEHIND_DIST = 50;
+export const BEHIND_DIST = 200;
 export const TOTAL_LEN   = RING_COUNT * RING_STEP;

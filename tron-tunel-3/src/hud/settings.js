@@ -6,6 +6,7 @@ const DEFAULTS = {
   targetFps:     0,    // 0 = uncapped
   reflectionRes: 128,
   renderRes:     _isMobile ? 540 : 0,  // mobile: cap at 540p by default
+  demoCamEnabled: false, // demo camera
 };
 
 function load() {
@@ -31,10 +32,12 @@ export function initSettingsUI(onResChange) {
   const resSelect  = document.getElementById('set-renderres');
   const closeBtn   = document.getElementById('settings-close');
   const reloadNote = document.getElementById('settings-reload-note');
+  const demoCamToggle = document.getElementById('demo-cam-toggle');
 
   fpsSelect.value = String(settings.targetFps);
   refSelect.value = String(settings.reflectionRes);
   resSelect.value = String(settings.renderRes);
+  demoCamToggle.checked = settings.demoCamEnabled;
 
   btn.addEventListener('click', () => panel.classList.toggle('open'));
   closeBtn.addEventListener('click', () => panel.classList.remove('open'));
@@ -62,5 +65,14 @@ export function initSettingsUI(onResChange) {
     settings.renderRes = Number(resSelect.value);
     save();
     onResChange?.();
+  });
+
+  demoCamToggle.addEventListener('change', () => {
+    settings.demoCamEnabled = demoCamToggle.checked;
+    save();
+    // Dynamicznie importuj camera aby uniknąć circular dependency
+    import('../camera.js').then(({ toggleDemoMode }) => {
+      toggleDemoMode(settings.demoCamEnabled);
+    });
   });
 }

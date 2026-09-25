@@ -14,6 +14,7 @@ import { lerp } from "../procedural/math";
  */
 export const POST_TIMELINE = [
   { time: 14.0,  trigger: 'startBw', lerp:1.0 },
+  { time: 14.0,  trigger: 'startBw', lerp:1.0 },
   { time: 15.5,  trigger: 'stopBw', lerp:1.0 },
 
 

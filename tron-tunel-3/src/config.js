@@ -230,3 +230,32 @@ export const AUDIO_TUNNEL = {
   twistRate:  0.6,    // rad/s; try 0.3 (subtle) to 2.0 (aggressive barrel feel)
   twistScale: 1.0,    // 0 = no twist, >1 = exaggerated
 };
+
+// ---- Demo Camera: inteligentny system dynamicznej kamery ----
+export const DEMO_CAM = {
+  enabled:        true,
+  modeDuration:   5.0,   // czas trwania jednego trybu (s)
+  modeTransition: 2.0,   // czas przejścia między trybami (s)
+
+  // dist    = odległość kamery za kulą (m)
+  // height  = przesunięcie wzdłuż surface-normal (ku osi tunelu): TUNNEL_R=12, więc
+  //           height=11 ≈ kamera przy osi = widok top-down
+  // panRate = prędkość kątowa orbity (rad/s); 2π/5≈1.257 = pełny obrót w 5s
+  // distRand = per-tryb nadpisanie globalnego distRand
+  modes: [
+
+    // 0: Very close — tuż nad powierzchnią, FOV max, kamera prawie przykleja się do ściany
+    { dist:  1.5, height: 0.4,  panRate: 0.0,   rollRate: 0.7,  oscAmp: 0.04, fov: 44, label: 'vclose' },
+    // 1: Close — bliskie ujęcie, GoPro
+    { dist:  2.5, height: 0.8,  panRate: 0.0,   rollRate: 0.7,  oscAmp: 0.0,  fov: 115, label: 'close'  },
+    // 2: Close z rollem i oscylacją — najbardziej dynamiczny
+    { dist:  3.0, height: 1.8,  panRate: 0.0,   rollRate: 1.9,  oscAmp: 0.38, fov: 114, label: 'roll'   },
+  ],
+
+  // Globalne przedziały randomizacji (± wartość)
+  distRand:   0.5,
+  heightRand: 0.5,
+  panRand:    0.0,   // panRate nie randomizujemy — orbit musi trafić pełny obrót
+  rollRand:   0.0,
+  oscRand:    0.05,
+};

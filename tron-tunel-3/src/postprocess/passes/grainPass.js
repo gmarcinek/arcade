@@ -58,11 +58,6 @@ class GrainPass {
     this.setGlitchAmount(GrainPass.CONFIG.maxGlitchAmount * h);
   }
 
-  setNoiseOffTrack(isOffTrack) {
-    const noiseAmount = isOffTrack ? GrainPass.CONFIG.maxNoiseAmount : GrainPass.CONFIG.defaultNoiseAmount;
-    this.setNoiseAmount(noiseAmount);
-  }
-
   resize(w, h) {
     this.width = w;
     this.height = h;
