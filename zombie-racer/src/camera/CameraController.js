@@ -25,6 +25,7 @@ const ORBIT_FOV    = 90;   // [deg]
 
 // ── Czas przejścia między stanami ─────────────────────────────────
 const STATE_BLEND = 0.5;   // [s]
+const RETURN_BLEND = 0.25; // [s] powrót do gracza po obserwacji wybuchu
 
 // Tymczasowe obiekty (unikamy alokacji per-frame)
 const _toPos  = new THREE.Vector3();
@@ -122,6 +123,7 @@ export class CameraController {
     this._blendT   = 0.0;
     this._state    = state;
 
+    if (state === CamState.PLAYER) this._snapYaw = true;
     if (state === CamState.NPC_DESTROY) this._applyOrbitOpts(opts);
   }
 
@@ -140,7 +142,8 @@ export class CameraController {
     }
 
     // 2. Przesuń blend t
-    this._blendT = Math.min(1.0, this._blendT + dt / STATE_BLEND);
+    const blendTime = this._state === CamState.PLAYER ? RETURN_BLEND : STATE_BLEND;
+    this._blendT = Math.min(1.0, this._blendT + dt / blendTime);
     const t = smoothStep(this._blendT);
 
     // 3. Blend wirtualnej kamery (from → to)
@@ -188,6 +191,12 @@ export class CameraController {
       this._desDir.set(Math.sin(yaw), 0, Math.cos(yaw));
     }
     this._motionDir.lerp(this._desDir, dta(CAMERA_DIR_LERP, dt)).normalize();
+    // Po orbicie kierunek był zamrożony — od razu ustaw go za autem, blend pozycji i tak wygładzi przejście
+    if (this._snapYaw) {
+      this._snapYaw = false;
+      this._motionDir.copy(this._desDir);
+      this._camYaw = Math.atan2(this._desDir.x, this._desDir.z);
+    }
 
     // Yaw kamery dąży za kierunkiem ruchu
     const targetYaw = Math.atan2(this._motionDir.x, this._motionDir.z);

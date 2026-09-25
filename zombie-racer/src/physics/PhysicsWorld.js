@@ -55,5 +55,24 @@ export function createPhysicsWorld() {
   world.addContactMaterial(carCar);
   world.addContactMaterial(carWall);
 
+  // Usuwanie cia\u0142 w trakcie kroku (np. zombie w beginContact) psuje p\u0119tl\u0119 cannon-es \u2014 odk\u0142adamy je na koniec kroku.
+  const removeNow = world.removeBody.bind(world);
+  const internalStep = world.internalStep.bind(world);
+  const pendingRemovals = [];
+  let stepping = false;
+  world.removeBody = (body) => {
+    if (!stepping) return removeNow(body);
+    if (!pendingRemovals.includes(body)) pendingRemovals.push(body);
+  };
+  world.internalStep = (dt) => {
+    stepping = true;
+    try {
+      internalStep(dt);
+    } finally {
+      stepping = false;
+      for (const b of pendingRemovals.splice(0)) removeNow(b);
+    }
+  };
+
   return world;
 }

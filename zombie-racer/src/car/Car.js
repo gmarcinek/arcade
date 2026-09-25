@@ -9,6 +9,7 @@ import { CAR_MASS, MAX_ENGINE_FORCE, MAX_STEER, BRAKE_FORCE,
          FRICTION_SLIP_FRONT_STATIC, FRICTION_SLIP_REAR_STATIC,
          DAMAGE_PER_IMPULSE, WHEEL_SLIDE_SPEED } from '../physicsConfig.js';
 import { carBodyMaterial, wheelMaterial } from '../physics/PhysicsWorld.js';
+import { createChassisShape } from '../physics/chassisShape.js';
 import { DamageSystem, PARTS } from './DamageSystem.js';
 import { CarStats } from './CarStats.js';
 
@@ -149,25 +150,9 @@ export class Car {
     }
 
     // ── Cannon-es physics ─────────────────────────────────
-    // Złożona bryła kolizji: podwozie + kabina + dach
-    // Dzięki temu auto ma realistyczny moment bezwładności i może kozłować
     this.chassisBody = new CANNON.Body({ mass: CAR_MASS, material: carBodyMaterial });
-
-    // Podwozie — szeroki, płaski kształt (dolna część auta)
-    const shapeFloor  = new CANNON.Box(new CANNON.Vec3(1.15, 0.22, 2.35));
-    // Kabina — węższy, wyższy kształt (górna część nadwozia)
-    const shapeCabin  = new CANNON.Box(new CANNON.Vec3(0.85, 0.40, 1.15));
-    // Dach — bardzo wąski, płaski (przesuwa środek masy w górę, umożliwia kozłowanie)
-    const shapeRoof   = new CANNON.Box(new CANNON.Vec3(0.75, 0.12, 1.0));
-
     const com = new CANNON.Vec3(CHASSIS_COM_OFFSET_X, CHASSIS_COM_OFFSET_Y, CHASSIS_COM_OFFSET_Z);
-
-    // podwozie: na osi COM (y=0 względem środka masy)
-    this.chassisBody.addShape(shapeFloor, new CANNON.Vec3(com.x,          com.y - 0.18,  com.z));
-    // kabina: 0.42m wyżej nad podwoziem
-    this.chassisBody.addShape(shapeCabin, new CANNON.Vec3(com.x,          com.y + 0.42,  com.z + 0.12));
-    // dach: kolejne 0.52m wyżej — podnosi środek masy i tensor bezwładności w osi X
-    this.chassisBody.addShape(shapeRoof,  new CANNON.Vec3(com.x,          com.y + 0.90,  com.z + 0.08));
+    this.chassisBody.addShape(createChassisShape(com));
 
     this.chassisBody.position.set(spawnX, spawnY, spawnZ);
     this.chassisBody.angularDamping = ANGULAR_DAMPING;
@@ -395,8 +380,9 @@ export class Car {
     this.hp = Math.max(0, this.hp - effectiveHpLost);
 
     if (this.hp <= 0 && this.isAlive) {
-      this.isAlive = false;
+      // onDestroy (NPC → onCarKill) sam przestawia isAlive i uruchamia sekwencję śmierci
       if (typeof this.onDestroy === 'function') this.onDestroy();
+      else this.isAlive = false;
     }
 
     return rawDamage;

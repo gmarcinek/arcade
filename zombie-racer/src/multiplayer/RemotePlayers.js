@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import * as CANNON from 'cannon-es';
 import { Car } from '../car/Car.js';
 import { carBodyMaterial } from '../physics/PhysicsWorld.js';
+import { createChassisShape } from '../physics/chassisShape.js';
 import { CHASSIS_COM_OFFSET_X, CHASSIS_COM_OFFSET_Y, CHASSIS_COM_OFFSET_Z, CAR_MASS } from '../physicsConfig.js';
 
 // Stałe geometrii kół (zgodne z physicsConfig.js)
@@ -202,11 +203,9 @@ export class RemotePlayers {
       collisionFilterGroup: 8, // remote players group
       collisionFilterMask:  2, // only collide with player (group 2)
     });
-    // Bryła kolizji identyczna jak chassisBody gracza (Car.js) — 3 warstwy
+    // Bryła kolizji identyczna jak chassisBody gracza (Car.js)
     const _com = new CANNON.Vec3(CHASSIS_COM_OFFSET_X, CHASSIS_COM_OFFSET_Y, CHASSIS_COM_OFFSET_Z);
-    phyBody.addShape(new CANNON.Box(new CANNON.Vec3(1.15, 0.22, 2.35)), new CANNON.Vec3(_com.x, _com.y - 0.18, _com.z));
-    phyBody.addShape(new CANNON.Box(new CANNON.Vec3(0.85, 0.40, 1.15)), new CANNON.Vec3(_com.x, _com.y + 0.42, _com.z + 0.12));
-    phyBody.addShape(new CANNON.Box(new CANNON.Vec3(0.75, 0.12, 1.0)),  new CANNON.Vec3(_com.x, _com.y + 0.90, _com.z + 0.08));
+    phyBody.addShape(createChassisShape(_com));
     phyBody.linearDamping  = 0; // reset w każdej klatce — tłumienie zbędne
     phyBody.angularDamping = 0;
     phyBody.allowSleep = false; // musi reagować na kolizje każdą klatkę

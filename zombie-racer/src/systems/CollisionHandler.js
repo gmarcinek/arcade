@@ -17,6 +17,8 @@ export class CollisionHandler {
     this._remoteBodyMap = options.remoteBodyMap || null; // Map<CANNON.Body, socketId>
     this._onTreeBreak   = options.onTreeBreak   || null; // (treeIndex, impactDir, speed, launch)
     this._onRemoteHit   = options.onRemoteHit   || null; // (remoteId, damage)
+    this._onNpcClash    = options.onNpcClash    || null; // (npc, dmgToPlayerHp, dmgToNpcHp)
+    this._onNpcObstacle = options.onNpcObstacle || null; // (npc, impactSpeed)
 
     // Cooldown żeby speedup nie aplikował się co klatkę
     this._speedupCooldown = 0;
@@ -52,8 +54,8 @@ export class CollisionHandler {
       if (!body || !npc.isAlive) continue;
 
       const planarSpeed = Math.sqrt(body.velocity.x * body.velocity.x + body.velocity.z * body.velocity.z);
-      const maxYawSpin = Math.max(0.35, planarSpeed * 0.10);
-      const maxRollPitch = Math.max(0.2, planarSpeed * 0.05);
+      const maxYawSpin = Math.max(2.5, planarSpeed * 0.10);
+      const maxRollPitch = Math.max(1.0, planarSpeed * 0.05);
 
       if (Math.abs(body.angularVelocity.y) > maxYawSpin) {
         body.angularVelocity.y = Math.sign(body.angularVelocity.y) * maxYawSpin;
@@ -130,6 +132,7 @@ export class CollisionHandler {
     const treeHit = this.city?.applyTreeHit(treeBody, impactDir, normalSpeed, treeDamage, launchSpeed);
 
     car.receiveImpact(carImpactImpulse, contactNormal);
+    if (car !== this.player) this._onNpcObstacle?.(car, normalSpeed);
 
     if (this.audio) {
       if (car === this.player) {
@@ -143,7 +146,7 @@ export class CollisionHandler {
     if (car === this.player) {
       if (treeHit?.broke) {
         this.hud.showMessage('🌲 DRZEWO WYRwane Z KORZENIAMI', '#88dd66', 900);
-        if (this._onTreeBreak) this._onTreeBreak(treeHit.treeIndex, impactDir, impactSpeed, launchSpeed);
+        if (this._onTreeBreak) this._onTreeBreak(treeHit.treeIndex, impactDir, normalSpeed, launchSpeed);
       } else if (treeHit) {
         this.hud.showMessage(`🌲 ${Math.ceil(treeHit.hp)}/${treeHit.maxHp} HP`, '#88dd66', 500);
       }
@@ -163,6 +166,15 @@ export class CollisionHandler {
         this.audio?.playBumper();
         this.hud.showMessage('🚀 LAUNCH!', '#ffff00', 800);
       }
+      return;
+    }
+
+    if (bodyB.userData?.building && car && car !== this.player) {
+      const nx = bodyB.position.x - bodyA.position.x;
+      const nz = bodyB.position.z - bodyA.position.z;
+      const len = Math.hypot(nx, nz) || 1;
+      const approach = (bodyA.velocity.x * nx + bodyA.velocity.z * nz) / len;
+      if (approach > 2) this._onNpcObstacle?.(car, approach);
       return;
     }
 
@@ -190,8 +202,7 @@ export class CollisionHandler {
       }
 
       bodyA.applyImpulse(
-        new CANNON.Vec3(dirX * boost * bodyA.mass, 0, dirZ * boost * bodyA.mass),
-        bodyA.position
+        new CANNON.Vec3(dirX * boost * bodyA.mass, 0, dirZ * boost * bodyA.mass)
       );
       this._speedupCooldown = 1.5;
       this.hud.showMessage('⚡ SPEED BOOST!', '#44aaff', 900);
@@ -264,6 +275,7 @@ export class CollisionHandler {
         const momRatioPN = momP / Math.max(1, momN);
         const selfScaleNPC = Math.max(0.2, Math.min(2.0, 1.5 - 0.5 * momRatioPN));
 
+        const playerHpBefore = this.player.hp;
         this.player.receiveImpact(impactForce * CAR_IMPACT_SCALE * selfScaleNPC, contactNormal);
         this.audio?.playHitWall(Math.min(1.0, relSpeed / 12));
         this._playScrapeFromBodies(bodyA, bodyB, contactNormal.x, contactNormal.z, 0.9);
@@ -283,9 +295,12 @@ export class CollisionHandler {
         );
 
         const npcHpBefore = npc.hp;
-        const npcDamageHP = (relSpeed * relSpeed * this.player.stats.offence) / (npc.stats.defence * 3);
+        // Taranujący NPC (większy pęd) bierze mniej; gdy to gracz taranuje — bez zmian (×1.0)
+        const npcSelfScale = Math.max(0.2, Math.min(1.0, 1.5 - 0.5 * (momN / Math.max(1, momP))));
+        const npcDamageHP = npcSelfScale * (relSpeed * relSpeed * this.player.stats.offence) / (npc.stats.defence * 3);
         npc.hp = Math.max(0, npc.hp - npcDamageHP);
         const actualDamage = Math.floor(npcHpBefore - npc.hp);
+        this._onNpcClash?.(npc, playerHpBefore - this.player.hp, npcHpBefore - npc.hp);
 
         // Sync damage state so smoke/fire visuals reflect HP loss
         const _dr = Math.min(1, 1 - (npc.hp / npc.maxHp));
@@ -297,7 +312,7 @@ export class CollisionHandler {
           this.onCarKill(npc);
         } else if (momRatioPN >= 1) {
           // Nagroda tylko gdy gracz wygrał zderzenie (większy pęd)
-          this.onCarHit(actualDamage, npc.maxHp);
+          this.onCarHit(actualDamage, npc.maxHp, npc);
         }
 
         this.hud.showMessage(`🚗 -${actualDamage} HP`, '#ffcc44', 800);

@@ -6,6 +6,7 @@
     "scripts": {
         "dev": "vite",
         "convert:audio": "node scripts/convert-audio.mjs",
+        "train:ai": "node scripts/train-ai.mjs",
         "build": "vite build",
         "preview": "vite preview",
         "start": "node server.js"

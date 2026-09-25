@@ -34,6 +34,9 @@ import {
 import { AudioManager }      from './audio/AudioManager.js';
 import { MultiplayerClient } from './multiplayer/MultiplayerClient.js';
 import { RemotePlayers }     from './multiplayer/RemotePlayers.js';
+import { setObstacles }      from './ai/sensors.js';
+import { DriveRecorder }     from './ai/DriveRecorder.js';
+import { PolicyNet, TRAINED_MODEL } from './ai/PolicyNet.js';
 
 // ── Map ────────────────────────────────────────────────────
 let MAP = defaultMap;
@@ -115,6 +118,15 @@ terrain.build(scene, world);
 
 // ── Game objects — lazy-init in initWorld() after map selection ───
 let city, player, npcCars = [], zombies = [], collisions;
+
+// ── AI oponentów ── wybór w menu; nagrywanie tylko w dev (zapis przez endpoint Vite)
+const AI_MODE_KEY = 'zombieRacerAiMode';
+// Endpoint zapisu istnieje tylko w lokalnym serwerze dev (vite.config.js)
+const CAN_RECORD = import.meta.env.DEV
+  && ['localhost', '127.0.0.1', '[::1]'].includes(window.location.hostname);
+let _recordDrive = false;
+/** @type {DriveRecorder|null} */
+let recorder = null;
 
 // ── Input ─────────────────────────────────────────────────────────
 // pointer: coarse = palec/rysik (prawdziwy dotyk); fine = myszka/touchpad
@@ -225,6 +237,7 @@ function addCredits(amount, label, color) {
 }
 
 function onZombieKill(zombie) {
+  if (recorder && zombie.mesh) recorder.reward({ x: zombie.mesh.position.x, z: zombie.mesh.position.z }, 1.0);
   zombie.kill(scene, world);
   timer.addTime(20);
   zombieKills++;
@@ -379,8 +392,7 @@ function _explodeNPC(npc, velX = 0, velY = 0, velZ = 0) {
         nx * strength * (1 - BLAST_UP_BIAS),
         strength * BLAST_UP_BIAS,
         nz * strength * (1 - BLAST_UP_BIAS)
-      ),
-      new CANNON.Vec3(body.position.x, body.position.y, body.position.z)
+      )
     );
     // 1/9 obrotu do 9/9 kierunku
     body.angularVelocity.x += (Math.random() - 0.5) * (strength / 36000);
@@ -388,7 +400,7 @@ function _explodeNPC(npc, velX = 0, velY = 0, velZ = 0) {
   }
 
   // Po wybuchu: popatrz o 1s dłużej przed powrotem do gracza.
-  setTimeout(() => camCtrl.setState(CamState.PLAYER), 2500);
+  setTimeout(() => camCtrl.setState(CamState.PLAYER), 1250);
 
   timer.addTime(60);
   carKills++;
@@ -409,10 +421,15 @@ function _respawnNPC(npc) {
 
 function onCarKill(npc) {
   if (!npc.isAlive) return;
+  recorder?.onNpcDeath(npc);
+  if (recorder && npc.chassisBody && player.chassisBody
+      && npc.chassisBody.position.distanceTo(player.chassisBody.position) < 30) {
+    recorder.reward({ npcIndex: npcCars.indexOf(npc) }, 3.0);
+  }
   npc.isAlive  = false;
   npc._isDying = true;
   npc._dyingTimer     = 0;
-  npc._dyingExplodeAt = 2.0 + Math.random() * 1.0; // 2-3s losowo
+  npc._dyingExplodeAt = 1.0 + Math.random() * 0.5; // 1-1.5s losowo
   audio.playOpponentKillStart();
 
   // Odetnij sterowanie natychmiast — zeruj silnik i hamulce
@@ -450,9 +467,11 @@ function onCarKill(npc) {
   }
 }
 
-function onCarHit(damageDealt, npcMaxHp = 600) {
+function onCarHit(damageDealt, npcMaxHp = 600, npc = null) {
   const earnedCr  = Math.max(1, Math.round(damageDealt * HP_TO_CREDIT));
   const earnedSec = Math.round(damageDealt * HP_TO_TIME);
+  const npcIndex  = npc ? npcCars.indexOf(npc) : -1;
+  if (npcIndex >= 0) recorder?.reward({ npcIndex }, Math.max(0.3, earnedSec / 20));
   if (earnedSec > 0) timer.addTime(earnedSec);
   const timeLabel = earnedSec > 0 ? ` +${earnedSec}s` : '';
   addCredits(earnedCr, `💥 hit${timeLabel}`, '#ffaa44');
@@ -553,6 +572,7 @@ const PLAYER_RESPAWN_DELAY = 3.0; // [s]
 
 function _onPlayerDeath() {
   if (_playerDead) return;
+  recorder?.onDeath();
   _playerDead      = true;
   _playerDeathTimer = PLAYER_RESPAWN_DELAY;
 
@@ -612,6 +632,7 @@ function _onPlayerDeath() {
 
 function _doPlayerRespawn() {
   _playerDead = false;
+  recorder?.onRespawn();
 
   // Losowa pozycja w promieniu 20m od centrum spawnu
   const cx = MAP.playerSpawn?.x ?? 0;
@@ -658,6 +679,7 @@ function _checkRespawn() {
   if (_respawnCooldown > 0) { _respawnCooldown--; return; }
 
   if (outOfBounds || underground) {
+    recorder?.onRespawn();
     // Teleport back to last valid position + 10m up
     const safeH = terrain.getHeightAt(_lastValidPos.x, _lastValidPos.z);
     player.chassisBody.position.set(_lastValidPos.x, safeH + 10, _lastValidPos.z);
@@ -726,6 +748,15 @@ function showModeMenu() {
     <button id="_btnSingle" style="${btnStyle}background:#00bb55;color:#fff;">
       🧟 SINGLE PLAYER
     </button>
+    <div style="display:flex;gap:8px;align-items:center;margin:2px 0 6px;font-size:12px;color:#888;letter-spacing:1px;">
+      OPONENCI:
+      <button data-ai="classic" style="padding:8px 16px;font-weight:700;border-radius:8px;cursor:pointer;">KLASYCZNA AI</button>
+      <button data-ai="learned" style="padding:8px 16px;font-weight:700;border-radius:8px;cursor:pointer;">🧠 UCZONA AI</button>
+    </div>
+    <div id="_aiInfo" style="font-size:12px;color:#666;margin-bottom:6px;max-width:460px;text-align:center;"></div>
+    <label id="_aiRecordWrap" style="font-size:13px;color:#aaa;margin-bottom:18px;cursor:pointer;">
+      <input type="checkbox" id="_aiRecord" checked> Nagrywaj moją jazdę do treningu AI
+    </label>
     <button id="_btnMulti" style="${btnStyle}background:#cc3300;color:#fff;">
       🌐 MULTIPLAYER
     </button>
@@ -735,7 +766,52 @@ function showModeMenu() {
 
   const status = overlay.querySelector('#_mpStatus');
 
+  // ── Wybór AI oponentów ──
+  let aiMode = localStorage.getItem(AI_MODE_KEY) === 'learned' && TRAINED_MODEL ? 'learned' : 'classic';
+  const aiInfo = overlay.querySelector('#_aiInfo');
+  const aiButtons = overlay.querySelectorAll('[data-ai]');
+  const learnedBtn = overlay.querySelector('[data-ai="learned"]');
+  if (!TRAINED_MODEL) {
+    learnedBtn.disabled = true;
+    learnedBtn.style.opacity = '0.4';
+    learnedBtn.style.cursor = 'not-allowed';
+  }
+  if (!CAN_RECORD) overlay.querySelector('#_aiRecordWrap').style.display = 'none';
+  const renderAi = () => {
+    aiButtons.forEach(b => {
+      const on = b.dataset.ai === aiMode;
+      b.style.background = on ? '#2266ff' : '#222';
+      b.style.color = on ? '#fff' : '#aaa';
+      b.style.border = on ? '2px solid #88aaff' : '2px solid #444';
+    });
+    const m = TRAINED_MODEL?.meta;
+    aiInfo.textContent = aiMode === 'learned'
+      ? `Model: ${m?.samples ?? '?'} próbek, trening ${m?.trainedAt?.slice(0, 16).replace('T', ' ') ?? '?'}`
+      : TRAINED_MODEL ? 'Maszyna stanów: patrol, pościg, taran, ucieczka'
+      : 'Brak modelu — pograj z nagrywaniem, potem: npm run train:ai';
+  };
+  aiButtons.forEach(b => {
+    b.onclick = () => {
+      if (b.disabled) return;
+      aiMode = b.dataset.ai;
+      localStorage.setItem(AI_MODE_KEY, aiMode);
+      renderAi();
+    };
+  });
+  renderAi();
+
   overlay.querySelector('#_btnSingle').onclick = () => {
+    _recordDrive = CAN_RECORD && overlay.querySelector('#_aiRecord').checked;
+    NPCCar.policy = null;
+    if (aiMode === 'learned' && TRAINED_MODEL) {
+      try {
+        NPCCar.policy = new PolicyNet(TRAINED_MODEL);
+      } catch (e) {
+        aiInfo.textContent = e.message;
+        aiInfo.style.color = '#ff6644';
+        return;
+      }
+    }
     document.body.removeChild(overlay);
     showMapMenu();
   };
@@ -1027,6 +1103,7 @@ function initWorld(mapData) {
 
   city = new CityBuilder();
   city.build(scene, world, terrain, mapData);
+  setObstacles(mapData);
 
   player = new PlayerCar();
   const spawnH = terrain.getHeightAt(playerSpawn.x, playerSpawn.z);
@@ -1090,6 +1167,8 @@ function initWorld(mapData) {
       mpClient?.sendHitPlayer(remoteId, damage);
       if (won) _remoteLastHitMs.set(remoteId, Date.now()); // nagroda tylko dla zwycięzcy
     },
+    onNpcClash:    (npc, dmgP, dmgN) => recorder?.onNpcClash(npc, dmgP, dmgN, player.maxHp),
+    onNpcObstacle: (npc, speed) => recorder?.onNpcObstacle(npc, speed),
   });
   _lastValidPos = { x: playerSpawn.x, z: playerSpawn.z };
 
@@ -1174,6 +1253,11 @@ function initWorld(mapData) {
 function startGame() {
   if (_gameLoopStarted) return;
   initWorld(MAP);
+  if (!mpClient && _recordDrive) recorder = new DriveRecorder();
+  if (!mpClient) {
+    const label = NPCCar.policy ? 'AI: UCZONA 🧠' : 'AI: KLASYCZNA';
+    setTimeout(() => hud.showMessage(`${label}${recorder ? '  ● REC' : ''}`, '#88ccff', 2500), 3600);
+  }
   _gameLoopStarted = true;
   requestAnimationFrame(gameLoop);
 }
@@ -1200,6 +1284,7 @@ function gameLoop() {
   } else if (_playerDead) {
     player.sync(dt);
   }
+  recorder?.tick(dt, player, input, npcCars, _playerDead || _gameOverSequence);
 
   while (accumulator >= FIXED_DT) {
     // ── Dynamiczne tłumienie obrotu — silniejsze przy szybkim kręceniu ──────
@@ -1240,6 +1325,7 @@ function gameLoop() {
     while (input.consumeHeal()) {
       if (credits >= CREDITS_HEAL_COST) {
         credits -= CREDITS_HEAL_COST;
+        recorder?.onHeal();
         player.hp = Math.min(player.maxHp, player.hp + HEAL_AMOUNT);
         audio.playHeal();
         const ratio = player.hp / player.maxHp;
@@ -1275,6 +1361,7 @@ function gameLoop() {
 
     // Respawn manualny klawiszem Insert — reset w aktualnym miejscu
     if (input.insertPressed && _respawnCooldown <= 0) {
+      recorder?.onRespawn();
       const p = player.chassisBody.position;
       const safeH = terrain.getHeightAt(p.x, p.z);
       player.chassisBody.position.set(p.x, safeH + 2, p.z);
@@ -1288,6 +1375,7 @@ function gameLoop() {
 
     // Respawn manualny klawiszem Home — powrót na start
     if (input.homePressed && _respawnCooldown <= 0) {
+      recorder?.onRespawn();
       const safeH = terrain.getHeightAt(MAP.playerSpawn.x, MAP.playerSpawn.z);
       player.chassisBody.position.set(MAP.playerSpawn.x, safeH + 10, MAP.playerSpawn.z);
       player.chassisBody.velocity.set(0, 0, 0);
@@ -1301,7 +1389,8 @@ function gameLoop() {
 
   for (const npc of npcCars) {
     if (npc.isAlive) {
-      npc.update(terrain, player.chassisBody.position, player.chassisBody.velocity, npcCars);
+      npc.update(terrain, player.chassisBody.position, player.chassisBody.velocity, npcCars, dt,
+                 !_playerDead && !_gameOverSequence);
       // Krew na czerwono: poniżej 20% życia traci 1 HP/s (gwarantowana śmierć)
       if (npc.hp > 0 && npc.hp < npc.maxHp * 0.20) {
         npc.hp = Math.max(0, npc.hp - dt);
@@ -1324,6 +1413,7 @@ function gameLoop() {
   for (const z of zombies) {
     if (z.isAlive && z._mpId === undefined) z.update(dt); // MP zombie: pozycja z serwera
   }
+  recorder?.tickNpcs(dt, npcCars, player, !_playerDead && !_gameOverSequence);
 
   particles.update(dt);
   debris.update(dt);
