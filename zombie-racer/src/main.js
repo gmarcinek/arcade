@@ -119,11 +119,12 @@ terrain.build(scene, world);
 // ── Game objects — lazy-init in initWorld() after map selection ───
 let city, player, npcCars = [], zombies = [], collisions;
 
-// ── AI oponentów ── wybór w menu; nagrywanie tylko w dev (zapis przez endpoint Vite)
+// ── AI oponentów ── produkcja korzysta z nowej AI stanowej; uczenie jest tylko lokalne.
 const AI_MODE_KEY = 'zombieRacerAiMode';
 // Endpoint zapisu istnieje tylko w lokalnym serwerze dev (vite.config.js)
-const CAN_RECORD = import.meta.env.DEV
+const IS_LOCAL_AI_ENV = import.meta.env.DEV
   && ['localhost', '127.0.0.1', '[::1]'].includes(window.location.hostname);
+const CAN_RECORD = IS_LOCAL_AI_ENV;
 let _recordDrive = false;
 /** @type {DriveRecorder|null} */
 let recorder = null;
@@ -767,16 +768,20 @@ function showModeMenu() {
   const status = overlay.querySelector('#_mpStatus');
 
   // ── Wybór AI oponentów ──
-  let aiMode = localStorage.getItem(AI_MODE_KEY) === 'learned' && TRAINED_MODEL ? 'learned' : 'classic';
+  let aiMode = IS_LOCAL_AI_ENV && localStorage.getItem(AI_MODE_KEY) === 'learned' && TRAINED_MODEL
+      ? 'learned'
+      : 'classic';
   const aiInfo = overlay.querySelector('#_aiInfo');
   const aiButtons = overlay.querySelectorAll('[data-ai]');
   const learnedBtn = overlay.querySelector('[data-ai="learned"]');
+  const aiModePicker = learnedBtn.parentElement;
   if (!TRAINED_MODEL) {
     learnedBtn.disabled = true;
     learnedBtn.style.opacity = '0.4';
     learnedBtn.style.cursor = 'not-allowed';
   }
   if (!CAN_RECORD) overlay.querySelector('#_aiRecordWrap').style.display = 'none';
+  if (!IS_LOCAL_AI_ENV) aiModePicker.style.display = 'none';
   const renderAi = () => {
     aiButtons.forEach(b => {
       const on = b.dataset.ai === aiMode;
