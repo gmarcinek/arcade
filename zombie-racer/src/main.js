@@ -72,30 +72,52 @@ const canvas = document.getElementById('game');
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 
 // ── Scene ─────────────────────────────────────────────────────────
+function createSkyTexture() {
+  const sky = document.createElement('canvas');
+  sky.width = 16;
+  sky.height = 256;
+  const context = sky.getContext('2d');
+  const gradient = context.createLinearGradient(0, 0, 0, sky.height);
+  gradient.addColorStop(0, '#16294f');
+  gradient.addColorStop(0.42, '#5d87ae');
+  gradient.addColorStop(0.68, '#e4a36f');
+  gradient.addColorStop(1, '#f4c99a');
+  context.fillStyle = gradient;
+  context.fillRect(0, 0, sky.width, sky.height);
+
+  const texture = new THREE.CanvasTexture(sky);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  return texture;
+}
+
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x87ceeb);
-scene.fog = new THREE.Fog(0x87ceeb, 260, WORLD_SIZE * 0.9);
+scene.background = createSkyTexture();
+scene.fog = new THREE.Fog(0xe2a071, 180, WORLD_SIZE * 0.82);
 
 // ── Lighting ──────────────────────────────────────────────────────
-scene.add(new THREE.AmbientLight(0xc8d8ff, 0.50));   // chłodny ambient (niebo)
+scene.add(new THREE.HemisphereLight(0x9fc9ff, 0x243421, 1.15));
 
 // Słońce główne (ciepłe, cienie)
-const sun = new THREE.DirectionalLight(0xfff0d0, 1.4);
+const sun = new THREE.DirectionalLight(0xffc078, 2.1);
 sun.position.set(50, 80, 30);
 sun.castShadow = true;
 sun.shadow.mapSize.set(2048, 2048);
 sun.shadow.camera.near = 1; sun.shadow.camera.far = WORLD_SIZE;
 sun.shadow.camera.left = sun.shadow.camera.bottom = -WORLD_SIZE * 0.5;
 sun.shadow.camera.right = sun.shadow.camera.top = WORLD_SIZE * 0.5;
+sun.shadow.bias = -0.00015;
+sun.shadow.normalBias = 0.035;
+sun.shadow.radius = 2;
 scene.add(sun);
 
 // Fill light (miękki, z lewej) — wypełnia cień po prawej stronie auta
-const fill = new THREE.DirectionalLight(0xaabbff, 0.35);
+const fill = new THREE.DirectionalLight(0x7ca4ff, 0.45);
 fill.position.set(-60, 30, 0);
 scene.add(fill);
 
@@ -104,7 +126,7 @@ const rim = new THREE.DirectionalLight(0x88bbff, 0.25);
 rim.position.set(0, 10, -80);
 scene.add(rim);
 
-renderer.toneMappingExposure = 1.05;
+renderer.toneMappingExposure = 1.12;
 
 // ── Camera ────────────────────────────────────────────────────────
 const camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.1, 500);
