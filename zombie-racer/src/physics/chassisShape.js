@@ -5,8 +5,8 @@ import * as CANNON from 'cannon-es';
 // Narożniki ścięte pod 45°, żeby auta ześlizgiwały się z siebie zamiast zahaczać.
 const LEVELS = [
   { y: -0.30, halfW: 0.88, front:  1.80, back: -1.95, chamfer: 0.28 },
-  { y:  0.25, halfW: 0.92, front:  1.80, back: -2.00, chamfer: 0.32 },
-  { y:  0.78, halfW: 0.60, front:  0.75, back: -0.75, chamfer: 0.12 },
+  { y:  0.14, halfW: 0.92, front:  1.80, back: -2.00, chamfer: 0.32 },
+  { y:  0.56, halfW: 0.60, front:  0.75, back: -0.75, chamfer: 0.12 },
 ];
 
 function ring({ y, halfW: w, front: f, back: b, chamfer: c }, off) {
