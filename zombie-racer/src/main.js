@@ -156,6 +156,37 @@ let recorder = null;
 const isTouchDevice = window.matchMedia('(pointer: coarse)').matches;
 const input = isTouchDevice ? new TouchInput() : new KeyboardInput();
 
+if (!isTouchDevice) {
+  let isDraggingCamera = false;
+  let lastPointerX = 0;
+  let lastPointerY = 0;
+
+  canvas.addEventListener('mousedown', event => {
+    if (event.button !== 0) return;
+    isDraggingCamera = true;
+    lastPointerX = event.clientX;
+    lastPointerY = event.clientY;
+  });
+  window.addEventListener('mousemove', event => {
+    if (!isDraggingCamera) return;
+    camCtrl.dragLook(event.clientX - lastPointerX, event.clientY - lastPointerY);
+    lastPointerX = event.clientX;
+    lastPointerY = event.clientY;
+  });
+  window.addEventListener('mouseup', () => {
+    if (!isDraggingCamera) return;
+    isDraggingCamera = false;
+    camCtrl.releaseDragLook();
+  });
+
+  window.addEventListener('keydown', event => {
+    if (!event.ctrlKey || event.key !== '1') return;
+    event.preventDefault();
+    const visible = Car.toggleCollisionDebug();
+    hud.showMessage(visible ? 'BRYLA KOLIZYJNA: ON' : 'BRYLA KOLIZYJNA: OFF', visible ? '#ff38e1' : '#aaaaaa', 1200);
+  });
+}
+
 // ── Systems ───────────────────────────────────────────────────────
 const particles = new ParticleSystem(scene);
 const audio = new AudioManager();
@@ -778,7 +809,7 @@ function showModeMenu() {
     </div>
     <div id="_aiInfo" style="font-size:12px;color:#666;margin-bottom:6px;max-width:460px;text-align:center;"></div>
     <label id="_aiRecordWrap" style="font-size:13px;color:#aaa;margin-bottom:18px;cursor:pointer;">
-      <input type="checkbox" id="_aiRecord" checked> Nagrywaj moją jazdę do treningu AI
+      <input type="checkbox" id="_aiRecord"> Nagrywaj moją jazdę do treningu AI
     </label>
     <button id="_btnMulti" style="${btnStyle}background:#cc3300;color:#fff;">
       🌐 MULTIPLAYER

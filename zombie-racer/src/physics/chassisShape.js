@@ -4,9 +4,9 @@ import * as CANNON from 'cannon-es';
 // Poziomy: spód → "ramię" (pionowe ściany do wysokości zderzaków innych aut) → dach.
 // Narożniki ścięte pod 45°, żeby auta ześlizgiwały się z siebie zamiast zahaczać.
 const LEVELS = [
-  { y: -0.30, halfW: 1.10, front:  2.30, back: -2.30, chamfer: 0.35 },
-  { y:  0.35, halfW: 1.15, front:  2.35, back: -2.35, chamfer: 0.40 },
-  { y:  1.12, halfW: 0.75, front:  1.08, back: -0.92, chamfer: 0.15 },
+  { y: -0.30, halfW: 0.88, front:  1.80, back: -1.95, chamfer: 0.28 },
+  { y:  0.25, halfW: 0.92, front:  1.80, back: -2.00, chamfer: 0.32 },
+  { y:  0.78, halfW: 0.60, front:  0.75, back: -0.75, chamfer: 0.12 },
 ];
 
 function ring({ y, halfW: w, front: f, back: b, chamfer: c }, off) {

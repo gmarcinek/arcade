@@ -21,8 +21,44 @@ const _wobbleForce = new CANNON.Vec3();
 const _wobblePoint = new CANNON.Vec3(0, 0, 0);
 const _detachedStep = new THREE.Euler();
 
+function createCollisionWireframe(shape) {
+  const edges = new Set();
+  const positions = [];
+  for (const face of shape.faces) {
+    for (let index = 0; index < face.length; index++) {
+      const a = face[index];
+      const b = face[(index + 1) % face.length];
+      const key = a < b ? `${a}:${b}` : `${b}:${a}`;
+      if (edges.has(key)) continue;
+      edges.add(key);
+      const from = shape.vertices[a];
+      const to = shape.vertices[b];
+      positions.push(from.x, from.y, from.z, to.x, to.y, to.z);
+    }
+  }
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+  const material = new THREE.LineBasicMaterial({
+    color: 0xff38e1,
+    transparent: true,
+    opacity: 0.8,
+    depthTest: false,
+  });
+  const wireframe = new THREE.LineSegments(geometry, material);
+  wireframe.renderOrder = 2;
+  return wireframe;
+}
+
 export class Car {
   static suvGltf = null; // ustawiane z main.js po załadowaniu modelu
+  static collisionDebugEnabled = false;
+  static collisionWireframes = new Set();
+
+  static toggleCollisionDebug() {
+    Car.collisionDebugEnabled = !Car.collisionDebugEnabled;
+    for (const wireframe of Car.collisionWireframes) wireframe.visible = Car.collisionDebugEnabled;
+    return Car.collisionDebugEnabled;
+  }
 
   constructor({ stats } = {}) {
     this.stats = stats instanceof CarStats ? stats : new CarStats(stats || {});
@@ -153,6 +189,10 @@ export class Car {
     this.chassisBody = new CANNON.Body({ mass: CAR_MASS, material: carBodyMaterial });
     const com = new CANNON.Vec3(CHASSIS_COM_OFFSET_X, CHASSIS_COM_OFFSET_Y, CHASSIS_COM_OFFSET_Z);
     this.chassisBody.addShape(createChassisShape(com));
+    const collisionWireframe = createCollisionWireframe(this.chassisBody.shapes[0]);
+    collisionWireframe.visible = Car.collisionDebugEnabled;
+    Car.collisionWireframes.add(collisionWireframe);
+    this.chassisMesh.add(collisionWireframe);
 
     this.chassisBody.position.set(spawnX, spawnY, spawnZ);
     this.chassisBody.angularDamping = ANGULAR_DAMPING;

@@ -22,6 +22,8 @@ const ORBIT_DIST   = 20;   // [m]
 const ORBIT_HEIGHT = 3.5;  // [m]
 const ORBIT_SPEED  = 0.45; // [rad/s]
 const ORBIT_FOV    = 90;   // [deg]
+const DRAG_YAW_MAX   = 0.72;
+const DRAG_PITCH_MAX = 0.32;
 
 // ── Czas przejścia między stanami ─────────────────────────────────
 const STATE_BLEND = 0.5;   // [s]
@@ -67,6 +69,10 @@ export class CameraController {
     this._camYaw    = 0;
     this._motionDir = new THREE.Vector3(0, 0, 1);
     this._desDir    = new THREE.Vector3(0, 0, 1);
+    this._dragYaw = 0;
+    this._dragPitch = 0;
+    this._dragYawTarget = 0;
+    this._dragPitchTarget = 0;
 
     // ── Stan NPC_DESTROY — orbit ─────────────────────────────────
     this._orbitTarget = null;  // THREE.Group
@@ -125,6 +131,17 @@ export class CameraController {
 
     if (state === CamState.PLAYER) this._snapYaw = true;
     if (state === CamState.NPC_DESTROY) this._applyOrbitOpts(opts);
+  }
+
+  dragLook(deltaX, deltaY) {
+    if (this._state !== CamState.PLAYER) return;
+    this._dragYawTarget = THREE.MathUtils.clamp(this._dragYawTarget + deltaX * 0.006, -DRAG_YAW_MAX, DRAG_YAW_MAX);
+    this._dragPitchTarget = THREE.MathUtils.clamp(this._dragPitchTarget - deltaY * 0.004, -DRAG_PITCH_MAX, DRAG_PITCH_MAX);
+  }
+
+  releaseDragLook() {
+    this._dragYawTarget = 0;
+    this._dragPitchTarget = 0;
   }
 
   /**
@@ -211,17 +228,21 @@ export class CameraController {
     // Pozycja — dystans zmienia TYLKO boost, nie klawisze
     const camDist  = CAMERA_OFFSET_BEHIND + BOOST_CAMERA_PULLBACK * boostLevel;
     const upOffset = CAMERA_OFFSET_UP - BOOST_CAMERA_DIP * boostLevel;
+    const dragLerp = dta(0.09, dt);
+    this._dragYaw += (this._dragYawTarget - this._dragYaw) * dragLerp;
+    this._dragPitch += (this._dragPitchTarget - this._dragPitch) * dragLerp;
+    const viewYaw = this._camYaw + this._dragYaw;
     outPos.set(
-      carPos.x - Math.sin(this._camYaw) * camDist,
-      carPos.y + upOffset,
-      carPos.z - Math.cos(this._camYaw) * camDist,
+      carPos.x - Math.sin(viewYaw) * camDist,
+      carPos.y + upOffset + Math.sin(this._dragPitch) * camDist * 0.55,
+      carPos.z - Math.cos(viewYaw) * camDist,
     );
 
     // Look target z lekkim lead
     const lookLead = Math.min(2.0, speed * 0.05);
     outLook.set(
       carPos.x + this._motionDir.x * lookLead,
-      carPos.y + 1.2,
+      carPos.y + 1.2 + this._dragPitch * 3.0,
       carPos.z + this._motionDir.z * lookLead,
     );
 
