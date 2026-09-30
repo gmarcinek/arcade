@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import * as CANNON from 'cannon-es';
 import { MAP } from './mapData.js';
+import { WORLD_SIZE } from '../constants.js';
 import { groundMaterial, asphaltMaterial, slickMaterial, buildingWallMaterial } from '../physics/PhysicsWorld.js';
 import { makeAsphaltTexture, makeBuildingTextures } from '../utils/ProceduralTextures.js';
 import { LAUNCH_PAD_CONTACT_DELAY, LAUNCH_PAD_STROKE, LAUNCH_PAD_RISE_TIME, LAUNCH_PAD_RELOAD_TIME, LAUNCH_PAD_EFFECTIVE_MASS } from '../physicsConfig.js';
@@ -17,6 +18,8 @@ export class CityBuilder {
     this._terrain = null;
     this._trees = [];
     this._launchPads = [];
+    this._rocketBarrels = [];
+    this._chaosBarrels = [];
   }
 
   build(scene, world, terrain, mapData = MAP) {
@@ -26,11 +29,15 @@ export class CityBuilder {
     this._mapData = mapData;
     this._trees = [];
     this._launchPads = [];
+    this._rocketBarrels = [];
+    this._chaosBarrels = [];
     this._buildRoads(scene, world, terrain);
     this._buildBuildings(scene, world, terrain);
     this._buildRamps(scene, world, terrain);
     this._buildBanks(scene, world, terrain);
     this._buildLaunchPads(scene, world, terrain);
+    this._buildRocketBarrels(scene, world, terrain);
+    this._buildChaosBarrels(scene, world, terrain);
     this._buildTrees(scene, world, terrain);
     this._buildObstacles(scene, world, terrain);
   }
@@ -54,7 +61,7 @@ export class CityBuilder {
           if (body.mass > 0) {
             const padVel = LAUNCH_PAD_STROKE / Math.max(LAUNCH_PAD_RISE_TIME, 0.001);
             const impulse = Math.min(22000, body.mass * padVel + LAUNCH_PAD_EFFECTIVE_MASS * padVel);
-            body.applyImpulse(new CANNON.Vec3(0, impulse, 0), body.position);
+            body.applyImpulse(new CANNON.Vec3(0, impulse, 0), pad.targetPoint ?? body.position);
           }
           pad.strikeDone = true;
         }
@@ -72,6 +79,7 @@ export class CityBuilder {
           pad.timer = LAUNCH_PAD_RELOAD_TIME;
           pad.lift = 0;
           pad.targetBody = null;
+          pad.targetPoint = null;
         }
       } else if (pad.phase === 'reload') {
         pad.timer -= dt;
@@ -93,9 +101,44 @@ export class CityBuilder {
       tree.fallenGroup.position.copy(tree.brokenBody.position);
       tree.fallenGroup.quaternion.copy(tree.brokenBody.quaternion);
     }
+
+    for (const barrel of this._rocketBarrels) {
+      barrel.mesh.rotation.y += dt * 1.8;
+      barrel.ring.material.emissiveIntensity = 1.6 + Math.sin(performance.now() * 0.008 + barrel.phase) * 0.7;
+    }
+    for (const barrel of this._chaosBarrels) {
+      barrel.mesh.rotation.y -= dt * 1.4;
+      barrel.ring.material.emissiveIntensity = 1.8 + Math.sin(performance.now() * 0.01 + barrel.phase) * 0.8;
+    }
   }
 
-  requestLaunchPadPulse(body, targetBody) {
+  collectRocketBarrel(body) {
+    const index = this._rocketBarrels.findIndex(barrel => barrel.body === body);
+    if (index === -1) return false;
+    const [barrel] = this._rocketBarrels.splice(index, 1);
+    this._scene.remove(barrel.mesh);
+    this._world.removeBody(barrel.body);
+    barrel.mesh.traverse(object => {
+      object.geometry?.dispose();
+      object.material?.dispose();
+    });
+    return true;
+  }
+
+  collectChaosBarrel(body) {
+    const index = this._chaosBarrels.findIndex(barrel => barrel.body === body);
+    if (index === -1) return false;
+    const [barrel] = this._chaosBarrels.splice(index, 1);
+    this._scene.remove(barrel.mesh);
+    this._world.removeBody(barrel.body);
+    barrel.mesh.traverse(object => {
+      object.geometry?.dispose();
+      object.material?.dispose();
+    });
+    return true;
+  }
+
+  requestLaunchPadPulse(body, targetBody, targetPoint = null) {
     const idx = body?.userData?.launchPadIndex;
     if (idx == null) return false;
     const pad = this._launchPads[idx];
@@ -104,6 +147,7 @@ export class CityBuilder {
     pad.timer = 0;
     pad.lift = 0;
     pad.targetBody = targetBody;
+    pad.targetPoint = targetPoint?.clone() ?? null;
     pad.strikeDone = false;
     return true;
   }
@@ -218,6 +262,87 @@ export class CityBuilder {
       phyBody.position.set(r.x, terrain.getHeightAt(r.x, r.z) + 0.05, r.z);
       world.addBody(phyBody);
     }
+  }
+
+  _buildRocketBarrels(scene, world, terrain) {
+    const barrels = [];
+    const blocked = this._mapData.buildings ?? [];
+    const trees = this._mapData.trees ?? [];
+    const spawn = this._mapData.playerSpawn ?? { x: 0, z: 0 };
+    const limit = WORLD_SIZE * 0.46;
+
+    for (let attempt = 0; barrels.length < 15 && attempt < 1200; attempt++) {
+      const x = (Math.random() * 2 - 1) * limit;
+      const z = (Math.random() * 2 - 1) * limit;
+      if (Math.hypot(x - spawn.x, z - spawn.z) < 35) continue;
+      if (blocked.some(building => Math.abs(x - building.x) < building.w / 2 + 4 && Math.abs(z - building.z) < building.d / 2 + 4)) continue;
+      if (trees.some(tree => Math.hypot(x - tree.x, z - tree.z) < 6)) continue;
+      if (barrels.some(barrel => Math.hypot(x - barrel.x, z - barrel.z) < 24)) continue;
+
+      const y = terrain.getHeightAt(x, z);
+      const mesh = new THREE.Group();
+      const barrel = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.72, 0.72, 1.45, 16),
+        new THREE.MeshStandardMaterial({ color: 0x2239a8, metalness: 0.65, roughness: 0.28, emissive: 0x08124b, emissiveIntensity: 1.2 })
+      );
+      const ring = new THREE.Mesh(
+        new THREE.TorusGeometry(0.75, 0.07, 8, 16),
+        new THREE.MeshStandardMaterial({ color: 0x3feeff, emissive: 0x18bfff, emissiveIntensity: 1.8 })
+      );
+      ring.rotation.x = Math.PI / 2;
+      ring.position.y = 0.12;
+      mesh.add(barrel, ring);
+      mesh.position.set(x, y + 0.74, z);
+      mesh.castShadow = true;
+      scene.add(mesh);
+
+      const body = new CANNON.Body({ mass: 0, collisionResponse: false });
+      body.addShape(new CANNON.Sphere(1.25));
+      body.position.set(x, y + 0.85, z);
+      body.userData = { rocketBarrel: true };
+      world.addBody(body);
+      barrels.push({ x, z, body, mesh, ring, phase: Math.random() * Math.PI * 2 });
+    }
+    this._rocketBarrels = barrels;
+  }
+
+  _buildChaosBarrels(scene, world, terrain) {
+    const barrels = [];
+    const blocked = this._mapData.buildings ?? [];
+    const spawn = this._mapData.playerSpawn ?? { x: 0, z: 0 };
+    const limit = WORLD_SIZE * 0.46;
+    for (let attempt = 0; barrels.length < 15 && attempt < 1400; attempt++) {
+      const x = (Math.random() * 2 - 1) * limit;
+      const z = (Math.random() * 2 - 1) * limit;
+      if (Math.hypot(x - spawn.x, z - spawn.z) < 45) continue;
+      if (blocked.some(building => Math.abs(x - building.x) < building.w / 2 + 5 && Math.abs(z - building.z) < building.d / 2 + 5)) continue;
+      if (barrels.some(barrel => Math.hypot(x - barrel.x, z - barrel.z) < 36)) continue;
+
+      const y = terrain.getHeightAt(x, z);
+      const mesh = new THREE.Group();
+      const barrel = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.78, 0.78, 1.55, 16),
+        new THREE.MeshStandardMaterial({ color: 0xf06a19, metalness: 0.58, roughness: 0.3, emissive: 0x7a1b00, emissiveIntensity: 1.4 })
+      );
+      const ring = new THREE.Mesh(
+        new THREE.TorusGeometry(0.82, 0.08, 8, 16),
+        new THREE.MeshStandardMaterial({ color: 0xffde3b, emissive: 0xff7a00, emissiveIntensity: 2.1 })
+      );
+      ring.rotation.x = Math.PI / 2;
+      ring.position.y = 0.13;
+      mesh.add(barrel, ring);
+      mesh.position.set(x, y + 0.8, z);
+      mesh.castShadow = true;
+      scene.add(mesh);
+
+      const body = new CANNON.Body({ mass: 0, collisionResponse: false });
+      body.addShape(new CANNON.Sphere(1.35));
+      body.position.set(x, y + 0.9, z);
+      body.userData = { chaosBarrel: true };
+      world.addBody(body);
+      barrels.push({ x, z, body, mesh, ring, phase: Math.random() * Math.PI * 2 });
+    }
+    this._chaosBarrels = barrels;
   }
 
   _buildBuildings(scene, world, terrain) {

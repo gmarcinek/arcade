@@ -1,12 +1,16 @@
 import * as THREE from 'three';
 import * as CANNON from 'cannon-es';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
+import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
 import { createPhysicsWorld } from './physics/PhysicsWorld.js';
 import { Terrain } from './world/Terrain.js';
 import { CityBuilder } from './world/CityBuilder.js';
 import { PlayerCar } from './car/PlayerCar.js';
 import { Car } from './car/Car.js';
 import { NPCCar } from './entities/NPCCar.js';
+import { PoliceCar } from './entities/PoliceCar.js';
 import { Zombie } from './entities/Zombie.js';
 import { KeyboardInput } from './input/KeyboardInput.js';
 import { TouchInput } from './input/TouchInput.js';
@@ -30,10 +34,9 @@ import {
   HEAL_AMOUNT,
   HP_TO_CREDIT,
   HP_TO_TIME,
+  GRAVITY,
 } from './physicsConfig.js';
 import { AudioManager }      from './audio/AudioManager.js';
-import { MultiplayerClient } from './multiplayer/MultiplayerClient.js';
-import { RemotePlayers }     from './multiplayer/RemotePlayers.js';
 import { setObstacles }      from './ai/sensors.js';
 import { DriveRecorder }     from './ai/DriveRecorder.js';
 import { PolicyNet, TRAINED_MODEL } from './ai/PolicyNet.js';
@@ -41,24 +44,7 @@ import { PolicyNet, TRAINED_MODEL } from './ai/PolicyNet.js';
 // ── Map ────────────────────────────────────────────────────
 let MAP = defaultMap;
 
-// ── Multiplayer ─────────────────────────────────────────
-/** @type {MultiplayerClient|null} */
-let mpClient       = null;
-/** @type {RemotePlayers|null} */
-let remotePlayers  = null;
-let _mpScores      = new Map();  // ip → kills (lokalny podręczny cache)
-let _mpMatchEl     = null;       // DOM overlay wyników meczu
-let _mpScoreEl     = null;       // DOM tablica wyników na żywo
-let _mpInitPlayers = null;       // gracze z serwera przy wejściu (dodawani po initWorld)
-let _mpInitZombies     = null;       // zombie z serwera przy wejściu
-let _mpInitBrokenTrees = null;       // drzewa złamane przed dołączeniem
-let _mpZombies         = null;       // Map<serverId, Zombie> — zombie zarządzane przez serwer
-let _mpStartScheduled  = false;
-let _mpScoreIntervalId = null;
 let _gameLoopStarted   = false;
-const MATCH_MS     = 5 * 60 * 1000;
-/** Map<remoteId, timestamp> — timestamp mojego ostatniego trafienia tego gracza (last-hitter tracking) */
-const _remoteLastHitMs = new Map();
 
 // ── Wczytaj model auta (async, przed inicjalizacją) ───────────────
 try {
@@ -130,6 +116,47 @@ renderer.toneMappingExposure = 1.12;
 
 // ── Camera ────────────────────────────────────────────────────────
 const camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.1, 500);
+const composer = new EffectComposer(renderer);
+composer.addPass(new RenderPass(scene, camera));
+const hueShiftPass = new ShaderPass({
+  uniforms: {
+    tDiffuse: { value: null },
+    time: { value: 0 },
+  },
+  vertexShader: `
+    varying vec2 vUv;
+    void main() {
+      vUv = uv;
+      gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+    }
+  `,
+  fragmentShader: `
+    uniform sampler2D tDiffuse;
+    uniform float time;
+    varying vec2 vUv;
+    vec3 rgbToHsv(vec3 color) {
+      vec4 k = vec4(0.0, -0.3333333, 0.6666667, -1.0);
+      vec4 p = mix(vec4(color.bg, k.wz), vec4(color.gb, k.xy), step(color.b, color.g));
+      vec4 q = mix(vec4(p.xyw, color.r), vec4(color.r, p.yzx), step(p.x, color.r));
+      float d = q.x - min(q.w, q.y);
+      float e = 0.0000001;
+      return vec3(abs(q.z + (q.w - q.y) / (6.0 * d + e)), d / (q.x + e), q.x);
+    }
+    vec3 hsvToRgb(vec3 color) {
+      vec3 p = abs(fract(color.xxx + vec3(0.0, 0.6666667, 0.3333333)) * 6.0 - 3.0);
+      return color.z * mix(vec3(1.0), clamp(p - 1.0, 0.0, 1.0), color.y);
+    }
+    void main() {
+      vec4 source = texture2D(tDiffuse, vUv);
+      vec3 hsv = rgbToHsv(source.rgb);
+      hsv.x = fract(hsv.x + time * 0.16);
+      hsv.y = min(1.0, hsv.y + 0.2);
+      gl_FragColor = vec4(hsvToRgb(hsv), source.a);
+    }
+  `,
+});
+hueShiftPass.enabled = false;
+composer.addPass(hueShiftPass);
 
 // ── Physics ───────────────────────────────────────────────────────
 const world = createPhysicsWorld();
@@ -139,7 +166,99 @@ const terrain = new Terrain();
 terrain.build(scene, world);
 
 // ── Game objects — lazy-init in initWorld() after map selection ───
-let city, player, npcCars = [], zombies = [], collisions;
+let city, player, npcCars = [], zombies = [], collisions, policeCar = null;
+let _worldModifier = null;
+
+function _raisePoliceAlarm(position) {
+  if (policeCar?.raiseAlarm(position)) {
+    hud.showMessage('POLICJA: ALARM!', '#4ca8ff', 1500);
+  }
+}
+
+function _clearWorldModifier() {
+  if (!_worldModifier) return;
+  _worldModifier.restore();
+  _worldModifier = null;
+  hud.setWorldModifier();
+}
+
+function _activateWorldModifier() {
+  _clearWorldModifier();
+  const effects = [
+    {
+      label: 'MOON GRAVITY',
+      icon: '☾',
+      weight: 1,
+      apply: () => world.gravity.set(0, -1.955, 0),
+      restore: () => world.gravity.set(0, GRAVITY, 0),
+    },
+    {
+      label: 'JUPITER GRAVITY',
+      icon: '♃',
+      weight: 0.5,
+      apply: () => world.gravity.set(0, -28.6, 0),
+      restore: () => world.gravity.set(0, GRAVITY, 0),
+    },
+    {
+      label: 'MONSTER WHEELS',
+      icon: '⚙',
+      weight: 1,
+      apply: () => [player, ...npcCars, policeCar].forEach(car => car?.setChaosWheels(true)),
+      restore: () => [player, ...npcCars, policeCar].forEach(car => car?.setChaosWheels(false)),
+    },
+    {
+      label: 'TURBO OPPONENTS',
+      icon: '⇈',
+      weight: 1,
+      apply: () => { NPCCar.speedMultiplier = 2; },
+      restore: () => { NPCCar.speedMultiplier = 1; },
+    },
+    {
+      label: 'FAST PEDESTRIANS',
+      icon: '⚡',
+      weight: 1,
+      apply: () => { Zombie.speedMultiplier = 4; },
+      restore: () => { Zombie.speedMultiplier = 1; },
+    },
+    {
+      label: 'SUPERMAN MODE',
+      icon: 'S',
+      weight: 0.7,
+      apply: () => { player.supermanMode = true; },
+      restore: () => { player.supermanMode = false; },
+    },
+    {
+      label: 'INSTANT BRAKE',
+      icon: '▣',
+      weight: 0.8,
+      apply: () => { player.instantBrakeMode = true; },
+      restore: () => { player.instantBrakeMode = false; },
+    },
+    {
+      label: 'LSD',
+      icon: '◉',
+      weight: 0.6,
+      apply: () => { hueShiftPass.enabled = true; },
+      restore: () => { hueShiftPass.enabled = false; },
+    },
+  ];
+  const totalWeight = effects.reduce((sum, effect) => sum + effect.weight, 0);
+  let selection = Math.random() * totalWeight;
+  const effect = effects.find(candidate => (selection -= candidate.weight) <= 0) ?? effects[0];
+  effect.apply();
+  _worldModifier = { ...effect, remaining: 15 };
+  hud.showMessage(`${effect.icon} ${effect.label}`, '#ff9b38', 1800);
+}
+
+function _tickWorldModifier(dt) {
+  if (!_worldModifier) return;
+  _worldModifier.remaining -= dt;
+  if (_worldModifier.remaining <= 0) {
+    _clearWorldModifier();
+    return;
+  }
+  hud.setWorldModifier(_worldModifier.icon, _worldModifier.label, _worldModifier.remaining);
+}
 
 // ── AI oponentów ── produkcja korzysta z nowej AI stanowej; uczenie jest tylko lokalne.
 const AI_MODE_KEY = 'zombieRacerAiMode';
@@ -295,14 +414,6 @@ function onZombieKill(zombie) {
   zombie.kill(scene, world);
   timer.addTime(20);
   zombieKills++;
-  mpClient?.sendKill();
-  // W MP: poinformuj serwer kt贸ry zombie zosta艂 zabity i usu艅 z mapy lokalnej
-  if (zombie._mpId !== undefined) {
-    mpClient?.sendZombieKill(zombie._mpId);
-    _mpZombies?.delete(zombie._mpId);
-    const idx = zombies.indexOf(zombie);
-    if (idx !== -1) zombies.splice(idx, 1);
-  }
   addCredits(CREDITS_ZOMBIE, '🧟 +20s', '#44ff44');
   const pos = zombie.mesh ? zombie.mesh.position : { x: 0, z: 0 };
   particles.spawnBloodSplatter(pos.x, 1, pos.z);
@@ -310,10 +421,10 @@ function onZombieKill(zombie) {
   checkWinConditions();
 }
 
-function showWin(reason) {
+function showWin(reason, playFanfare = true) {
   if (gameOverVisible) return;
   gameOverVisible = true;
-  audio.playWin();
+  if (playFanfare) audio.playWin();
   const landingHref = window.location.pathname.includes('/dist/') ? '../landingPage.html' : './landingPage.html';
   const el = document.createElement('div');
   el.style.cssText = `position:fixed;inset:0;background:rgba(0,0,0,0.88);
@@ -333,10 +444,16 @@ function showWin(reason) {
 }
 
 function checkWinConditions() {
-  if (gameOverVisible) return;
+  if (gameOverVisible || _winSequence) return;
   if (npcCars.length > 0) {
     const aliveNpcs = npcCars.filter(c => c.isAlive).length;
-    if (aliveNpcs === 0) { showWin('Wszystkich oponentów zniszczono! 🚗💥'); return; }
+    if (aliveNpcs === 0) {
+      _winSequence = true;
+      audio.playWin();
+      hud.showMessage('OSTATNI OPONENT ZNISZCZONY!', '#00ff88', 3500);
+      setTimeout(() => showWin('Wszystkich oponentów zniszczono! 🚗💥', false), 4000);
+      return;
+    }
   }
   if (zombies.length > 0) {
     const aliveZombies = zombies.filter(z => z.isAlive).length;
@@ -398,7 +515,8 @@ function _explodeNPC(npc, velX = 0, velY = 0, velZ = 0) {
   const BLAST_RADIUS     = 12;   // [m]
   const BLAST_DMG_NPC    = 400;  // HP obrażeń NPC przy epicentrum (skala z dystansem)
   const BLAST_DMG_PLAYER = 60;   // HP obrażeń gracza przy epicentrum
-  const BLAST_FORCE      = 2800; // [N·s] impulse
+  const BLAST_FORCE      = 14000; // [N·s] impulse
+  const BLAST_FORCE_PLAYER = 56000; // [N·s] stronger player recoil
   const BLAST_UP_BIAS    = 0.25;
 
   // Zombie w zasięgu → zabij
@@ -415,6 +533,9 @@ function _explodeNPC(npc, velX = 0, velY = 0, velZ = 0) {
     { body: player.chassisBody, isPlayer: true },
     ...npcCars.filter(c => c !== npc && c.isAlive && c.chassisBody)
               .map(c => ({ body: c.chassisBody, npcRef: c })),
+    ...(policeCar && policeCar !== npc && policeCar.isAlive && policeCar.chassisBody
+      ? [{ body: policeCar.chassisBody, npcRef: policeCar }]
+      : []),
   ];
   for (const t of _carTargets) {
     const body = t.body;
@@ -428,15 +549,17 @@ function _explodeNPC(npc, velX = 0, velY = 0, velZ = 0) {
 
     // Obrażenia
     if (t.isPlayer) {
-      player.hp = Math.max(0, player.hp - Math.round(BLAST_DMG_PLAYER * falloff));
-      hud.showMessage('💥 Fala uderzeniowa!', '#ff4444', 1000);
+      if (!player.supermanMode) {
+        player.hp = Math.max(0, player.hp - Math.round(BLAST_DMG_PLAYER * falloff));
+        hud.showMessage('💥 Fala uderzeniowa!', '#ff4444', 1000);
+      }
     } else if (t.npcRef) {
       t.npcRef.hp = Math.max(0, t.npcRef.hp - Math.round(BLAST_DMG_NPC * falloff));
       if (t.npcRef.hp <= 0 && t.npcRef.isAlive) onCarKill(t.npcRef);
     }
 
     // Impuls fizyczny
-    const strength = BLAST_FORCE * falloff;
+    const strength = (t.isPlayer ? BLAST_FORCE_PLAYER : BLAST_FORCE) * falloff;
     const len = dist || 0.01;
     const nx = dx / len;
     const nz = dz / len;
@@ -454,11 +577,12 @@ function _explodeNPC(npc, velX = 0, velY = 0, velZ = 0) {
   }
 
   // Po wybuchu: popatrz o 1s dłużej przed powrotem do gracza.
-  setTimeout(() => camCtrl.setState(CamState.PLAYER), 1250);
+  setTimeout(() => {
+    if (!_winSequence) camCtrl.setState(CamState.PLAYER);
+  }, 1250);
 
   timer.addTime(60);
   carKills++;
-  mpClient?.sendKill();
   addCredits(CREDITS_CAR_KILL, '🚗💥 +1:00', '#ffcc00');
   checkWinConditions();
   // brak respawnu po zabiciu — NPC odradzają się TYLKO po wyleceniu za planszę
@@ -475,6 +599,7 @@ function _respawnNPC(npc) {
 
 function onCarKill(npc) {
   if (!npc.isAlive) return;
+  if (!npc.isPolice) _raisePoliceAlarm(npc.chassisBody?.position);
   recorder?.onNpcDeath(npc);
   if (recorder && npc.chassisBody && player.chassisBody
       && npc.chassisBody.position.distanceTo(player.chassisBody.position) < 30) {
@@ -537,6 +662,7 @@ function onCarHit(damageDealt, npcMaxHp = 600, npc = null) {
 // ── Game Over ─────────────────────────────────────────────────────
 let gameOverVisible   = false;
 let _gameOverSequence = false; // true = czas się skończył, scena renderuje, gracz nie steruje
+let _winSequence      = false;
 
 function _triggerGameOverExplosion() {
   if (!player || _playerDead) return;
@@ -575,9 +701,6 @@ function _triggerGameOverExplosion() {
     orbitOffset: _getDestroyCamOrbitOffset(vel.x, vel.z),
   });
 
-  // Poinformuj innych graczy przez serwer
-  mpClient?.sendPlayerExploded(ep.x, ep.y, ep.z);
-
   audio.playGameOver();
 }
 
@@ -611,6 +734,7 @@ timer.onGameOver = () => {
 // ── Resize ────────────────────────────────────────────────────────
 window.addEventListener('resize', () => {
   renderer.setSize(window.innerWidth, window.innerHeight);
+  composer.setSize(window.innerWidth, window.innerHeight);
   camera.aspect = window.innerWidth / window.innerHeight;
   camera.updateProjectionMatrix();
 });
@@ -811,14 +935,8 @@ function showModeMenu() {
     <label id="_aiRecordWrap" style="font-size:13px;color:#aaa;margin-bottom:18px;cursor:pointer;">
       <input type="checkbox" id="_aiRecord"> Nagrywaj moją jazdę do treningu AI
     </label>
-    <button id="_btnMulti" style="${btnStyle}background:#cc3300;color:#fff;">
-      🌐 MULTIPLAYER
-    </button>
-    <div id="_mpStatus" style="margin-top:20px;color:#888;font-size:13px;height:20px;"></div>
   `;
   document.body.appendChild(overlay);
-
-  const status = overlay.querySelector('#_mpStatus');
 
   // ── Wybór AI oponentów ──
   let aiMode = IS_LOCAL_AI_ENV && localStorage.getItem(AI_MODE_KEY) === 'learned' && TRAINED_MODEL
@@ -873,239 +991,11 @@ function showModeMenu() {
     document.body.removeChild(overlay);
     showMapMenu();
   };
-
-  overlay.querySelector('#_btnMulti').onclick = () => {
-    overlay.querySelector('#_btnMulti').disabled = true;
-    status.textContent = 'Łączenie z serwerem…';
-    status.style.color = '#ffcc00';
-
-    mpClient = new MultiplayerClient();
-    _setupMultiplayer(mpClient);
-
-    mpClient.connect();
-
-    mpClient.onInit = (data) => {
-      if (_mpStartScheduled) return;
-      status.textContent = `✓ Połączono jako ${data.ip}`;
-      status.style.color = '#00ff88';
-      // Wczytaj dotychczasowe wyniki
-      _mpScores = new Map(Object.entries(data.scores || {}).map(([k, v]) => [k, Number(v)]));
-      _updateScoreBoard();
-
-      // Zapamiętaj graczy — dodamy ich po initWorld() gdy remotePlayers będzie gotowy
-      _mpInitPlayers     = data.players || {};
-      _mpInitZombies     = data.zombies  || [];
-      _mpInitBrokenTrees = data.brokenTrees || [];
-
-      // Jeśli akurat trwa ekran wyników — poczekaj
-      if (data.inResults) {
-        status.textContent = 'Czekaj na start kolejnego meczu…';
-        return;
-      }
-      _mpStartScheduled = true;
-      setTimeout(() => {
-        if (overlay.parentNode) document.body.removeChild(overlay);
-        // W MP zawsze domyślna plansza
-        MAP = defaultMap;
-        startGame();
-      }, 800);
-    };
-
-    // Timeout połączenia
-    setTimeout(() => {
-      if (!mpClient?.myId) {
-        status.textContent = '✗ Brak połączenia z serwerem.';
-        status.style.color = '#ff4444';
-        overlay.querySelector('#_btnMulti').disabled = false;
-      }
-    }, 6000);
-  };
-}
-
-// ── Multiplayer: inicjalizuj eventy klienta ───────────────────────
-
-/**
- * Sync zombie z serwera. Tworzy nowe Zombie z KINEMATIC body lub aktualizuje
- * pozycję istniejących. Usuwa te, których serwer już nie zwraca (zabite).
- * @param {Array<{id:number, x:number, z:number}>} zbList
- */
-function _updateMpZombies(zbList) {
-  if (!_mpZombies || !terrain) return;
-  const receivedIds = new Set();
-  for (const zd of zbList) {
-    receivedIds.add(zd.id);
-    if (_mpZombies.has(zd.id)) {
-      const zobj = _mpZombies.get(zd.id);
-      if (!zobj.isAlive) continue;
-      const y = terrain.getHeightAt(zd.x, zd.z) + 0.5;
-      zobj.body.position.set(zd.x, y, zd.z);
-      zobj.body.velocity.set(0, 0, 0);   // zablokuj integrację fizyki
-      if (zobj.mesh) zobj.mesh.position.set(zd.x, y, zd.z);
-    } else {
-      const zobj = new Zombie();
-      const y = terrain.getHeightAt(zd.x, zd.z) + 0.5;
-      zobj.spawn(scene, world, zd.x, y, zd.z);
-      // collisionResponse=false już ustawione w spawn()
-      zobj._mpId = zd.id;
-      _mpZombies.set(zd.id, zobj);
-      zombies.push(zobj);
-    }
-  }
-  // Usuń zombie, których serwer nie zawiera w pakiecie (zostały zabite przez innego gracza)
-  for (const [id, zobj] of _mpZombies) {
-    if (!receivedIds.has(id) && zobj.isAlive) {
-      zobj.kill(scene, world);
-      const idx = zombies.indexOf(zobj);
-      if (idx !== -1) zombies.splice(idx, 1);
-      _mpZombies.delete(id);
-    }
-  }
-}
-
-function _setupMultiplayer(client) {
-  client.onPlayerJoined = (id, ip, initData) => {
-    if (!remotePlayers) return;
-    remotePlayers.add(id, ip, initData || {});
-    hud.showMessage(`${ip} dołączył`, '#88ccff', 1500);
-  };
-
-  // Gracze którzy już eksplodowali — żeby nie płomienby się 2 razy przy rozlączeniu
-  const _explodedRemote = new Set();
-
-  client.onPlayerLeft = (id) => {
-    if (!remotePlayers) return;
-    if (_explodedRemote.has(id)) {
-      // Już wybuchł — tylko usuń, bez ponownej animacji
-      _explodedRemote.delete(id);
-      remotePlayers.remove(id);
-    } else {
-      remotePlayers.removeWithDeath(id);
-    }
-  };
-
-  client.onPlayersUpdate = (players, zombies, myId) => {
-    remotePlayers?.updateState(players, myId);
-    if (Array.isArray(zombies)) _updateMpZombies(zombies);
-  };
-
-  client.onScoreUpdate = (ip, kills) => {
-    _mpScores.set(ip, kills);
-    _updateScoreBoard();
-  };
-
-  client.onMatchEnd = (leaderboard) => {
-    _showMatchOverlay(leaderboard);
-  };
-
-  client.onMatchStart = () => {
-    _mpMatchEl?.remove();
-    _mpMatchEl = null;
-    _mpScores.clear();
-    _updateScoreBoard();
-    hud.showMessage('Nowy mecz! 🏁', '#ffcc00', 2000);
-  };
-
-  client.onTreeBreak = (id, dirX, dirZ, speed, launch) => {
-    city?.applyRemoteTreeBreak(id, dirX, dirZ, speed, launch);
-  };
-
-  client.onImpact = ({ damage }) => {
-    if (player) {
-      // Taka sama ścieżka jak lokalny gracz — receiveImpact przelicza impulse → HP przez damageSystem
-      player.receiveImpact(damage, { x: 1, y: 0, z: 0 });
-    }
-  };
-
-  // Inny gracz eksplodował (koniec jego czasu) — pokaż eksplozję z debrisem
-  client.onPlayerExploded = ({ id, x, y, z }) => {
-    if (!remotePlayers) return;
-    _explodedRemote.add(id); // zapamiętaj — nie rzuć wybuchu drugi raz przy disconnect
-    const entry = remotePlayers._entries.get(id);
-    const ip = entry?.ip ?? id;
-    remotePlayers.onPlayerDied?.(id, ip, { x, y, z, clone: () => ({ x, y, z }) });
-  };
-}
-
-/** Aktualizuje tabletkę wyników (prawy dolny róg) podczas meczu. */
-function _updateScoreBoard() {
-  if (!_mpScoreEl) return;
-  const MATCH_LEFT = MATCH_MS - (Date.now() % MATCH_MS);
-  const mins = Math.floor(MATCH_LEFT / 60000);
-  const secs = String(Math.floor((MATCH_LEFT % 60000) / 1000)).padStart(2, '0');
-  const myIp  = mpClient?.myIp;
-  const ping  = mpClient?.latency ?? 0;
-  const pingColor = ping < 80 ? '#44ff44' : ping < 200 ? '#ffcc00' : '#ff4444';
-
-  // Kolekcja wszystkich graczy z HP
-  const allPlayers = [];
-  // Ja
-  if (player && myIp) {
-    allPlayers.push({ ip: myIp, kills: _mpScores.get(myIp) ?? 0, hp: player.hp, maxHp: player.maxHp, me: true });
-  }
-  // Zdalni
-  if (remotePlayers) {
-    for (const [, e] of remotePlayers._entries) {
-      const kills = _mpScores.get(e.ip) ?? 0;
-      allPlayers.push({ ip: e.ip, kills, hp: e.hp, maxHp: e.maxHp, me: false });
-    }
-  }
-  allPlayers.sort((a, b) => b.kills - a.kills);
-
-  const rows = allPlayers.slice(0, 8).map(p => {
-    const meStyle  = p.me ? 'color:#ffcc00;font-weight:900;' : 'color:#ccc;';
-    const hpPct    = Math.max(0, Math.min(100, Math.round(p.hp / p.maxHp * 100)));
-    const hpColor  = hpPct > 60 ? '#44cc44' : hpPct > 25 ? '#ccaa00' : '#cc3300';
-    const hpBar    = `<span style="display:inline-block;width:${hpPct * 0.6}px;height:6px;background:${hpColor};border-radius:3px;vertical-align:middle;"></span>`;
-    return `<div style="${meStyle}display:flex;gap:6px;align-items:center;">
-      <span style="flex:1;font-family:monospace;font-size:12px;">${p.ip}</span>
-      <span style="font-size:11px;color:#aaa;">${p.kills}k</span>
-      ${hpBar}
-    </div>`;
-  }).join('');
-
-  _mpScoreEl.innerHTML = `
-    <div style="color:#888;font-size:11px;margin-bottom:6px;display:flex;justify-content:space-between;">
-      <span>🕐 ${mins}:${secs}</span>
-      <span style="color:${pingColor};">ping ${ping}ms</span>
-    </div>
-    <div>${rows || '<div style="color:#555">brak graczy</div>'}</div>
-  `;
-}
-
-/** Pokazuje fullscreen leaderboard po zakończeniu meczu (7s). */
-function _showMatchOverlay(leaderboard) {
-  _mpMatchEl?.remove();
-  const myIp = mpClient?.myIp;
-
-  const rows = leaderboard.map((e, i) => {
-    const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `${i + 1}.`;
-    const me    = e.ip === myIp ? ';font-size:22px;color:#ffcc00' : '';
-    return `<div style="margin:4px 0${me}">${medal} ${e.ip} — ${e.kills} kills</div>`;
-  }).join('');
-
-  _mpMatchEl = document.createElement('div');
-  _mpMatchEl.style.cssText = `
-    position:fixed;inset:0;background:rgba(0,0,0,0.88);
-    display:flex;flex-direction:column;align-items:center;justify-content:center;
-    z-index:500;color:#fff;font-family:system-ui,sans-serif;
-  `;
-  _mpMatchEl.innerHTML = `
-    <div style="font-size:42px;font-weight:900;color:#ffcc00;letter-spacing:3px;margin-bottom:8px;">
-      KONIEC MECZU
-    </div>
-    <div style="font-size:14px;color:#888;margin-bottom:28px;">
-      Kolejny mecz za 7 sekund…
-    </div>
-    <div style="font-size:18px;line-height:2;text-align:center;">
-      ${rows || '<div style="color:#555">brak wyników</div>'}
-    </div>
-  `;
-  document.body.appendChild(_mpMatchEl);
 }
 
 // ── Map Menu ──────────────────────────────────────────────────────
 function showMapMenu() {
-  const maps = JSON.parse(localStorage.getItem('zombieRacerMaps') || '{}');
+  const maps = loadSavedMaps();
   const mapNames = Object.keys(maps);
   if (mapNames.length === 0) {
     startGame();
@@ -1154,6 +1044,15 @@ function showMapMenu() {
   document.body.appendChild(menu);
 }
 
+function loadSavedMaps() {
+  try {
+    const maps = JSON.parse(localStorage.getItem('zombieRacerMaps') || '{}');
+    return maps && typeof maps === 'object' && !Array.isArray(maps) ? maps : {};
+  } catch {
+    return {};
+  }
+}
+
 function initWorld(mapData) {
   const playerSpawn  = mapData.playerSpawn  ?? { x: 0, z: 0 };
   const npcWaypoints = mapData.npcWaypoints ?? [];
@@ -1166,156 +1065,72 @@ function initWorld(mapData) {
   player = new PlayerCar();
   const spawnH = terrain.getHeightAt(playerSpawn.x, playerSpawn.z);
   player.build(scene, world, playerSpawn.x, spawnH + 0.9, playerSpawn.z, 0x00dd66);
-  // group 2 = kolizje z remote players (group 8, mask 2)
-  player.chassisBody.collisionFilterGroup = 2;
-
   const npcColors = [0xcc2200, 0x2200cc, 0xcc8800, 0xaa00cc, 0x00aacc, 0xddcc00, 0x00cc44, 0xff6600, 0x8800cc, 0xcc0066];
   npcCars = [];
-  // W trybie multiplayer nie ma NPC cars — tylko gracze ludzcy
-  if (!mpClient) {
-    for (let i = 0; i < Math.min(npcWaypoints.length, 10); i++) {
-      const npc = new NPCCar(npcWaypoints[i], npcColors[i % npcColors.length]);
-      npc.buildNPC(scene, world, terrain);
-      npc.onSmoke       = (x, y, z, type) => particles.spawnSmoke(x, y, z, type);
-      npc.onFireExplode = () => onCarKill(npc);
-      npc.onDestroy     = () => onCarKill(npc);
-      npc.onBoundsExit  = () => setTimeout(() => _respawnNPC(npc), 500);
-      npcCars.push(npc);
-    }
+  for (let i = 0; i < Math.min(npcWaypoints.length, 10); i++) {
+    const npc = new NPCCar(npcWaypoints[i], npcColors[i % npcColors.length]);
+    npc.buildNPC(scene, world, terrain);
+    npc.onSmoke       = (x, y, z, type) => particles.spawnSmoke(x, y, z, type);
+    npc.onFireExplode = () => onCarKill(npc);
+    npc.onDestroy     = () => onCarKill(npc);
+    npc.onBoundsExit  = () => setTimeout(() => _respawnNPC(npc), 500);
+    npcCars.push(npc);
+  }
+
+  if (npcWaypoints.length > 0) {
+    const policeWaypoints = npcWaypoints.flatMap((route, routeIndex) =>
+      route.map((waypoint, waypointIndex) => ({ waypoint, routeIndex, waypointIndex }))
+    );
+    const freePoliceWaypoints = policeWaypoints
+      .filter(({ waypoint }) => {
+        if (Math.hypot(waypoint.x - playerSpawn.x, waypoint.z - playerSpawn.z) < 45) return false;
+        return npcCars.every(npc => Math.hypot(
+          waypoint.x - npc.chassisBody.position.x,
+          waypoint.z - npc.chassisBody.position.z
+        ) > 32);
+      });
+    const policeSpawn = freePoliceWaypoints[(Math.random() * freePoliceWaypoints.length) | 0]
+      ?? policeWaypoints.reduce((furthest, candidate) => {
+        const nearest = npcCars.reduce((distance, npc) => Math.min(distance, Math.hypot(
+          candidate.waypoint.x - npc.chassisBody.position.x,
+          candidate.waypoint.z - npc.chassisBody.position.z
+        )), Infinity);
+        return nearest > furthest.distance ? { ...candidate, distance: nearest } : furthest;
+      }, { ...policeWaypoints[0], distance: -Infinity });
+    policeCar = new PoliceCar(npcWaypoints[policeSpawn.routeIndex]);
+      policeCar.waypointIdx = Math.max(0, policeCar.waypointRoute.indexOf(policeSpawn.waypoint));
+    policeCar.buildNPC(scene, world, terrain);
+    policeCar.onSmoke = (x, y, z, type) => particles.spawnSmoke(x, y, z, type);
   }
 
   zombies = [];
-  // W trybie SP: spawn lokalnych zombie; w MP: serwer jest autorytatywny
-  if (!mpClient) {
-    for (const sp of zombieSpawns) {
-      for (let j = 0; j < 3; j++) {
-        const ox = (Math.random() - 0.5) * 10;
-        const oz = (Math.random() - 0.5) * 10;
-        const z = new Zombie();
-        const zh = terrain.getHeightAt(sp.x + ox, sp.z + oz) + 1.2;
-        z.spawn(scene, world, sp.x + ox, zh, sp.z + oz);
-        zombies.push(z);
-      }
-    }
-  } else {
-    _mpZombies = new Map();
-  }
-
-  // MP: utwórz RemotePlayers PRZED CollisionHandler, żeby remoteBodyMap był prawidłowy
-  if (mpClient) {
-    remotePlayers = new RemotePlayers(scene, world, terrain);
-    // Dym uszkodzenia zdalnych aut — taki sam system jak u gracza lokalnego
-    remotePlayers.onSmoke = (x, y, z, type) => particles.spawnSmoke(x, y, z, type);
-
-    // Dodaj graczy którzy byli już na serwerze w momencie wejścia
-    if (_mpInitPlayers) {
-      for (const [id, p] of Object.entries(_mpInitPlayers)) {
-        if (id !== mpClient.myId) remotePlayers.add(id, p.ip, p);
-      }
-      _mpInitPlayers = null;
+  for (const sp of zombieSpawns) {
+    for (let j = 0; j < 3; j++) {
+      const ox = (Math.random() - 0.5) * 10;
+      const oz = (Math.random() - 0.5) * 10;
+      const z = new Zombie();
+      const zh = terrain.getHeightAt(sp.x + ox, sp.z + oz) + 1.2;
+      z.spawn(scene, world, sp.x + ox, zh, sp.z + oz);
+      zombies.push(z);
     }
   }
 
-  collisions = new CollisionHandler(world, player, zombies, npcCars, timer, hud, audio, city, onZombieKill, onCarKill, onCarHit, {
-    remoteBodyMap: remotePlayers ? { get: (b) => remotePlayers.getBodyMap().get(b) } : null,
-    onTreeBreak: (treeIndex, impactDir, impactSpeed, launchSpeed) => {
-      mpClient?.sendTreeBreak(treeIndex, impactDir.x, impactDir.z, impactSpeed, launchSpeed);
-    },
-    onRemoteHit: (remoteId, damage, won) => {
-      mpClient?.sendHitPlayer(remoteId, damage);
-      if (won) _remoteLastHitMs.set(remoteId, Date.now()); // nagroda tylko dla zwycięzcy
-    },
+  collisions = new CollisionHandler(world, player, zombies, [...npcCars, policeCar].filter(Boolean), timer, hud, audio, city, onZombieKill, onCarKill, onCarHit, {
     onNpcClash:    (npc, dmgP, dmgN) => recorder?.onNpcClash(npc, dmgP, dmgN, player.maxHp),
     onNpcObstacle: (npc, speed) => recorder?.onNpcObstacle(npc, speed),
+    onChaosBarrel: _activateWorldModifier,
+    onPoliceIncident: _raisePoliceAlarm,
   });
   _lastValidPos = { x: playerSpawn.x, z: playerSpawn.z };
 
-  if (mpClient) {
-
-    // Last-hitter tracking: kto ostatni zadał nieautomatyczny damage zdalnemu graczowi
-    // Wpis 'me' ustawiany gdy lokalny gracz trafia; kasowany gdy inny gracz trafia jako nowszy
-    remotePlayers.onHpDrop = (id, prevHp, newHp) => {
-      const drop = prevHp - newHp;
-      const myHitAge = Date.now() - (_remoteLastHitMs.get(id) ?? 0);
-      if (myHitAge <= 1500 && drop > 0) {
-        // Mój damage dotarł do serwera i wrócił jako HP drop — nagradzaj
-        const e = remotePlayers._entries.get(id);
-        onCarHit(drop, e?.maxHp ?? 100);
-      } else if (drop > 3 && myHitAge > 1500) {
-        // Znaczny spadek spoza mojego okna → ktoś inny trafił → kasuj kill credit
-        _remoteLastHitMs.delete(id);
-      }
-    };
-
-    // Callback: zdalny gracz zginął — pełna sekwencja eksplozji jak NPC
-    remotePlayers.onPlayerDied = (id, ip, pos) => {
-      const x = pos.x, y = pos.y, z = pos.z;
-
-      // Pierwsza eksplozja — natychmiastowa
-      particles.spawnExplosion(x, y + 1, z);
-      audio.playCarExplosion();
-
-      // Druhie jądro + dym 250ms później
-      setTimeout(() => {
-        particles.spawnExplosion(x + (Math.random() - 0.5) * 1.5, y + 2.5, z + (Math.random() - 0.5) * 1.5);
-        particles.spawnExplosion(x + (Math.random() - 0.5) * 1.0, y + 0.5, z + (Math.random() - 0.5) * 1.0);
-        audio.playCarExplosion();
-      }, 250);
-
-      // Gruz fizyczny z dymem (tak samo jak NPC)
-      debris.spawn(
-        x, y + 0.5, z,
-        0, 0, 0,
-        (dx, dy, dz, type) => particles.spawnSmoke(dx, dy, dz, type)
-      );
-
-      // Kill credit — jeśli ja zadałem ostatni nieautomatyczny damage
-      if (_remoteLastHitMs.has(id)) {
-        _remoteLastHitMs.delete(id);
-        timer.addTime(60);
-        addCredits(CREDITS_CAR_KILL, `💀 ${ip} +1:00`, '#ffcc00');
-      }
-
-      hud.showMessage(`💥 ZABITY: ${ip}`, '#ff4400', 2500);
-    };
-
-    // Zastosuj początkowy snapshot zombie z serwera
-    if (_mpInitZombies) {
-      _updateMpZombies(_mpInitZombies);
-      _mpInitZombies = null;
-    }
-
-    // Odtwrz drzewa złamane przed dołączeniem
-    if (_mpInitBrokenTrees) {
-      for (const id of _mpInitBrokenTrees) city?.applyRemoteTreeBreak(id);
-      _mpInitBrokenTrees = null;
-    }
-
-    // Tablica wyników (prawy dolny róg)
-    _mpScoreEl = document.createElement('div');
-    _mpScoreEl.style.cssText = `
-      position:fixed;bottom:16px;right:16px;
-      background:rgba(0,0,0,0.65);border:1px solid #333;
-      border-radius:8px;padding:8px 12px;z-index:100;
-      color:#ccc;min-width:180px;pointer-events:none;
-    `;
-    document.body.appendChild(_mpScoreEl);
-    _updateScoreBoard();
-    // Aktualizuj licznik co sekundę
-    if (_mpScoreIntervalId === null) {
-      _mpScoreIntervalId = setInterval(() => { if (_mpScoreEl) _updateScoreBoard(); }, 1000);
-    }
-  }
 }
 
 function startGame() {
   if (_gameLoopStarted) return;
   initWorld(MAP);
-  if (!mpClient && _recordDrive) recorder = new DriveRecorder();
-  if (!mpClient) {
-    const label = NPCCar.policy ? 'AI: UCZONA 🧠' : 'AI: KLASYCZNA';
-    setTimeout(() => hud.showMessage(`${label}${recorder ? '  ● REC' : ''}`, '#88ccff', 2500), 3600);
-  }
+  if (_recordDrive) recorder = new DriveRecorder();
+  const label = NPCCar.policy ? 'AI: UCZONA 🧠' : 'AI: KLASYCZNA';
+  setTimeout(() => hud.showMessage(`${label}${recorder ? '  ● REC' : ''}`, '#88ccff', 2500), 3600);
   _gameLoopStarted = true;
   requestAnimationFrame(gameLoop);
 }
@@ -1334,10 +1149,11 @@ function gameLoop() {
   if (gameOverVisible) return; // plansza widoczna — całkowite zatrzymanie
 
   const dt = Math.min(clock.getDelta(), 0.1);
+  _tickWorldModifier(dt);
   accumulator += dt;
 
   // Podczas sekwencji game over: gracz nie steruje, ale scena się renderuje
-  if (!_gameOverSequence && !_playerDead) {
+  if (!_gameOverSequence && !_winSequence && !_playerDead) {
     player.update(input, dt);
   } else if (_playerDead) {
     player.sync(dt);
@@ -1359,24 +1175,6 @@ function gameLoop() {
 
   // Zsynchronizuj mesh gracza z pozycją po fizyce (dt=0 by nie dublować efektów czasowych)
   player.sync(0);
-
-  // ── Multiplayer: wyślij pełny stan gracza + zombie ──────────────
-  if (!_gameOverSequence && mpClient?.connected && player.chassisBody) {
-    const pos = player.chassisBody.position;
-    const q   = player.chassisBody.quaternion;
-    const vel = player.chassisBody.velocity;
-    const mass     = player.chassisBody.mass;
-    const momentum = vel.length() * mass;
-    mpClient.sendPosition(
-      pos.x, pos.y, pos.z,
-      q.x, q.y, q.z, q.w,
-      vel.x, vel.y, vel.z,
-      player.hp, player.maxHp,
-      { ...player.damageSystem.state },
-      0x00dd66, mass, momentum
-    );
-  }
-  if (remotePlayers) remotePlayers.update(dt);
 
   if (!_gameOverSequence) {
     // ── Healing — każde wciśnięcie Backspace = 1 leczenie instant ──
@@ -1400,7 +1198,7 @@ function gameLoop() {
     _checkRespawn();
 
     // Krew na czerwono: poniżej 20% życia traci 1 HP/s (gwarantowana śmierć)
-    if (!_playerDead && player.hp > 0 && player.hp < player.maxHp * 0.20) {
+    if (!_playerDead && !player.supermanMode && player.hp > 0 && player.hp < player.maxHp * 0.20) {
       player.hp = Math.max(0, player.hp - dt);
     }
 
@@ -1468,8 +1266,25 @@ function gameLoop() {
     }
   }
 
+  if (policeCar) {
+    if (policeCar.isAlive) {
+      policeCar.update(terrain, player.chassisBody.position, player.chassisBody.velocity, [...npcCars, policeCar], dt,
+        !_playerDead && !_gameOverSequence);
+      if (policeCar.sirenPulse) audio.playPoliceSiren();
+    } else if (policeCar._isDying) {
+      policeCar.updateDying(dt);
+    } else if (policeCar._ghostTimer > 0) {
+      policeCar._ghostTimer -= dt;
+      if (policeCar._ghostTimer <= 0) {
+        scene.remove(policeCar.group);
+        for (const wheel of policeCar.wheelMeshes) scene.remove(wheel);
+        policeCar.wheelMeshes = [];
+      }
+    }
+  }
+
   for (const z of zombies) {
-    if (z.isAlive && z._mpId === undefined) z.update(dt); // MP zombie: pozycja z serwera
+    if (z.isAlive) z.update(dt);
   }
   recorder?.tickNpcs(dt, npcCars, player, !_playerDead && !_gameOverSequence);
 
@@ -1578,12 +1393,14 @@ function gameLoop() {
   }
 
   // ── Audio ──
-  audio.updateEngine(speedKmh, input.throttle, player._boostLevel, engineDmgPct, player.hp / player.maxHp);
-  if (player.boostActive && !_prevBoostActive) audio.playBoostStart();
-  if (!player.boostActive && _prevBoostActive && player._boostFuel <= 0.01) audio.playBoostEmpty();
-  _prevBoostActive = player.boostActive;
+  const boostActive = player.boostActive || player.rocketBoostActive;
+  const boostLevel = player.rocketBoostActive ? 1 : player._boostLevel;
+  audio.updateEngine(speedKmh, input.throttle, boostLevel, engineDmgPct, player.hp / player.maxHp);
+  if (boostActive && !_prevBoostActive) audio.playBoostStart();
+  if (!boostActive && _prevBoostActive && player._boostFuel <= 0.01) audio.playBoostEmpty();
+  _prevBoostActive = boostActive;
 
-  hud.update(timer.getDisplay(), zombieKills, carKills, player.hp, credits, speedKmh, player._boostFuel, player.boostActive);
+  hud.update(timer.getDisplay(), zombieKills, carKills, player.hp, credits, speedKmh, player._boostFuel, boostActive, player.rocketBoostSeconds, player.rocketBoostActive);
   damageOverlay.update(player.damageSystem.state);
   const q = player.chassisBody.quaternion;
   const playerYaw = Math.atan2(
@@ -1592,7 +1409,8 @@ function gameLoop() {
   );
   minimap?.update(player.chassisBody.position, playerYaw, npcCars);
 
-  renderer.render(scene, camera);
+  hueShiftPass.uniforms.time.value += dt;
+  composer.render();
 }
 
 showModeMenu();

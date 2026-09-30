@@ -19,6 +19,8 @@ export class CollisionHandler {
     this._onRemoteHit   = options.onRemoteHit   || null; // (remoteId, damage)
     this._onNpcClash    = options.onNpcClash    || null; // (npc, dmgToPlayerHp, dmgToNpcHp)
     this._onNpcObstacle = options.onNpcObstacle || null; // (npc, impactSpeed)
+    this._onChaosBarrel = options.onChaosBarrel || null;
+    this._onPoliceIncident = options.onPoliceIncident || null;
 
     // Cooldown żeby speedup nie aplikował się co klatkę
     this._speedupCooldown = 0;
@@ -155,6 +157,21 @@ export class CollisionHandler {
 
   _handleContact(bodyA, bodyB) {
     const car = this._findCarByBody(bodyA);
+    const otherCar = this._findCarByBody(bodyB);
+
+    if (car?.isPolice && car.isAlerted && otherCar && !otherCar.isPolice && otherCar !== this.player) {
+      const relSpeed = Math.hypot(
+        bodyA.velocity.x - bodyB.velocity.x,
+        bodyA.velocity.z - bodyB.velocity.z
+      );
+      if (relSpeed > 2) {
+        const damage = 0.1 * (relSpeed * relSpeed * this.player.stats.offence)
+          / (otherCar.stats.defence * 3);
+        otherCar.hp = Math.max(0, otherCar.hp - damage);
+        if (otherCar.hp <= 0 && otherCar.isAlive) this.onCarKill(otherCar);
+      }
+      return;
+    }
 
     if (bodyB.userData?.tree && car) {
       this._handleTreeContact(car, bodyA, bodyB);
@@ -162,7 +179,16 @@ export class CollisionHandler {
     }
 
     if (bodyB.userData?.launchPad && car) {
-      if (this.city?.requestLaunchPadPulse(bodyB, bodyA) && car === this.player) {
+      const contact = this._findContact(bodyA, bodyB);
+      const relativePoint = contact ? this._contactRelPoint(contact, bodyA) : null;
+      const contactPoint = relativePoint
+        ? new CANNON.Vec3(
+          bodyA.position.x + relativePoint.x,
+          bodyA.position.y + relativePoint.y,
+          bodyA.position.z + relativePoint.z
+        )
+        : null;
+      if (this.city?.requestLaunchPadPulse(bodyB, bodyA, contactPoint) && car === this.player) {
         this.audio?.playBumper();
         this.hud.showMessage('🚀 LAUNCH!', '#ffff00', 800);
       }
@@ -179,6 +205,18 @@ export class CollisionHandler {
     }
 
     if (bodyA !== this.player.chassisBody) return;
+
+    if (bodyB.userData?.rocketBarrel && this.city?.collectRocketBarrel(bodyB)) {
+      this.player.addRocketBoostSeconds(12);
+      this.hud.showMessage('RAKIETOWY DOPALACZ: +12s', '#45e8ff', 1600);
+      this.audio?.playBoostStart();
+      return;
+    }
+
+    if (bodyB.userData?.chaosBarrel && this.city?.collectChaosBarrel(bodyB)) {
+      this._onChaosBarrel?.();
+      return;
+    }
 
     // ── Speedup bank ──────────────────────────────────────────────
     if (bodyB.userData?.speedup && this._speedupCooldown <= 0) {
@@ -211,21 +249,30 @@ export class CollisionHandler {
 
     // Player hits building
     if (bodyB.userData?.building) {
-      const playerSpeed = bodyA.velocity.length();
-      const BUMPER_THRESHOLD = BUMPER_SPEED_THRESHOLD;
-      if (playerSpeed <= BUMPER_THRESHOLD) return;
-      const effectiveSpeed = playerSpeed - BUMPER_THRESHOLD;
       const nx = bodyB.position.x - bodyA.position.x;
       const nz = bodyB.position.z - bodyA.position.z;
       const len = Math.sqrt(nx * nx + nz * nz) || 1;
       const contactNormal = { x: nx / len, y: 0, z: nz / len };
-      this.player.receiveImpact(effectiveSpeed * BUILDING_IMPACT_SCALE, contactNormal);
+      const planarSpeed = Math.hypot(bodyA.velocity.x, bodyA.velocity.z);
+      const normalSpeed = Math.max(0, bodyA.velocity.x * contactNormal.x + bodyA.velocity.z * contactNormal.z);
+      const impactAngle = planarSpeed > 0.01 ? normalSpeed / planarSpeed : 0;
+      const effectiveSpeed = Math.max(0, normalSpeed - BUMPER_SPEED_THRESHOLD * 0.55);
+      const damageChance = 0.3 + impactAngle * 0.65;
+      const damageRoll = 0.85 + Math.random() * 0.45;
+      const takesDamage = effectiveSpeed > 0 && Math.random() < damageChance;
+
+      if (takesDamage) {
+        this.player.receiveImpact(effectiveSpeed * damageRoll * BUILDING_IMPACT_SCALE, contactNormal);
+      }
       if (this.audio) {
-        this.audio.playHitWall(Math.min(1.0, effectiveSpeed / 14));
-        this.audio.playImpact(Math.min(1.0, effectiveSpeed / 14));
+        const soundIntensity = Math.min(1.0, Math.max(normalSpeed, planarSpeed * 0.18) / 14);
+        this.audio.playHitWall(soundIntensity);
+        this.audio.playImpact(soundIntensity);
         this._playScrapeFromBodies(bodyA, bodyB, contactNormal.x, contactNormal.z, 1.0);
       }
-      const hpLost = Math.round(effectiveSpeed * BUILDING_IMPACT_SCALE * DAMAGE_PER_IMPULSE * 100);
+      const hpLost = takesDamage
+        ? Math.round(effectiveSpeed * damageRoll * BUILDING_IMPACT_SCALE * DAMAGE_PER_IMPULSE * 100)
+        : 0;
       if (hpLost > 0) this.hud.showMessage(`🏗️ BUDYNEK -${hpLost} HP`, '#ff6600', 900);
       return;
     }
@@ -243,7 +290,7 @@ export class CollisionHandler {
           const len = Math.sqrt(nx * nx + nz * nz) || 1;
           this._playScrapeFromBodies(bodyA, bodyB, nx / len, nz / len, 0.7);
           // Zombie: dokładnie 1 HP obrażeń dla gracza
-          this.player.hp = Math.max(0, this.player.hp - 1);
+          if (!this.player.supermanMode) this.player.hp = Math.max(0, this.player.hp - 1);
           this.onZombieKill(zombie);
         }
       }
@@ -256,6 +303,7 @@ export class CollisionHandler {
       const relVelX = bodyA.velocity.x - bodyB.velocity.x;
       const relVelZ = bodyA.velocity.z - bodyB.velocity.z;
       const relSpeed = Math.sqrt(relVelX * relVelX + relVelZ * relVelZ);
+      if (!npc.isPolice && relSpeed > 2) this._onPoliceIncident?.(bodyA.position);
       const _muNPC = (bodyA.mass * bodyB.mass) / (bodyA.mass + bodyB.mass);
       if (0.5 * _muNPC * relSpeed * relSpeed > CAR_ENERGY_THRESHOLD) {
         // Normal: from player toward NPC = direction of impact on player's car

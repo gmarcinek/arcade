@@ -340,6 +340,13 @@ export class AudioManager {
 
   playOpponentHitStrong(intensity = 1.0) {
     if (!this._ctx) return;
+    const vol = Math.min(1, Math.max(0.2, intensity));
+    this._playSample(this._samples.humanCollision, {
+      volume: 0.45 + vol * 0.35,
+      playbackRate: 0.84 + Math.random() * 0.08,
+    });
+    this._playNoise(0.3, vol * 0.72, 180, 'bandpass');
+    this._playTone(64, 'triangle', 0.26, vol * 0.42, 0.22);
   }
 
   // ── Eksplozja NPC auta ────────────────────────────────────────────
@@ -418,6 +425,26 @@ export class AudioManager {
     });
   }
 
+  playPoliceSiren() {
+    if (!this._ctx) return;
+    const ctx = this._ctx;
+    const start = ctx.currentTime;
+    for (const [frequency, offset] of [[680, 0], [920, 0.27]]) {
+      const oscillator = ctx.createOscillator();
+      const gain = ctx.createGain();
+      oscillator.type = 'sine';
+      oscillator.frequency.setValueAtTime(frequency * 0.92, start + offset);
+      oscillator.frequency.linearRampToValueAtTime(frequency, start + offset + 0.12);
+      gain.gain.setValueAtTime(0.001, start + offset);
+      gain.gain.linearRampToValueAtTime(0.13, start + offset + 0.025);
+      gain.gain.exponentialRampToValueAtTime(0.001, start + offset + 0.25);
+      oscillator.connect(gain);
+      gain.connect(this._masterGain);
+      oscillator.start(start + offset);
+      oscillator.stop(start + offset + 0.26);
+    }
+  }
+
   playWin() {
     if (!this._ctx) return;
     this._playSample(this._samples.win, {
@@ -428,6 +455,9 @@ export class AudioManager {
 
   playGameOver() {
     if (!this._ctx) return;
+    this._playTone(220, 'sawtooth', 0.55, 0.22, 0.5);
+    this._playTone(146, 'sawtooth', 0.75, 0.18, 0.7);
+    this._playNoise(0.5, 0.14, 260, 'lowpass');
   }
 
   // ── Start boosta ─────────────────────────────────────────────────

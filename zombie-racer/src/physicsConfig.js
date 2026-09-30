@@ -6,7 +6,7 @@
 // ── Swiat ──────────────────────────────────────────────────────────
 // Sila grawitacji. Wyzsze odczucia ciezkosci, szybsze ladowanie po skoku.
 // Zakres: [-9.8 ziemska … -30 bardzo ciezkie]
-export const GRAVITY = -10.8;
+export const GRAVITY = -11.88;
 
 // ── Podwozie / masa ────────────────────────────────────────────────
 // Masa nadwozia [kg]. Wyzsza = wolniejsze przyspieszenie i hamowanie, wiekszy impet przy zderzeniu.
@@ -18,11 +18,9 @@ export const CAR_MASS = 1750;
 // Zakres: [-0.3 … 0.3]  (zwykle 0)
 export const CHASSIS_COM_OFFSET_X = 0;
 
-// Wysokosc srodka masy [m] nad podstawa pudla kolizyjnego.
-// Wyzej = auto chetniej sie przechyla i wywraca w zakretech.
-// Zakres: [0.0 nisko/stabilnie … 0.6 wysoko/niestabilnie]
-// Kodiaq: CoM ~620mm od ziemi, SUV wiec wysoko
-export const CHASSIS_COM_OFFSET_Y = 0.1;
+// Przesuniecie bryly wzgledem punktu masy [m].
+// Zero jest nieco nizsze od poprzedniego ustawienia, ale nie obniza przesadnie kolizji.
+export const CHASSIS_COM_OFFSET_Y = 0;
 
 // Przesuniecie srodka masy w przod/tyl [m].
 // Ujemne (przod) = understeer (auto jedzie prosto, trudniej skrecic).

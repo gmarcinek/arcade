@@ -7,6 +7,8 @@ const WANDER_INTERVAL_MIN = 2000;
 const WANDER_INTERVAL_MAX = 5000;
 
 export class Zombie {
+  static speedMultiplier = 1;
+
   constructor() {
     this.mesh = null;
     this.body = null;
@@ -57,8 +59,9 @@ export class Zombie {
         now + WANDER_INTERVAL_MIN + Math.random() * (WANDER_INTERVAL_MAX - WANDER_INTERVAL_MIN);
     }
 
-    const vx = Math.sin(this._wanderAngle) * ZOMBIE_SPEED;
-    const vz = Math.cos(this._wanderAngle) * ZOMBIE_SPEED;
+    const speed = ZOMBIE_SPEED * Zombie.speedMultiplier;
+    const vx = Math.sin(this._wanderAngle) * speed;
+    const vz = Math.cos(this._wanderAngle) * speed;
     this.body.velocity.set(vx, 0, vz);
     this.body.position.x += vx * dt;
     this.body.position.z += vz * dt;

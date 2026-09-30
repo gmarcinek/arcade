@@ -21,6 +21,15 @@ const TOOLS = {
 
 const SIDEBAR_W = 190;
 
+function loadSavedMaps() {
+  try {
+    const maps = JSON.parse(localStorage.getItem('zombieRacerMaps') || '{}');
+    return maps && typeof maps === 'object' && !Array.isArray(maps) ? maps : {};
+  } catch {
+    return {};
+  }
+}
+
 export class MapEditor {
   constructor() {
     this.currentTool = 'building';
@@ -31,6 +40,10 @@ export class MapEditor {
     this._panY     = 0;
     this._painting = false;
     this._lastCell = null;
+    this._onMouseUp = () => {
+      this._painting = false;
+      this._lastCell = null;
+    };
 
     this._buildUI();
   }
@@ -155,10 +168,7 @@ export class MapEditor {
     this.canvas.addEventListener('mousemove', (e) => {
       if (this._painting) this._paintAtEvent(e);
     });
-    window.addEventListener('mouseup', () => {
-      this._painting = false;
-      this._lastCell = null;
-    });
+    window.addEventListener('mouseup', this._onMouseUp);
     this.canvas.addEventListener('wheel', (e) => {
       e.preventDefault();
       this._onWheel(e);
@@ -314,14 +324,14 @@ export class MapEditor {
     const name = prompt('Nazwa planszy:');
     if (!name || !name.trim()) return;
     const key  = name.trim();
-    const maps = JSON.parse(localStorage.getItem('zombieRacerMaps') || '{}');
+    const maps = loadSavedMaps();
     maps[key]  = this._buildMapData();
     localStorage.setItem('zombieRacerMaps', JSON.stringify(maps));
     alert(`Plansza "${key}" zapisana.`);
   }
 
   _deleteMap() {
-    const maps  = JSON.parse(localStorage.getItem('zombieRacerMaps') || '{}');
+    const maps  = loadSavedMaps();
     const names = Object.keys(maps);
     if (!names.length) { alert('Brak zapisanych plansz.'); return; }
     const name = prompt(`Podaj nazwę do usunięcia:\n${names.join('\n')}`);

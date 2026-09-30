@@ -26,7 +26,9 @@ export class HUD {
           <div id="hud-boost-bar" style="height:100%;width:100%;background:#00ccff;transition:background .1s;border-radius:5px;"></div>
         </div>
       </div>
+      <div id="hud-rocket" style="margin-top:5px;font-size:13px;font-weight:800;color:#45e8ff;text-shadow:0 1px 4px #000;"></div>
       </div>
+      <div id="hud-world-modifier" style="position:absolute;top:22px;left:50%;transform:translateX(-50%);font-size:24px;font-weight:900;color:#ff9b38;text-shadow:0 2px 10px #000;letter-spacing:1px;"></div>
       <div id="hud-speed" style="position:absolute;bottom:24px;right:32px;font-size:38px;font-weight:900;color:#fff;text-shadow:0 2px 10px #000;text-align:right;letter-spacing:1px;"></div>
     `;
     this._timer     = document.getElementById('hud-timer');
@@ -35,10 +37,16 @@ export class HUD {
     this._hpValue   = document.getElementById('hud-hp-value');
     this._hpBar     = document.getElementById('hud-hp-bar');
     this._boostBar  = document.getElementById('hud-boost-bar');
+    this._rocket    = document.getElementById('hud-rocket');
+    this._worldModifier = document.getElementById('hud-world-modifier');
     this._speed     = document.getElementById('hud-speed');
   }
 
-  update(timerDisplay, zombieKills, carKills, hpPercent, credits = 0, speedKmh = 0, boostFuel = 1, boostActive = false) {
+  setWorldModifier(icon = '', label = '', seconds = 0) {
+    this._worldModifier.textContent = label ? `${icon} ${label} ${Math.ceil(seconds)}s` : '';
+  }
+
+  update(timerDisplay, zombieKills, carKills, hpPercent, credits = 0, speedKmh = 0, boostFuel = 1, boostActive = false, rocketSeconds = 0, rocketActive = false) {
     this._timer.textContent   = timerDisplay;
     this._kills.textContent   = `🧟 ×${zombieKills}   🚗 ×${carKills}`;
     this._credits.textContent = `💰 ${credits >= 0 ? '+' : ''}${credits} CR`;
@@ -50,6 +58,8 @@ export class HUD {
     const bpct = Math.max(0, Math.min(100, boostFuel * 100));
     this._boostBar.style.width      = bpct + '%';
     this._boostBar.style.background = boostActive ? '#ffffff' : bpct > 50 ? '#00ccff' : bpct > 20 ? '#ffaa00' : '#ff4444';
+    this._rocket.textContent = rocketSeconds > 0 || rocketActive ? `ROCKET ${rocketSeconds.toFixed(1)}s${rocketActive ? '  ACTIVE' : ''}` : '';
+    this._rocket.style.color = rocketActive ? '#ffffff' : '#45e8ff';
     this._speed.textContent = `${Math.round(speedKmh)} km/h`;
   }
 

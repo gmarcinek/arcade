@@ -5,7 +5,7 @@ import { SOFT_BOUNDS, insideObstacle, gatherStatic, rayDist } from '../ai/sensor
 import { carPose, egoFeatures, targetFeatures, attitudeFeatures, perceiveTarget, createTargetMemory,
          FEATURE_COUNT, MEMORY_S, VIEW_DIST } from '../ai/features.js';
 
-const NPC_MAX_HP       = 850;
+const NPC_MAX_HP       = 1700;
 const NPC_BOUNDS       = WORLD_SIZE / 2 - 5;
 const MAX_ATTACKERS    = 3;     // ilu NPC naraz może polować na gracza
 const CRUISE_SPEED     = 17;    // m/s
@@ -40,6 +40,7 @@ function _clamp(v, lo, hi) { return v < lo ? lo : v > hi ? hi : v; }
 export class NPCCar extends Car {
   /** @type {import('../ai/PolicyNet.js').PolicyNet|null} gdy ustawione — wszyscy NPC jeżdżą siecią */
   static policy = null;
+  static speedMultiplier = 1;
 
   constructor(waypointRoute, color = 0xcc2200) {
     super({ stats: { engine: 0.8, defence: 0.7, offence: 0.7 } });
@@ -189,7 +190,7 @@ export class NPCCar extends Car {
 
     // ── Cel zależny od intencji ──
     let tx, tz;
-    let cruiseSpeed = CRUISE_SPEED * this._skill;
+    let cruiseSpeed = CRUISE_SPEED * this._skill * NPCCar.speedMultiplier;
     let throttleCap = 1.0;
     switch (this._state) {
       case State.HUNT:
@@ -201,7 +202,7 @@ export class NPCCar extends Car {
         const T = Math.min(memDist / closing, (ram ? 0.8 : 1.6) * this._skill);
         tx = mem.x + mem.vx * T;
         tz = mem.z + mem.vz * T;
-        cruiseSpeed = ram ? 99 : HUNT_SPEED * this._skill;
+        cruiseSpeed = ram ? 99 : HUNT_SPEED * this._skill * NPCCar.speedMultiplier;
         throttleCap = ram ? RAM_THROTTLE : 1.0;
         break;
       }
@@ -213,7 +214,7 @@ export class NPCCar extends Car {
         const reach = this._state === State.FLEE ? 80 : 45;
         tx = pos.x + ax / len * reach;
         tz = pos.z + az / len * reach;
-        cruiseSpeed = HUNT_SPEED * this._skill;
+        cruiseSpeed = HUNT_SPEED * this._skill * NPCCar.speedMultiplier;
         break;
       }
       default: {

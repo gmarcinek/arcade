@@ -79,6 +79,7 @@ export class Car {
     this._throttleFiltered = 0.0;
     this._wheelDetached = [false, false, false, false];
     this._detachedWheelState = [null, null, null, null];
+    this._chaosWheels = false;
   }
 
   build(scene, world, spawnX, spawnY, spawnZ, color = 0xff2200) {
@@ -327,6 +328,22 @@ export class Car {
     this.vehicle.setBrake(brakeVal * wheelMods[3].brakeMult, 3);
   }
 
+  setChaosWheels(enabled) {
+    const scale = enabled ? 2 : 1;
+    this._chaosWheels = enabled;
+    for (const wheel of this.wheelMeshes) wheel.scale.setScalar(scale);
+    for (const info of this.vehicle?.wheelInfos ?? []) {
+      info.radius = WHEEL_RADIUS * scale;
+      info.suspensionRestLength = SUSPENSION_REST_LENGTH * scale;
+      info.suspensionStiffness = SUSPENSION_STIFFNESS * (enabled ? 0.4 : 1);
+      info.dampingRelaxation = DAMPING_RELAXATION * (enabled ? 0.45 : 1);
+      info.dampingCompression = DAMPING_COMPRESSION * (enabled ? 0.45 : 1);
+      info.maxSuspensionTravel = SUSPENSION_MAX_TRAVEL * (enabled ? 1.5 : 1);
+      info.rollInfluence = ROLL_INFLUENCE * (enabled ? 0.45 : 1);
+      info.chassisConnectionPointLocal.x = Math.sign(info.chassisConnectionPointLocal.x) * WHEEL_POS_X * (enabled ? 1.45 : 1);
+    }
+  }
+
   sync(dt = 0) {
     if (!this.chassisBody) return;
     this._wobbleTime += dt;
@@ -360,11 +377,11 @@ export class Car {
       this.wheelMeshes[i].position.copy(t.position);
       this.wheelMeshes[i].quaternion.copy(t.quaternion);
 
-      // Visual camber: tilt damaged wheels outward around the chassis forward axis
+      // Visual camber: damaged and Monster Wheels tilt outward around the chassis forward axis
       const dmg = this.damageSystem.state[_WHEEL_PARTS[i]];
-      if (dmg > 0.05) {
+      if (dmg > 0.05 || this._chaosWheels) {
         const side = (i === 0 || i === 2) ? 1 : -1; // FL/RL tilt left, FR/RR tilt right
-        const camberRad = dmg * 0.22 * side; // max ~12.6° at 100% damage
+        const camberRad = (dmg * 0.22 + (this._chaosWheels ? 0.16 : 0)) * side;
         _camberAxis.set(0, 0, 1).applyQuaternion(this.group.quaternion);
         _camberQ.setFromAxisAngle(_camberAxis, camberRad);
         this.wheelMeshes[i].quaternion.premultiply(_camberQ);
@@ -386,6 +403,7 @@ export class Car {
   }
 
   receiveImpact(impulse, contactNormalWorld) {
+    if (this.supermanMode) return 0;
     const invQ = this.chassisBody.quaternion.inverse();
     const localNormal = new CANNON.Vec3();
     invQ.vmult(contactNormalWorld, localNormal);

@@ -2,12 +2,25 @@ export class KeyboardInput {
   constructor() {
     this.keys = new Set();
     this._healQueue = 0;
+    this._gameKeys = new Set([
+      'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight',
+      'KeyW', 'KeyA', 'KeyS', 'KeyD',
+      'Space', 'ShiftLeft', 'ShiftRight', 'Backspace', 'Home', 'Insert',
+    ]);
     window.addEventListener('keydown', e => {
+      if (this._isTextInput(e.target) || !this._gameKeys.has(e.code)) return;
       if (!e.repeat && e.code === 'Backspace') this._healQueue++;
       this.keys.add(e.code);
       e.preventDefault();
     });
-    window.addEventListener('keyup', e => this.keys.delete(e.code));
+    window.addEventListener('keyup', e => {
+      if (this._gameKeys.has(e.code)) this.keys.delete(e.code);
+    });
+  }
+
+  _isTextInput(target) {
+    return target instanceof HTMLElement
+      && (target.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName));
   }
 
   get throttle() {

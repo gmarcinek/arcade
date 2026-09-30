@@ -152,6 +152,8 @@ export class ParticleSystem {
 
       if (p.life <= 0) {
         this.scene.remove(p.points);
+        p.points.geometry.dispose();
+        p.points.material.dispose();
         this.particles.splice(i, 1);
       }
     }
